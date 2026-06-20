@@ -1,0 +1,5 @@
+-- 023_add_fastdl.down.sql
+-- SQLite doesn't support DROP COLUMN in older versions, but for simple migrations we can often skip it or recreate table.
+-- Since it's a new feature, we can just leave it or use a script if necessary.
+-- However, for completeness:
+-- ALTER TABLE arma3server DROP COLUMN fast_download_enabled;

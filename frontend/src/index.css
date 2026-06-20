@@ -1,0 +1,132 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+@custom-variant light (&:where(.light, .light *));
+
+@theme {
+  --color-background: #051424;
+  --color-foreground: #d4e4fa;
+  
+  --color-surface: #051424;
+  --color-surface-elevated: #122131;
+  --color-border: #334155;
+  --color-border-active: #3b82f6;
+  
+  --color-primary: #adc6ff;
+  --color-primary-foreground: #002e6a;
+  
+  --color-accent: #1e293b;
+  --color-accent-foreground: #d4e4fa;
+  
+  --color-muted: #0d1c2d;
+  --color-muted-foreground: #8c909f;
+  
+  --color-success: #10b981;
+  --color-destructive: #ffb4ab;
+
+  --radius-sm: 0.125rem;
+  --radius-md: 0.25rem;
+  --radius-lg: 0.5rem;
+  --font-sans: 'Inter', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+}
+
+.light {
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  
+  --color-surface: #ffffff;
+  --color-surface-elevated: #f1f5f9;
+  --color-border: #e2e8f0;
+  --color-border-active: #2563eb;
+  
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  
+  --color-accent: #f1f5f9;
+  --color-accent-foreground: #0f172a;
+  
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight font-semibold;
+    letter-spacing: -0.02em;
+  }
+
+  code, pre {
+    font-family: var(--font-mono);
+  }
+
+  /* Hide number input arrows */
+  input::-webkit-outer-spin-button,
+  input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+
+  input[type=number] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+  }
+}
+
+@layer components {
+  .glass {
+    @apply bg-surface/80 backdrop-blur-md border border-border;
+  }
+  
+  .terminal-card {
+    @apply bg-surface border border-border rounded-md overflow-hidden transition-all duration-300;
+    box-shadow: none !important;
+  }
+  
+  .terminal-card-active {
+    @apply border-border-active;
+  }
+}
+
+@layer utilities {
+  /* Thin scrollbar for horizontally scrollable tab bars on mobile */
+  .scrollbar-thin::-webkit-scrollbar {
+    height: 3px;
+    width: 3px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 9999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  /* Word-wrap for log viewer on mobile to prevent horizontal scroll */
+  .log-wrap {
+    word-break: break-all;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+
+  /* Hide scrollbar for horizontal swipeable areas like bottom nav */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+}

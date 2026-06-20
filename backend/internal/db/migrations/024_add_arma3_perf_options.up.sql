@@ -1,0 +1,14 @@
+ALTER TABLE arma3server ADD COLUMN limit_fps INTEGER;
+ALTER TABLE arma3server ADD COLUMN max_mem INTEGER;
+ALTER TABLE arma3server ADD COLUMN cpu_count INTEGER;
+ALTER TABLE arma3server ADD COLUMN ex_threads INTEGER;
+ALTER TABLE arma3server ADD COLUMN enable_ht BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE arma3server ADD COLUMN debug_mode BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE arma3server ADD COLUMN network_diag_interval INTEGER;
+ALTER TABLE arma3server ADD COLUMN load_mission_to_memory BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE arma3server ADD COLUMN zeus_composition_script_level INTEGER;
+ALTER TABLE arma3server ADD COLUMN lobby_idle_timeout INTEGER;
+ALTER TABLE arma3server ADD COLUMN anti_flood_cycle_time REAL;
+ALTER TABLE arma3server ADD COLUMN anti_flood_cycle_limit INTEGER;
+ALTER TABLE arma3server ADD COLUMN anti_flood_cycle_hard_limit INTEGER;
+ALTER TABLE arma3server ADD COLUMN anti_flood_enable_kick INTEGER;

@@ -1,0 +1,55 @@
+{
+  "bindAddress": "0.0.0.0",
+  "bindPort": {{.Port}},
+  "publicAddress": "",
+  "publicPort": {{.Port}},
+  "a2s": {
+    "address": "0.0.0.0",
+    "port": {{.QueryPort}}
+  },
+  "game": {
+    "name": {{.Name | json}},
+    "password": {{.Password | json}},
+    "passwordAdmin": {{.AdminPassword | json}},
+    "admins": [
+      {{range $i, $admin := .Admins}}{{if $i}},{{end}}{{$admin | json}}{{end}}
+    ],
+    "scenarioId": {{.ScenarioID | json}},
+    "maxPlayers": {{.MaxPlayers}},
+    "visible": {{if .Visible}}true{{else}}false{{end}},
+    "crossPlatform": {{if .CrossPlatform}}true{{else}}false{{end}},
+    "supportedPlatforms": [
+      "PLATFORM_PC"{{if .CrossPlatform}}, "PLATFORM_XBL", "PLATFORM_PSN"{{end}}
+    ],
+    "gameProperties": {
+      "serverMaxViewDistance": {{.ServerMaxViewDistance}},
+      "serverMinGrassDistance": {{.ServerMinGrassDistance}},
+      "networkViewDistance": {{.NetworkViewDistance}},
+      "disableThirdPerson": {{if .ThirdPersonViewEnabled}}false{{else}}true{{end}},
+      "fastValidation": {{if .FastValidation}}true{{else}}false{{end}},
+      "battlEye": {{if .BattlEye}}true{{else}}false{{end}},
+      "VONCanTransmitCrossFaction": {{if .VonCanTransmitCrossFaction}}true{{else}}false{{end}},
+      "missionHeader": {{if .MissionHeader}}{{.MissionHeader | json}}{{else}}{}{{end}},
+      "persistence": {
+        "autoSaveInterval": {{.AutoSaveInterval}}
+      }
+    },
+    "mods": [
+      {{range $i, $mod := .ActiveMods}}{{if $i}},{{end}}
+        {
+        "modId": {{$mod.ID | json}},
+        "name": {{$mod.Name | json}}
+        }
+      {{end}}
+    ]
+  },
+  "operating": {
+    "lobbyPlayerSynchronise": true,
+    "disableAI": {{if .DisableAI}}true{{else}}false{{end}},
+    "aiLimit": {{.AILimit}},
+    "joinQueue": {
+      "maxSize": {{.JoinQueueMaxSize}}
+    }{{if .DisableNavmeshStreaming}},
+    "disableNavmeshStreaming": []{{end}}
+  }
+}

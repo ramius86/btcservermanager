@@ -1,0 +1,162 @@
+// GLOBAL SETTINGS
+hostname = {{.Name | json}};
+password = {{.Password | json}};
+passwordAdmin = {{.AdminPassword | json}};
+serverCommandPassword = {{.ServerCommandPassword | json}};
+
+{{if and .FastDownloadEnabled .FastDLDomain}}
+missionHTTPDownloadBaseURL = "https://{{.FastDLDomain}}/";
+{{end}}
+
+// JOINING RULES
+maxPlayers = {{.MaxPlayers}};
+{{if .IdleFPSLimit}}idleFPSLimit = {{.IdleFPSLimit}};{{end}}
+kickDuplicate = {{if .KickDuplicate}}1{{else}}0{{end}};
+verifySignatures = {{.VerifySignatures}};
+allowedFilePatching = {{.ClientFilePatching}};
+
+// ADMINS
+admins[] = { {{range $i, $a := .Admins}}{{if $i}}, {{end}}{{$a | json}}{{end}} };
+{{if .DebugConsoleAdmins}}enableDebugConsole[] = { {{range $i, $a := .DebugConsoleAdmins}}{{if $i}}, {{end}}{{$a | json}}{{end}} };{{else}}enableDebugConsole = {{.EnableDebugConsole}};{{end}}
+
+// MOTD
+{{if .Motd}}
+motd[] = {
+{{range $i, $line := .Motd}}
+    {{$line | json}}{{if (lt $i (sub (len $.Motd) 1))}},{{end}}
+{{end}}
+};
+motdInterval = {{if .MotdInterval}}{{.MotdInterval}}{{else}}5{{end}};
+{{end}}
+
+// HEADLESS CLIENTS
+headlessClients[] = { "127.0.0.1"{{range $ip := .HeadlessClients}}{{if ne $ip "127.0.0.1"}}, {{$ip | json}}{{end}}{{end}} };
+localClient[] = { "127.0.0.1"{{range $ip := .LocalClient}}{{if ne $ip "127.0.0.1"}}, {{$ip | json}}{{end}}{{end}} };
+
+// FILE EXTENSIONS
+{{if .AllowedLoadFileExtensions}}
+allowedLoadFileExtensions[] = { {{range $i, $ext := .AllowedLoadFileExtensions}}{{if $i}}, {{end}}{{$ext | json}}{{end}} };
+{{end}}
+{{if .AllowedPreprocessFileExtensions}}
+allowedPreprocessFileExtensions[] = { {{range $i, $ext := .AllowedPreprocessFileExtensions}}{{if $i}}, {{end}}{{$ext | json}}{{end}} };
+{{end}}
+{{if .AllowedHTMLLoadExtensions}}
+allowedHTMLLoadExtensions[] = { {{range $i, $ext := .AllowedHTMLLoadExtensions}}{{if $i}}, {{end}}{{$ext | json}}{{end}} };
+{{end}}
+{{if .AllowedHTMLLoadURIs}}
+allowedHTMLLoadURIs[] = { {{range $i, $uri := .AllowedHTMLLoadURIs}}{{if $i}}, {{end}}{{$uri | json}}{{end}} };
+{{end}}
+
+// INGAME SETTINGS
+disableVoN = {{if .VonEnabled}}0{{else}}1{{end}};
+{{if ne .VonCodec nil}}vonCodec = {{.VonCodec}};{{else}}vonCodec = 1;{{end}}
+vonCodecQuality = {{.VonCodecQuality}};
+persistent = {{if .Persistent}}1{{else}}0{{end}};
+drawingInMap = {{if .DrawingInMap}}1{{else}}0{{end}};
+forceRotorLibSimulation = {{.ForceRotorLibSimulation}};
+timeStampFormat = "short";
+BattlEye = {{if .BattlEye}}1{{else}}0{{end}};
+skipLobby = {{if .SkipLobby}}1{{else}}0{{end}};
+allowProfileGlasses = {{if .AllowProfileGlasses}}1{{else}}0{{end}};
+requiredBuild = {{if .RequiredBuild}}{{.RequiredBuild}}{{else}}0{{end}};
+statisticsEnabled = {{if .StatisticsEnabled}}1{{else}}0{{end}};
+{{if .ZeusCompositionScriptLevel}}
+zeusCompositionScriptLevel = {{.ZeusCompositionScriptLevel}};
+{{end}}
+{{if and .NetworkSettings .NetworkSettings.SteamProtocolMaxDataSize}}
+steamProtocolMaxDataSize = {{.NetworkSettings.SteamProtocolMaxDataSize}};
+{{end}}
+{{if .ArmaUnitsTimeout}}
+armaUnitsTimeout = {{.ArmaUnitsTimeout}};
+{{end}}
+{{if .OverrideHazeQuality}}
+overrideHazeQuality = {{.OverrideHazeQuality}};
+{{end}}
+
+// DIFFICULTY
+forcedDifficulty = {{.ForcedDifficulty | json}};
+
+// MISSION ROTATION
+autoSelectMission = {{if .AutoSelectMission}}true{{else}}false{{end}};
+randomMissionOrder = {{if .RandomMissionOrder}}true{{else}}false{{end}};
+{{if gt .MissionsToServerRestart 0}}
+missionsToServerRestart = {{.MissionsToServerRestart}};
+{{end}}
+
+// VOTING
+{{if .LobbyTimeout}}
+lobbyTimeout = {{.LobbyTimeout}};
+{{end}}
+{{if .LobbyIdleTimeout}}
+lobbyIdleTimeout = {{.LobbyIdleTimeout}};
+{{end}}
+{{if .VoteThreshold}}
+voteThreshold = {{.VoteThreshold}};
+{{end}}
+{{if .VoteMissionPlayers}}
+voteMissionPlayers = {{.VoteMissionPlayers}};
+{{end}}
+{{if .VotingTimeOut}}
+votingTimeOut = {{.VotingTimeOut}};
+{{end}}
+{{if .RoleTimeOut}}
+roleTimeOut = {{.RoleTimeOut}};
+{{end}}
+{{if .BriefingTimeOut}}
+briefingTimeOut = {{.BriefingTimeOut}};
+{{end}}
+{{if .DebriefingTimeOut}}
+debriefingTimeOut = {{.DebriefingTimeOut}};
+{{end}}
+
+// QoS ENFORCEMENT (server.cfg params)
+{{if .DisconnectTimeout}}
+disconnectTimeout = {{.DisconnectTimeout}};
+{{end}}
+{{if .MaxPing}}
+maxPing = {{.MaxPing}};
+{{end}}
+{{if .MaxDesync}}
+maxDesync = {{.MaxDesync}};
+{{end}}
+{{if .MaxPacketLoss}}
+maxPacketLoss = {{.MaxPacketLoss}};
+{{end}}
+enablePlayerDiag = {{if .EnablePlayerDiag}}1{{else}}0{{end}};
+kickClientsOnSlowNetwork[] = { {{if .KickOnSlowNetworkPing}}1{{else}}0{{end}}, {{if .KickOnSlowNetworkPacketLoss}}1{{else}}0{{end}}, {{if .KickOnSlowNetworkDesync}}1{{else}}0{{end}}, {{if .KickOnSlowNetworkDisconnect}}1{{else}}0{{end}} };
+
+// ANTI-FLOOD
+{{if .AntiFloodCycleTime}}
+class AntiFlood
+{
+    cycleTime = {{.AntiFloodCycleTime}};
+    cycleLimit = {{if .AntiFloodCycleLimit}}{{.AntiFloodCycleLimit}}{{else}}400{{end}};
+    cycleHardLimit = {{if .AntiFloodCycleHardLimit}}{{.AntiFloodCycleHardLimit}}{{else}}4000{{end}};
+    enableKick = {{if .AntiFloodEnableKick}}{{.AntiFloodEnableKick}}{{else}}0{{end}};
+};
+{{end}}
+
+// ADVANCED
+class AdvancedOptions
+{
+    skipDescriptionParsing = {{if .SkipDescriptionParsing}}1{{else}}0{{end}};
+    logObjectNotFound = {{if .LogObjectNotFound}}1{{else}}0{{end}};
+};
+
+// SIGNATURE VERIFICATION
+onUnsignedData = "kick (_this select 0)";
+onHackedData = "kick (_this select 0)";
+onDifferentData = "";
+
+{{if .AdditionalOptions}}{{.AdditionalOptions}}{{end}}
+
+class Missions
+{
+{{range $i, $m := .Missions}}
+    class Mission_{{$i}}
+    {
+        template = {{$m.Template | json}};
+        difficulty = {{$m.Difficulty | json}};
+    };
+{{end}}
+};

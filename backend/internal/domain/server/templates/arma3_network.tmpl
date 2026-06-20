@@ -1,0 +1,31 @@
+{{if .MaxMessagesSend}}
+MaxMsgSend = {{.MaxMessagesSend}};
+{{end}}
+{{if .MaxSizeGuaranteed}}
+MaxSizeGuaranteed = {{.MaxSizeGuaranteed}};
+{{end}}
+{{if .MaxSizeNonguaranteed}}
+MaxSizeNonguaranteed = {{.MaxSizeNonguaranteed}};
+{{end}}
+{{if .MinBandwidth}}
+MinBandwidth = {{.MinBandwidth}};
+{{end}}
+{{if .MaxBandwidth}}
+MaxBandwidth = {{.MaxBandwidth}};
+{{end}}
+{{if .MinErrorToSend}}
+MinErrorToSend = {{.MinErrorToSend}};
+{{end}}
+{{if .MinErrorToSendNear}}
+MinErrorToSendNear = {{.MinErrorToSendNear}};
+{{end}}
+{{if .MaxPacketSize}}
+class sockets
+{
+maxPacketSize = {{.MaxPacketSize}};
+};
+{{end}}
+{{if .MaxCustomFileSize}}
+MaxCustomFileSize = {{.MaxCustomFileSize}};
+{{end}}
+

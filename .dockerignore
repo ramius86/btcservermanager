@@ -1,0 +1,48 @@
+.git
+.gitignore
+.dockerignore
+node_modules
+frontend/node_modules
+frontend/dist
+
+# Binaries and local builds
+backend/btcservermanager
+backend/*.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Local storage and database
+storage
+backend/storage
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.log
+
+# Environment
+.env
+.env.local
+
+# IDEs
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+
+# Documentation & docker config
+README.md
+docker-compose.yml
+
+# Scratch and test files
+backend/scratch
+backend/coverage
+backend/coverage.out
+*.out
+*.profile
+cover
+coverage
+

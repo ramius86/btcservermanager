@@ -1,0 +1,1 @@
+ALTER TABLE workshop_mod ADD COLUMN needs_update BOOLEAN DEFAULT FALSE;

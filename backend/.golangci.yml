@@ -1,0 +1,148 @@
+version: "2"
+
+run:
+  concurrency: 4
+  tests: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 50
+
+linters:
+  enable:
+    - govet
+    - staticcheck
+    - unused
+    - errcheck
+    - errorlint
+    - nilerr
+    - forcetypeassert
+    - durationcheck
+    - reassign
+    - whitespace
+    - misspell
+    - dupword
+    - predeclared
+    - errname
+    - asciicheck
+    - unconvert
+    - ineffassign
+    - goconst
+    - bidichk
+    - bodyclose
+    - fatcontext
+    - sqlclosecheck
+    - rowserrcheck
+    - sloglint
+    - loggercheck
+    - testifylint
+    - thelper
+    - usetesting
+    - exptostd
+    - intrange
+    - usestdlibvars
+    - nolintlint
+  disable:
+    - noctx
+    - perfsprint
+    - containedctx
+    - copyloopvar
+    - cyclop
+    - depguard
+    - dupl
+    - err113
+    - exhaustive
+    - exhaustruct
+    - funlen
+    - gochecknoglobals
+    - gochecknoinits
+    - gocognit
+    - gocritic
+    - gocyclo
+    - godot
+    - goheader
+    - gosec
+    - iface
+    - importas
+    - lll
+    - makezero
+    - mirror
+    - mnd
+    - nakedret
+    - nestif
+    - paralleltest
+    - prealloc
+    - protogetter
+    - recvcheck
+    - revive
+    - spancheck
+    - testpackage
+    - unparam
+    - varnamelen
+    - wrapcheck
+    - wsl
+    - zerologlint
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+    rules:
+      - path: _test\.go
+        linters:
+          - funlen
+          - gocyclo
+          - nestif
+          - dupl
+          - gocritic
+          - gosec
+          - goconst
+          - containedctx
+          - usetesting
+          - testifylint
+          - thelper
+          - usestdlibvars
+          - perfsprint
+          - noctx
+          - forcetypeassert
+          - errcheck
+          - revive
+          - unused
+          - intrange
+          - staticcheck
+  settings:
+    dupl:
+      threshold: 200
+    errcheck:
+      check-type-assertions: true
+    funlen:
+      lines: 300
+      statements: 200
+    goconst:
+      min-len: 3
+      min-occurrences: 10
+    gocyclo:
+      min-complexity: 25
+    nolintlint:
+      require-explanation: true
+      require-specific: true
+
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+  settings:
+    gofumpt:
+      extra-rules: true

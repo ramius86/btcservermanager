@@ -1,0 +1,59 @@
+name: Backend Benchmarks
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [ "main", "master" ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-benchmark.yml"
+  pull_request:
+    branches: [ "main", "master" ]
+    paths:
+      - "backend/**"
+      - ".github/workflows/ci-benchmark.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    name: Performance Benchmarks
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      deployments: write
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
+        with:
+          go-version: '1.26.4'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Run benchmarks
+        run: |
+          cd backend
+          go test -bench=. -benchmem ./... | tee ../bench.txt
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@52576c92bccf6ac60c8223ec7eb2565637cae9ba # v1.22.1
+        with:
+          name: BTC Server Manager Benchmarks
+          tool: 'go'
+          output-file-path: bench.txt
+          benchmark-data-dir-path: ''
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: ${{ github.event_name == 'push' }}
+          comment-on-alert: true
+          alert-threshold: '130%'
+          fail-on-alert: true
+          alert-comment-cc-users: '@ramius86'
+          max-items-in-chart: 30

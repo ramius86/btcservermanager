@@ -1,0 +1,53 @@
+# Binaries
+btcservermanager
+btcservermanager.exe
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+out/
+
+# Local storage and logs
+storage/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# Environment variables
+.env
+.env.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Coverage
+*.out
+*.profile
+cover
+coverage
+*.log
+
+#roba
+markdown/*
+
+# Generated configs (prevent accidental inclusion in source tree)
+backend/internal/domain/server/**/*.cfg
+backend/internal/domain/server/**/*.json
+
+# Scratch directory
+backend/scratch/
+
+/debug/*
