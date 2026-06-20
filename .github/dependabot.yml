@@ -26,8 +26,3 @@ updates:
     schedule:
       interval: "weekly"
 
-  # Enable updates for Docker Compose (Root)
-  - package-ecosystem: "docker"
-    directory: "/"
-    schedule:
-      interval: "weekly"
