@@ -146,10 +146,10 @@ func (r *Repository) GetEventByMessageID(ctx context.Context, messageID string) 
 
 func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
 	query := `
-		SELECT p.user_id, u.username, p.status, e.date_time, e.game_type
-		FROM discord_event_participations p
-		JOIN discord_users u ON p.user_id = u.id
-		JOIN discord_events e ON p.event_id = e.id
+		SELECT u.id, u.username, COALESCE(p.status, 'no_response') as status, e.date_time, e.game_type
+		FROM discord_users u
+		CROSS JOIN discord_events e
+		LEFT JOIN discord_event_participations p ON p.user_id = u.id AND p.event_id = e.id
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -169,4 +169,26 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 		return nil, err
 	}
 	return result, nil
+}
+
+func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
+	query := `SELECT id, username, updated_at FROM discord_users ORDER BY username ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []DiscordUser
+	for rows.Next() {
+		var u DiscordUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
 }

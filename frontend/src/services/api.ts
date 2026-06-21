@@ -211,6 +211,7 @@ export interface DiscordEventDetail extends DiscordEvent {
 	going: string[]
 	notGoing: string[]
 	maybe: string[]
+	noResponse: string[]
 }
 
 export interface CreateDiscordEventRequest {

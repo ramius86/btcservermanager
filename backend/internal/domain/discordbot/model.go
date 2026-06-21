@@ -17,9 +17,10 @@ type Event struct {
 
 type DiscordEventDetail struct {
 	Event
-	Going    []string `json:"going"`
-	NotGoing []string `json:"notGoing"`
-	Maybe    []string `json:"maybe"`
+	Going      []string `json:"going"`
+	NotGoing   []string `json:"notGoing"`
+	Maybe      []string `json:"maybe"`
+	NoResponse []string `json:"noResponse"`
 }
 
 type CreateEventRequest struct {

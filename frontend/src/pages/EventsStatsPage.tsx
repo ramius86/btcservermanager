@@ -4,7 +4,7 @@ import { DiscordService, DiscordRawAttendance } from '../services/api'
 import { ArrowLeft, ArrowUpDown, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
 
-type SortField = 'username' | 'going' | 'notGoing' | 'maybe'
+type SortField = 'username' | 'going' | 'notGoing' | 'maybe' | 'noResponse'
 type SortOrder = 'asc' | 'desc'
 type ViewMode = 'all_time' | 'yearly' | 'monthly'
 
@@ -80,11 +80,11 @@ export function EventsStatsPage() {
     })
 
     // 2. Group by user
-    const userMap = new Map<string, { username: string, going: number, notGoing: number, maybe: number }>()
+    const userMap = new Map<string, { username: string, going: number, notGoing: number, maybe: number, noResponse: number }>()
     
     filtered.forEach(a => {
       if (!userMap.has(a.userId)) {
-        userMap.set(a.userId, { username: a.username, going: 0, notGoing: 0, maybe: 0 })
+        userMap.set(a.userId, { username: a.username, going: 0, notGoing: 0, maybe: 0, noResponse: 0 })
       }
       const u = userMap.get(a.userId)
       if (u) {
@@ -92,6 +92,7 @@ export function EventsStatsPage() {
         if (a.status === 'going') u.going++
         else if (a.status === 'not_going') u.notGoing++
         else if (a.status === 'maybe') u.maybe++
+        else if (a.status === 'no_response') u.noResponse++
       }
     })
 
@@ -99,7 +100,7 @@ export function EventsStatsPage() {
     return Array.from(userMap.entries()).map(([id, data]) => ({
       id,
       ...data,
-      total: data.going + data.notGoing + data.maybe
+      total: data.going + data.notGoing + data.maybe + data.noResponse
     }))
     .filter(r => r.total > 0)
     .sort((a, b) => {
@@ -249,6 +250,15 @@ export function EventsStatsPage() {
                     <ArrowUpDown className={`w-3 h-3 ${sortField === 'maybe' ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`} />
                   </div>
                 </th>
+                <th 
+                  className="px-4 py-3 font-medium text-muted-foreground cursor-pointer hover:text-foreground transition-colors group"
+                  onClick={() => handleSort('noResponse')}
+                >
+                  <div className="flex items-center gap-1">
+                    No Response
+                    <ArrowUpDown className={`w-3 h-3 ${sortField === 'noResponse' ? 'opacity-100' : 'opacity-0 group-hover:opacity-50'}`} />
+                  </div>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -276,6 +286,11 @@ export function EventsStatsPage() {
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 rounded-md bg-primary/10 text-primary font-mono font-bold text-xs">
                         {row.maybe}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 rounded-md bg-muted text-muted-foreground font-mono font-bold text-xs">
+                        {row.noResponse}
                       </span>
                     </td>
                   </tr>

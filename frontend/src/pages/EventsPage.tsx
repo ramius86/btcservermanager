@@ -491,6 +491,10 @@ export function EventsPage() {
                       <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1">Maybe</span>
                       <span className="text-lg font-mono font-black">{event.maybe?.length || 0}</span>
                     </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">No Resp.</span>
+                      <span className="text-lg font-mono font-black">{event.noResponse?.length || 0}</span>
+                    </div>
                   </div>
                   
                   <Button 

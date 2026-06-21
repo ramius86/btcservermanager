@@ -20,9 +20,10 @@ const (
 	notGoingCustomID = "rsvp_notgoing"
 	maybeCustomID    = "rsvp_maybe"
 
-	labelGoing    = "Going"
-	labelNotGoing = "Not Going"
-	labelMaybe    = "Maybe"
+	labelGoing      = "Going"
+	labelNotGoing   = "Not Going"
+	labelMaybe      = "Maybe"
+	labelNoResponse = "No Response"
 
 	btnLabelGoing    = "\u00A0\u00A0\u00A0Going\u00A0\u00A0\u00A0"
 	btnLabelNotGoing = "Not Going"
@@ -134,6 +135,12 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 
 	description := fmt.Sprintf("**Game:** %s\n**Date & Time:** %s", gameType, formattedDateTime)
 
+	allUsers, _ := s.repo.GetAllUsers(ctx)
+	var noRespNames []string
+	for _, u := range allUsers {
+		noRespNames = append(noRespNames, u.Username)
+	}
+
 	embed := &discordgo.MessageEmbed{
 		Title:       title,
 		Description: description,
@@ -142,6 +149,7 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 			{Name: fmt.Sprintf(fieldTitleFormat, labelGoing, 0), Value: "-", Inline: true},
 			{Name: fmt.Sprintf(fieldTitleFormat, labelNotGoing, 0), Value: "-", Inline: true},
 			{Name: fmt.Sprintf(fieldTitleFormat, labelMaybe, 0), Value: "-", Inline: true},
+			{Name: fmt.Sprintf(fieldTitleFormat, labelNoResponse, len(noRespNames)), Value: formatUsersForField(noRespNames), Inline: true},
 		},
 	}
 
@@ -227,15 +235,20 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 	}
 
 	detail := &DiscordEventDetail{
-		Event:    *event,
-		Going:    []string{},
-		NotGoing: []string{},
-		Maybe:    []string{},
+		Event:      *event,
+		Going:      []string{},
+		NotGoing:   []string{},
+		Maybe:      []string{},
+		NoResponse: []string{},
 	}
+
+	allUsers, _ := s.repo.GetAllUsers(ctx)
+	respondedMap := make(map[string]bool)
 
 	parts, err := s.repo.GetEventParticipations(ctx, id)
 	if err == nil {
 		for _, p := range parts {
+			respondedMap[p.UserID] = true
 			switch p.Status {
 			case "going":
 				detail.Going = append(detail.Going, p.Username)
@@ -244,6 +257,12 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 			case "maybe":
 				detail.Maybe = append(detail.Maybe, p.Username)
 			}
+		}
+	}
+
+	for _, u := range allUsers {
+		if !respondedMap[u.ID] {
+			detail.NoResponse = append(detail.NoResponse, u.Username)
 		}
 	}
 
@@ -414,10 +433,23 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 
 	going, notGoing, maybe := groupParticipants(parts)
 
+	allUsers, _ := s.repo.GetAllUsers(ctx)
+	respondedMap := make(map[string]bool)
+	for _, p := range parts {
+		respondedMap[p.UserID] = true
+	}
+	var noResponse []string
+	for _, u := range allUsers {
+		if !respondedMap[u.ID] {
+			noResponse = append(noResponse, u.Username)
+		}
+	}
+
 	embed.Fields = []*discordgo.MessageEmbedField{
 		{Name: fmt.Sprintf(fieldTitleFormat, labelGoing, len(going)), Value: formatUsersForField(going), Inline: true},
 		{Name: fmt.Sprintf(fieldTitleFormat, labelNotGoing, len(notGoing)), Value: formatUsersForField(notGoing), Inline: true},
 		{Name: fmt.Sprintf(fieldTitleFormat, labelMaybe, len(maybe)), Value: formatUsersForField(maybe), Inline: true},
+		{Name: fmt.Sprintf(fieldTitleFormat, labelNoResponse, len(noResponse)), Value: formatUsersForField(noResponse), Inline: true},
 	}
 
 	if embed.Image != nil && embed.Image.URL != "" {
