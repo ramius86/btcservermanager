@@ -480,19 +480,19 @@ export function EventsPage() {
                 <div className="flex items-center gap-6 border-l border-border pl-6 w-full sm:w-auto">
                   <div className="flex gap-4">
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-success mb-1">Going</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success mb-1 whitespace-nowrap">Going</span>
                       <span className="text-lg font-mono font-black">{event.going?.length || 0}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-1">Not</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-1 whitespace-nowrap">Not</span>
                       <span className="text-lg font-mono font-black">{event.notGoing?.length || 0}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1">Maybe</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1 whitespace-nowrap">Maybe</span>
                       <span className="text-lg font-mono font-black">{event.maybe?.length || 0}</span>
                     </div>
                     <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">No Resp.</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 whitespace-nowrap">No Resp.</span>
                       <span className="text-lg font-mono font-black">{event.noResponse?.length || 0}</span>
                     </div>
                   </div>
