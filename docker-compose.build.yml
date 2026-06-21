@@ -1,0 +1,60 @@
+services:
+  btcservermanager:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    volumes:
+      - ${HOST_STORAGE_PATH:-./storage}:/app/storage
+      - ${HOST_STORAGE_PATH:-./storage}/steam:/home/steam/Steam
+    environment:
+      - STEAM_API_KEY=${STEAM_API_KEY}
+      - SECRET_KEY=${SECRET_KEY}
+      - ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
+      - CF_TEAM_DOMAIN=${CF_TEAM_DOMAIN}
+      - CF_ZONE_ID=${CF_ZONE_ID}
+      - CF_API_TOKEN=${CF_API_TOKEN}
+      - CSP_ENABLED=${CSP_ENABLED}
+      - CSP_MODE=${CSP_MODE}
+      - DEBUG=${DEBUG:-false}
+      - FOX_EASTER_EGG=${FOX_EASTER_EGG:-false}
+      - DATABASE_URL=${DATABASE_URL:-/app/storage/data/btc.db}
+      - STORAGE_PATH=${STORAGE_PATH:-/app/storage}
+      - TIMEZONE=${TIMEZONE:-Europe/Rome}
+      - TZ=${TIMEZONE:-Europe/Rome}
+      - LOG_RETENTION_DAYS=${LOG_RETENTION_DAYS:-30}
+      - MAX_SCENARIO_SIZE=${MAX_SCENARIO_SIZE:-104857600}
+      - ADDITIONAL_MODS=${ADDITIONAL_MODS}
+      - STEAMCMD_PATH=${STEAMCMD_PATH:-/home/steam/steamcmd/steamcmd.sh}
+      - STEAMCMD_CACHE_PATH=${STEAMCMD_CACHE_PATH}
+      - DIRECTORY_MODS=${DIRECTORY_MODS}
+      - DIRECTORY_SERVERS=${DIRECTORY_SERVERS}
+      - DIRECTORY_LOGS=${DIRECTORY_LOGS}
+      - VERSION=${VERSION:-latest}
+      - PORT=${PORT:-8080}
+      - FASTDL_PORT=${FASTDL_PORT:-8081}
+      - FASTDL_DOMAIN=${FASTDL_DOMAIN}      
+      - PPROF_ENABLED=${PPROF_ENABLED:-false}
+      - PPROF_PORT=${PPROF_PORT:-6060}
+      - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
+      - DISCORD_GUILD_ID=${DISCORD_GUILD_ID}
+    ports:
+      # Arma 3
+      - "${ARMA3_GAME_PORTS:-127.0.0.1:2302-2306:2302-2306/udp}"
+      - "${ARMA3_STEAM_PORTS:-127.0.0.1:2312-2316:2312-2316/udp}"
+      # DayZ
+      - "${DAYZ_GAME_PORTS:-127.0.0.1:2402-2405:2402-2405/udp}"
+      - "${DAYZ_STEAM_PORTS:-127.0.0.1:27016:27016/udp}"
+      # Arma Reforger
+      - "${REFORGER_GAME_PORTS:-127.0.0.1:2001:2001/udp}"
+      - "${REFORGER_A2S_PORTS:-127.0.0.1:17777:17777/udp}"
+      - "${REFORGER_RCON_PORTS:-127.0.0.1:19999:19999/udp}"
+      # pprof
+      - "${PPROF_HOST_PORT:-127.0.0.1:6060}:${PPROF_PORT:-6060}"
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
