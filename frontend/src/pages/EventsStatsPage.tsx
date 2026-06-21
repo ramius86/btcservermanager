@@ -264,7 +264,7 @@ export function EventsStatsPage() {
             <tbody className="divide-y divide-border">
               {tableData.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-muted-foreground">
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">
                     No data available for this period and game.
                   </td>
                 </tr>
