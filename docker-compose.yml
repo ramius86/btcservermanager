@@ -1,12 +1,7 @@
 services:
   btcservermanager:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    image: ghcr.io/ramius86/btcservermanager:${VERSION:-latest}
     restart: unless-stopped
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
     volumes:
       - ${HOST_STORAGE_PATH:-./storage}:/app/storage
       - ${HOST_STORAGE_PATH:-./storage}/steam:/home/steam/Steam
@@ -58,9 +53,6 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     restart: unless-stopped
-    dns:
-      - 1.1.1.1
-      - 1.0.0.1
     command: tunnel --no-autoupdate run
     environment:
       - TUNNEL_TOKEN=${TUNNEL_TOKEN}
