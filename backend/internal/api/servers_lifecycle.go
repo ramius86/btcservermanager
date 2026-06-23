@@ -2,6 +2,7 @@ package api
 
 import (
 	"btcservermanager/internal/domain/server"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -22,13 +23,12 @@ Other files in this split:
 */
 
 func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
 	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, errInvalidServerID, http.StatusBadRequest)
 		return
 	}
-	if err := r.serverService.StartServer(ctx, id); err != nil {
+	if err := r.serverService.StartServer(context.Background(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -52,13 +52,12 @@ func (r *Router) handleStopServer(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) handleRestartServer(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
 	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, errInvalidServerID, http.StatusBadRequest)
 		return
 	}
-	if err := r.serverService.RestartServer(ctx, id); err != nil {
+	if err := r.serverService.RestartServer(context.Background(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

@@ -10,6 +10,8 @@ export const formatUptime = (seconds: number | string | null) => {
     totalSeconds = seconds
   }
 
+  if (totalSeconds < 0) return 'Starting...'
+
   if (totalSeconds < 60) return `${totalSeconds}s`
   if (totalSeconds < 3600) return `${Math.floor(totalSeconds / 60)}m`
   
