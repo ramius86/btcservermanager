@@ -155,7 +155,7 @@ func (r *Router) validateStatsFilename(filename string, id int64, srvType server
 }
 
 func parseReforgerStats(f io.Reader) []server.ReforgerStatDto {
-	const maxStats = 2000
+	const maxStats = 15000
 
 	// Phase 1 — append-grow. Avoids the unconditional 160 kB pre-allocation of
 	// the old make([]ReforgerStatDto, 2000) when the file has fewer entries.

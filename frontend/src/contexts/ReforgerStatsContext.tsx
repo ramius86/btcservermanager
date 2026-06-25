@@ -33,7 +33,7 @@ export function ReforgerStatsProvider({ serverId, children }: Readonly<{ serverI
       if (e.payload.server_id === serverId) {
         setStats((prev) => {
           const newStats = [...prev, e.payload.stats]
-          if (newStats.length > 2000) return newStats.slice(-2000)
+          if (newStats.length > 15000) return newStats.slice(-15000)
           return newStats
         })
       }

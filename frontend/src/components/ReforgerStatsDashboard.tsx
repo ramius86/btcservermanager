@@ -106,7 +106,26 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
   const seenTimestamps = new Set(initialStats.map(s => s.timestamp))
   const wsNew = stats.filter(s => !seenTimestamps.has(s.timestamp))
   const combinedAll = isLive ? [...initialStats, ...wsNew] : initialStats
-  const combinedStats = combinedAll.length > 2000 ? combinedAll.slice(-2000) : combinedAll
+  const maxHistory = 15000
+  const historyStats = combinedAll.length > maxHistory ? combinedAll.slice(-maxHistory) : combinedAll
+
+  const maxChartPoints = 1500
+  let combinedStats = historyStats
+  if (historyStats.length > maxChartPoints) {
+    const step = Math.ceil(historyStats.length / maxChartPoints)
+    const downsampled = []
+    for (let i = 0; i < historyStats.length; i += step) {
+      const chunk = historyStats.slice(i, i + step)
+      if (chunk.length === 0) continue
+      const minFpsPoint = chunk.reduce((prev, curr) => (curr.fps < prev.fps ? curr : prev), chunk[0])
+      downsampled.push(minFpsPoint)
+    }
+    if (downsampled.length > 0 && historyStats.length > 0 && downsampled.at(-1)?.timestamp !== historyStats.at(-1)?.timestamp) {
+      const lastPoint = historyStats.at(-1)
+      if (lastPoint) downsampled.push(lastPoint)
+    }
+    combinedStats = downsampled
+  }
 
   if (initialLoading && combinedStats.length === 0) {
     return <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
@@ -132,7 +151,7 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
     )
   }
 
-  const latest = combinedStats.at(-1)
+  const latest = historyStats.at(-1)
 
   const parseTime = (ts: string) => {
     if (!ts) return new Date()

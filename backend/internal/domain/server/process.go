@@ -793,13 +793,6 @@ func updateReforgerTracker(tracker *reforgerTimeTracker) string {
 	return tracker.lastFormattedTimestamp
 }
 
-func isReforgerPreamble(line []byte) bool {
-	return bytes.Contains(line, []byte("WORLD")) ||
-		bytes.Contains(line, []byte("Entities")) ||
-		bytes.Contains(line, []byte("Frame")) ||
-		bytes.Contains(line, []byte("DEFAULT"))
-}
-
 func (m *ProcessManager) broadcastReforgerStats(p *Process, stat *ReforgerStatDto, rawLine string, b Broadcaster) {
 	if m.debugMode {
 		log.Printf("[DEBUG-STATS] ParsedTime: %s | FPS: %.1f | Players: %d | Raw: %s", stat.Timestamp, stat.FPS, stat.Players, rawLine)
@@ -836,8 +829,6 @@ func (m *ProcessManager) handleReforgerLogLine(p *Process, line []byte, b Broadc
 		m.broadcastReforgerStats(p, stat, lineStr, b)
 	}
 
-	isPreamble := isReforgerPreamble(line)
-
 	// Get buffer from pool to avoid allocation
 	outBuf, ok := bufferPool.Get().(*bytes.Buffer)
 	if !ok {
@@ -851,10 +842,10 @@ func (m *ProcessManager) handleReforgerLogLine(p *Process, line []byte, b Broadc
 	lineBytes := outBuf.Bytes()
 
 	// Divert to stats log and SKIP broadcasting to main log if it's telemetry
-	if (isStatLine || isPreamble) && statsLog != nil {
+	if isStatLine && statsLog != nil {
 		_, _ = statsLog.Write(lineBytes)
 	} else {
-		// Broadcast to UI only if NOT a stat/preamble line
+		// Broadcast to UI only if NOT a stat line
 		if b != nil {
 			b.Broadcast("server_log", LogPayload{
 				ServerID: p.serverID,
