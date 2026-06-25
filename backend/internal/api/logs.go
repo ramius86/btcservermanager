@@ -122,9 +122,11 @@ func (r *Router) getServerType(ctx context.Context, id int64) (server.Type, erro
 
 func (r *Router) resolveStatsFilename(id int64, srvType server.Type, queryFilename string) string {
 	filename := queryFilename
-	info := r.serverService.GetInstanceInfo(id)
-	if info != nil && info.CurrentLogFile != "" {
-		filename = info.CurrentLogFile
+	if filename == "" {
+		info := r.serverService.GetInstanceInfo(id)
+		if info != nil && info.CurrentLogFile != "" {
+			filename = info.CurrentLogFile
+		}
 	}
 	if filename == "" {
 		filename = r.findLatestServerLog(id, srvType)
