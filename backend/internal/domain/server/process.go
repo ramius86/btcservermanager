@@ -809,7 +809,22 @@ func (m *ProcessManager) broadcastReforgerStats(p *Process, stat *ReforgerStatDt
 	}
 }
 
+// isReforgerSpam detects the cyclic tick lines that Reforger emits around
+// each telemetry sample. These carry no diagnostic value and would flood
+// both the main log file and the WebSocket stream.
+func isReforgerSpam(line []byte) bool {
+	if !bytes.Contains(line, []byte("UpdateEntities")) && !bytes.Contains(line, []byte("Frame")) {
+		return false
+	}
+	s := strings.ReplaceAll(string(bytes.TrimSpace(line)), " ", "")
+	return s == "WORLD:UpdateEntities" || s == "WORLD:Frame"
+}
+
 func (m *ProcessManager) handleReforgerLogLine(p *Process, line []byte, b Broadcaster, mainLog, statsLog *os.File, tracker *reforgerTimeTracker) {
+	if isReforgerSpam(line) {
+		return
+	}
+
 	timestampStr := updateReforgerTracker(tracker)
 
 	var stat *ReforgerStatDto
