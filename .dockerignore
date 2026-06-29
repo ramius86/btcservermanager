@@ -36,6 +36,7 @@ backend/storage
 # Documentation & docker config
 README.md
 docker-compose.yml
+/docs/*
 
 # Scratch and test files
 backend/scratch

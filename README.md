@@ -12,6 +12,37 @@ This manager was developed to manage the game servers of the =BTC= Black Templar
 
 ---
 
+## 📸 Screenshots Gallery
+
+Here's a quick look at the main features of the BTC Server Manager interface:
+
+| 🎛️ Unified Dashboard | 📝 Live Log Streaming |
+|:---:|:---:|
+| <a href="docs/dashboard.png"><img src="docs/dashboard.png" width="400" alt="Dashboard"></a> | <a href="docs/logs.png"><img src="docs/logs.png" width="400" alt="Logs"></a> |
+| *Start, stop, and monitor all your server instances (Arma 3, DayZ, Reforger) from a single intuitive view.* | *Real-time streaming of server console logs for instant debugging and monitoring.* |
+
+| 🧩 Workshop Search Engine | ⚙️ Mod Presets Management |
+|:---:|:---:|
+| <a href="docs/arma_3_workshop.png"><img src="docs/arma_3_workshop.png" width="400" alt="Workshop"></a> | <a href="docs/arma3_mods.png"><img src="docs/arma3_mods.png" width="400" alt="Mod Management"></a> |
+| *Search, browse, and download mods directly from the Steam Workshop for both **Arma 3** and **Arma Reforger**.* | *Easily create, import, and manage custom HTML mod presets tailored for different server profiles.* |
+
+| 🛠️ Custom CBA Settings Generator | 🗺️ Scenario Orchestration |
+|:---:|:---:|
+| <a href="docs/arma_3_cba.png"><img src="docs/arma_3_cba.png" width="400" alt="Arma 3 CBA"></a> | <a href="docs/scenario.png"><img src="docs/scenario.png" width="400" alt="Scenarios"></a> |
+| *Preview CBA configurations visually and automatically generate a custom CBA userconfig PBO for each specific instance.* | *Upload `.pbo` files, configure mission parameters, and orchestrate Headless Clients seamlessly.* |
+
+<details>
+<summary><b>View more screenshots...</b></summary>
+<br>
+
+| Server Configurations | Arma 3 Mod Presets | Reforger Workshop |
+|:---:|:---:|:---:|
+| <a href="docs/server_list.png"><img src="docs/server_list.png" width="300" alt="Server List"></a><br>*Quick access to advanced server settings, ports, and configuration editors.* | <a href="docs/arma_3_mods.png"><img src="docs/arma_3_mods.png" width="300" alt="Arma 3 Mods"></a><br>*Detailed view of the mod preset management interface.* | <a href="docs/reforger_workshop.png"><img src="docs/reforger_workshop.png" width="300" alt="Reforger Workshop"></a><br>*Dedicated high-performance scraper for the official Arma Reforger Workshop.* |
+
+</details>
+
+---
+
 ## Key Features
 
 ### Unified Multi-Instance Dashboard
@@ -284,6 +315,12 @@ Once the manager is running with `pprof` enabled, you can collect diagnostics:
   ```bash
   curl http://localhost:6060/debug/pprof/goroutine?debug=2
   ```
+
+---
+
+## Benchmarks
+
+You can view the latest performance benchmark results [here](https://ramius86.github.io/btcservermanager/).
 
 ---
 
