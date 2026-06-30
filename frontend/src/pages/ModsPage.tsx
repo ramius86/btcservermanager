@@ -178,6 +178,14 @@ function useFilteredMods(mods: any[], searchQuery: string, sortBy: string) {
   })
 
   return filtered.sort((a, b) => {
+    // 1. Prioritize mods that need update
+    const aNeedsUpdate = a.needsUpdate === true && a.installationStatus !== 'INSTALLATION_IN_PROGRESS';
+    const bNeedsUpdate = b.needsUpdate === true && b.installationStatus !== 'INSTALLATION_IN_PROGRESS';
+    
+    if (aNeedsUpdate && !bNeedsUpdate) return -1;
+    if (!aNeedsUpdate && bNeedsUpdate) return 1;
+
+    // 2. Normal sorting
     if (sortBy === 'recent') {
       const dateA = a.installedAt ? new Date(a.installedAt).getTime() : 0
       const dateB = b.installedAt ? new Date(b.installedAt).getTime() : 0
@@ -395,13 +403,18 @@ const UpdateWarningAlert = ({ updateMods, handleUpdatePending, updatingAll }: an
         <p className="text-sm font-bold text-amber-500">
           {updateMods.length} mod{updateMods.length === 1 ? '' : 's'} have updates available
         </p>
-        <p className="mt-1 text-xs text-amber-500/80">
-          Click 'Update Pending' to start the installation process. Until then, the server will continue to use the currently installed versions.
+        <ul className="mt-2 mb-2 text-xs text-amber-500/90 list-disc list-inside space-y-1">
+          {updateMods.map((m: any) => (
+            <li key={m.id} className="font-semibold">{m.name || m.id}</li>
+          ))}
+        </ul>
+        <p className="text-xs text-amber-500/80">
+          Click 'Update Outdated Mods' to start the installation process. Until then, the server will continue to use the currently installed versions.
         </p>
       </div>
       <Button size="sm" onClick={handleUpdatePending} disabled={updatingAll} className="shrink-0 bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 hover:text-amber-400 border border-amber-500/30">
         <RefreshCw className={cn("w-3.5 h-3.5 mr-2", updatingAll && "animate-spin")} />
-        Update Pending
+        Update Outdated Mods
       </Button>
     </div>
   )
