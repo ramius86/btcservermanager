@@ -3,6 +3,27 @@ import { Card } from '../components/ui/Card'
 import { DiscordService, DiscordRawAttendance } from '../services/api'
 import { ArrowLeft, ArrowUpDown, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+} from 'chart.js'
+import { Bar, Doughnut } from 'react-chartjs-2'
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+)
 
 type SortField = 'username' | 'going' | 'notGoing' | 'maybe' | 'noResponse'
 type SortOrder = 'asc' | 'desc'
@@ -115,6 +136,141 @@ export function EventsStatsPage() {
 
   }, [attendances, viewMode, selectedYear, selectedMonth, selectedGame, sortField, sortOrder])
 
+  const globalStats = useMemo(() => {
+    let going = 0
+    let notGoing = 0
+    let maybe = 0
+    let noResponse = 0
+
+    tableData.forEach(row => {
+      going += row.going
+      notGoing += row.notGoing
+      maybe += row.maybe
+      noResponse += row.noResponse
+    })
+
+    const total = going + notGoing + maybe + noResponse
+
+    return { going, notGoing, maybe, noResponse, total }
+  }, [tableData])
+
+  const barChartData = useMemo(() => {
+    const chartRows = tableData.slice(0, 15)
+    return {
+      labels: chartRows.map(r => r.username),
+      datasets: [
+        {
+          label: 'Going',
+          data: chartRows.map(r => r.going),
+          backgroundColor: '#10b981',
+        },
+        {
+          label: 'Maybe',
+          data: chartRows.map(r => r.maybe),
+          backgroundColor: '#3b82f6',
+        },
+        {
+          label: 'Not Going',
+          data: chartRows.map(r => r.notGoing),
+          backgroundColor: '#ef4444',
+        },
+        {
+          label: 'No Response',
+          data: chartRows.map(r => r.noResponse),
+          backgroundColor: '#6b7280',
+        }
+      ]
+    }
+  }, [tableData])
+
+  const barChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        position: 'top' as const,
+        labels: {
+          color: '#8c909f',
+          font: {
+            family: 'Inter',
+            size: 11
+          }
+        }
+      },
+      tooltip: {
+        mode: 'index' as const,
+        intersect: false,
+      }
+    },
+    scales: {
+      x: {
+        stacked: true,
+        grid: {
+          display: false,
+        },
+        ticks: {
+          color: '#8c909f',
+          font: {
+            family: 'Inter',
+            size: 10
+          }
+        }
+      },
+      y: {
+        stacked: true,
+        grid: {
+          color: '#334155',
+        },
+        ticks: {
+          color: '#8c909f',
+          font: {
+            family: 'Inter',
+            size: 10
+          },
+          precision: 0
+        }
+      }
+    }
+  }
+
+  const donutData = useMemo(() => {
+    return {
+      labels: ['Going', 'Maybe', 'Not Going', 'No Response'],
+      datasets: [
+        {
+          data: [
+            globalStats.going,
+            globalStats.maybe,
+            globalStats.notGoing,
+            globalStats.noResponse
+          ],
+          backgroundColor: ['#10b981', '#3b82f6', '#ef4444', '#6b7280'],
+          borderWidth: 0,
+        }
+      ]
+    }
+  }, [globalStats])
+
+  const donutOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: {
+        display: false,
+      },
+      tooltip: {
+        callbacks: {
+          label: (context: any) => {
+            const value = context.raw || 0
+            const percentage = globalStats.total > 0 ? Math.round((value / globalStats.total) * 100) : 0
+            return ` ${context.label}: ${value} (${percentage}%)`
+          }
+        }
+      }
+    },
+    cutout: '70%'
+  }
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
@@ -145,14 +301,54 @@ export function EventsStatsPage() {
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto py-8 px-6">
-      <div className="flex items-center gap-4">
-        <Link to="/events" className="p-2 rounded-full hover:bg-surface-elevated text-muted-foreground hover:text-foreground transition-colors">
-          <ArrowLeft className="w-6 h-6" />
-        </Link>
-        <div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">Attendance Stats</h1>
-          <p className="text-muted-foreground mt-1">Track Discord event participations over time</p>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 flex flex-col justify-center">
+          <div className="flex items-center gap-4">
+            <Link to="/events" className="p-2 rounded-full hover:bg-surface-elevated text-muted-foreground hover:text-foreground transition-colors">
+              <ArrowLeft className="w-6 h-6" />
+            </Link>
+            <div>
+              <h1 className="text-4xl font-bold tracking-tight text-foreground">Attendance Stats</h1>
+              <p className="text-muted-foreground mt-1">Track Discord event participations over time</p>
+            </div>
+          </div>
         </div>
+
+        {/* Global Attendance Donut Card */}
+        <Card className="p-4 border-border bg-surface-elevated/50 flex items-center gap-6 shadow-sm">
+          <div className="w-20 h-20 flex-shrink-0 relative">
+            {globalStats.total > 0 ? (
+              <Doughnut data={donutData} options={donutOptions} />
+            ) : (
+              <div className="w-full h-full rounded-full border-2 border-dashed border-border flex items-center justify-center text-[10px] text-muted-foreground">N/A</div>
+            )}
+          </div>
+          <div className="flex-1 grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-success flex-shrink-0"></span>
+              <span className="text-muted-foreground truncate">Going:</span>
+              <span className="font-bold text-foreground">{globalStats.going}</span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-primary flex-shrink-0"></span>
+              <span className="text-muted-foreground truncate">Maybe:</span>
+              <span className="font-bold text-foreground">{globalStats.maybe}</span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-destructive flex-shrink-0"></span>
+              <span className="text-muted-foreground truncate">No:</span>
+              <span className="font-bold text-foreground">{globalStats.notGoing}</span>
+            </div>
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="w-2 h-2 rounded-full bg-[#6b7280] flex-shrink-0"></span>
+              <span className="text-muted-foreground truncate">Ignored:</span>
+              <span className="font-bold text-foreground">{globalStats.noResponse}</span>
+            </div>
+            <div className="col-span-2 pt-1 border-t border-border mt-1 text-[10px] text-muted-foreground">
+              Total Responses: <span className="font-bold text-foreground">{globalStats.total}</span>
+            </div>
+          </div>
+        </Card>
       </div>
 
       <Card className="p-6 border-border bg-surface-elevated/50 overflow-hidden">
@@ -208,6 +404,16 @@ export function EventsStatsPage() {
             </select>
           </div>
         </div>
+
+        {/* Stacked Bar Chart */}
+        {tableData.length > 0 && (
+          <div className="mb-8 p-4 bg-surface rounded-lg border border-border h-[280px]">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Top 15 User Attendance Breakdown</h3>
+            <div className="h-[220px]">
+              <Bar data={barChartData} options={barChartOptions} />
+            </div>
+          </div>
+        )}
 
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-left text-sm">
