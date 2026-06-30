@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	errDiscordNotConfigured       = "Discord bot not configured"
-	errDiscordRepoNotInitialized  = "Discord repository not initialized"
-	eventIDRoute                  = "/events/{id}"
-	errInvalidEventID             = "Invalid event ID"
+	errDiscordNotConfigured      = "Discord bot not configured"
+	errDiscordRepoNotInitialized = "Discord repository not initialized"
+	eventIDRoute                 = "/events/{id}"
+	errInvalidEventID            = "Invalid event ID"
 )
 
 func (r *Router) discordRoutes() chi.Router {
