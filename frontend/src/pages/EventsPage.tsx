@@ -464,18 +464,33 @@ export function EventsPage() {
                <p className="text-muted-foreground mt-1">Create an event to post it to Discord.</p>
              </div>
           ) : (
-            events.map(event => (
-              <Card key={event.id} className="p-5 border-border bg-surface-elevated/50 flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group">
-                <div>
-                  <h3 className="font-bold text-lg">{event.title}</h3>
-                  <div className="flex gap-3 text-sm text-muted-foreground mt-1">
-                    <span className="font-medium text-foreground">{event.dateTime}</span>
-                    <span>•</span>
-                    <span className="text-primary">{event.gameType}</span>
-                    <span>•</span>
-                    <span>#{channels.find(c => c.id === event.channelId)?.name || 'unknown-channel'}</span>
+            events.map(event => {
+              const isPast = event.dateTime ? new Date(event.dateTime) < new Date() : false
+              return (
+                <Card 
+                  key={event.id} 
+                  className={`p-5 border-border flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between group transition-all duration-200 ${
+                    isPast 
+                      ? 'bg-surface/20 border-border/40 opacity-50' 
+                      : 'bg-surface-elevated/50'
+                  }`}
+                >
+                  <div>
+                    <h3 className={`font-bold text-lg ${isPast ? 'text-muted-foreground' : 'text-foreground'}`}>{event.title}</h3>
+                    <div className="flex gap-3 text-sm text-muted-foreground mt-1">
+                      <span className={`font-medium ${isPast ? 'text-muted-foreground/80' : 'text-foreground'}`}>{event.dateTime}</span>
+                      <span>•</span>
+                      <span className={isPast ? 'text-muted-foreground/80' : 'text-primary'}>{event.gameType}</span>
+                      <span>•</span>
+                      <span>#{channels.find(c => c.id === event.channelId)?.name || 'unknown-channel'}</span>
+                      {isPast && (
+                        <>
+                          <span>•</span>
+                          <span className="text-muted-foreground/60 font-bold uppercase text-[10px] tracking-wider self-center">Passed</span>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
 
                 <div className="flex items-center gap-6 border-l border-border pl-6 w-full sm:w-auto">
                   <div className="flex gap-4">
@@ -517,7 +532,8 @@ export function EventsPage() {
                   </Button>
                 </div>
               </Card>
-            ))
+              )
+            })
           )}
         </div>
       </div>
