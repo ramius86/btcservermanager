@@ -237,6 +237,13 @@ export interface DiscordRawAttendance {
 	gameType: string
 }
 
+export interface DiscordUser {
+	id: string
+	username: string
+	isActive: boolean
+	updatedAt: string
+}
+
 export const DiscordService = {
 	getStatus: (): Promise<{ connected: boolean, configured: boolean }> => fetchApi('/discord/status'),
 	getChannels: (): Promise<DiscordChannel[]> => fetchApi('/discord/channels'),
@@ -247,4 +254,6 @@ export const DiscordService = {
 	createEvent: (data: CreateDiscordEventRequest): Promise<DiscordEvent> => fetchApi('/discord/events', { method: 'POST', body: JSON.stringify(data) }),
 	updateEvent: (id: number, data: UpdateDiscordEventRequest): Promise<DiscordEvent> => fetchApi(`/discord/events/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
 	deleteEvent: (id: number): Promise<void> => fetchApi(`/discord/events/${id}`, { method: 'DELETE' }),
+	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
+	setUserActive: (id: string, active: boolean): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active }) }),
 }

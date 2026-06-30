@@ -150,6 +150,7 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 		FROM discord_users u
 		CROSS JOIN discord_events e
 		LEFT JOIN discord_event_participations p ON p.user_id = u.id AND p.event_id = e.id
+		WHERE u.is_active = 1 OR p.status IS NOT NULL
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -172,7 +173,7 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 }
 
 func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
-	query := `SELECT id, username, updated_at FROM discord_users ORDER BY username ASC`
+	query := `SELECT id, username, is_active, updated_at FROM discord_users WHERE is_active = 1 ORDER BY username ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -182,7 +183,7 @@ func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
 	var users []DiscordUser
 	for rows.Next() {
 		var u DiscordUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -191,4 +192,36 @@ func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
 		return nil, err
 	}
 	return users, nil
+}
+
+func (r *Repository) GetAllUsersForManagement(ctx context.Context) ([]DiscordUser, error) {
+	query := `SELECT id, username, is_active, updated_at FROM discord_users ORDER BY username ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []DiscordUser
+	for rows.Next() {
+		var u DiscordUser
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.UpdatedAt); err != nil {
+			return nil, err
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return users, nil
+}
+
+func (r *Repository) SetUserActive(ctx context.Context, userID string, active bool) error {
+	activeVal := 0
+	if active {
+		activeVal = 1
+	}
+	query := `UPDATE discord_users SET is_active = ?, updated_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, activeVal, userID)
+	return err
 }

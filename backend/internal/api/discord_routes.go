@@ -10,9 +10,10 @@ import (
 )
 
 const (
-	errDiscordNotConfigured = "Discord bot not configured"
-	eventIDRoute            = "/events/{id}"
-	errInvalidEventID       = "Invalid event ID"
+	errDiscordNotConfigured       = "Discord bot not configured"
+	errDiscordRepoNotInitialized  = "Discord repository not initialized"
+	eventIDRoute                  = "/events/{id}"
+	errInvalidEventID             = "Invalid event ID"
 )
 
 func (r *Router) discordRoutes() chi.Router {
@@ -27,6 +28,8 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Get(eventIDRoute, r.handleGetDiscordEventDetail)
 	mux.Put(eventIDRoute, r.handleUpdateDiscordEvent)
 	mux.Delete(eventIDRoute, r.handleDeleteDiscordEvent)
+	mux.Get("/users", r.handleGetDiscordUsers)
+	mux.Patch("/users/{id}/active", r.handleUpdateDiscordUserActive)
 
 	return mux
 }
@@ -102,7 +105,7 @@ func (r *Router) handleCreateDiscordEvent(w http.ResponseWriter, req *http.Reque
 
 func (r *Router) handleGetDiscordEvents(w http.ResponseWriter, req *http.Request) {
 	if r.discordRepo == nil {
-		http.Error(w, "Discord repository not initialized", http.StatusInternalServerError)
+		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -197,7 +200,7 @@ func (r *Router) handleDeleteDiscordEvent(w http.ResponseWriter, req *http.Reque
 
 func (r *Router) handleGetDiscordEventStats(w http.ResponseWriter, req *http.Request) {
 	if r.discordRepo == nil {
-		http.Error(w, "Discord repository not initialized", http.StatusInternalServerError)
+		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -212,4 +215,51 @@ func (r *Router) handleGetDiscordEventStats(w http.ResponseWriter, req *http.Req
 	}
 
 	r.json(w, stats)
+}
+
+func (r *Router) handleGetDiscordUsers(w http.ResponseWriter, req *http.Request) {
+	if r.discordRepo == nil {
+		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+		return
+	}
+
+	users, err := r.discordRepo.GetAllUsersForManagement(req.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if users == nil {
+		users = []discordbot.DiscordUser{}
+	}
+
+	r.json(w, users)
+}
+
+func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.Request) {
+	if r.discordRepo == nil {
+		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+		return
+	}
+
+	id := chi.URLParam(req, "id")
+	if id == "" {
+		http.Error(w, "User ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		Active bool `json:"active"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := r.discordRepo.SetUserActive(req.Context(), id, payload.Active); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
 }

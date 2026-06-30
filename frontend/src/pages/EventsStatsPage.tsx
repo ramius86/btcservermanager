@@ -1,6 +1,6 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '../components/ui/Card'
-import { DiscordService, DiscordRawAttendance } from '../services/api'
+import { DiscordService, DiscordRawAttendance, DiscordUser } from '../services/api'
 import { ArrowLeft, ArrowUpDown, CalendarDays } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import {
@@ -31,6 +31,7 @@ type ViewMode = 'all_time' | 'yearly' | 'monthly'
 
 export function EventsStatsPage() {
   const [attendances, setAttendances] = useState<DiscordRawAttendance[]>([])
+  const [users, setUsers] = useState<DiscordUser[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -43,9 +44,13 @@ export function EventsStatsPage() {
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
 
   useEffect(() => {
-    DiscordService.getAttendanceStats()
-      .then((data) => {
-        setAttendances(data || [])
+    Promise.all([
+      DiscordService.getAttendanceStats(),
+      DiscordService.getUsers()
+    ])
+      .then(([statsData, usersData]) => {
+        setAttendances(statsData || [])
+        setUsers(usersData || [])
         setLoading(false)
       })
       .catch((err) => {
@@ -280,6 +285,18 @@ export function EventsStatsPage() {
     }
   }
 
+  const handleToggleUserActive = async (userId: string, currentActive: boolean) => {
+    try {
+      await DiscordService.setUserActive(userId, !currentActive)
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, isActive: !currentActive } : u))
+      
+      const freshStats = await DiscordService.getAttendanceStats()
+      setAttendances(freshStats || [])
+    } catch (err: any) {
+      alert(err.message || 'Failed to update user status')
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 text-muted-foreground">
@@ -504,6 +521,51 @@ export function EventsStatsPage() {
               )}
             </tbody>
           </table>
+        </div>
+      </Card>
+
+      {/* Player Management Section */}
+      <Card className="p-6 border-border bg-surface-elevated/50">
+        <div className="mb-6">
+          <h2 className="text-xl font-bold tracking-tight text-foreground">Player Management</h2>
+          <p className="text-muted-foreground text-sm mt-1">
+            Freeze players who have stopped playing to exclude them from "No Response" stats.
+            Their past attendance history will be preserved.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+          {users.map(user => (
+            <div 
+              key={user.id} 
+              className={`p-4 rounded-lg border flex items-center justify-between transition-colors ${
+                user.isActive 
+                  ? 'bg-surface border-border' 
+                  : 'bg-surface/30 border-border/50 opacity-60'
+              }`}
+            >
+              <div className="min-w-0 mr-4">
+                <p className="font-semibold text-foreground truncate">{user.username}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? 'bg-success' : 'bg-[#6b7280]'}`}></span>
+                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                    {user.isActive ? 'Active' : 'Frozen'}
+                  </span>
+                </div>
+              </div>
+              
+              <button
+                onClick={() => handleToggleUserActive(user.id, user.isActive)}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                  user.isActive 
+                    ? 'bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive' 
+                    : 'bg-primary/10 text-primary hover:bg-primary/20'
+                }`}
+              >
+                {user.isActive ? 'Freeze' : 'Activate'}
+              </button>
+            </div>
+          ))}
         </div>
       </Card>
     </div>

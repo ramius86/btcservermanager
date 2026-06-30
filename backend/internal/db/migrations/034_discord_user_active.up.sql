@@ -1,0 +1,1 @@
+ALTER TABLE discord_users ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1;
