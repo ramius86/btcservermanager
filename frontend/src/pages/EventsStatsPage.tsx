@@ -42,6 +42,7 @@ export function EventsStatsPage() {
 
   const [sortField, setSortField] = useState<SortField>('going')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [showManagement, setShowManagement] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -526,47 +527,57 @@ export function EventsStatsPage() {
 
       {/* Player Management Section */}
       <Card className="p-6 border-border bg-surface-elevated/50">
-        <div className="mb-6">
-          <h2 className="text-xl font-bold tracking-tight text-foreground">Player Management</h2>
-          <p className="text-muted-foreground text-sm mt-1">
-            Freeze players who have stopped playing to exclude them from "No Response" stats.
-            Their past attendance history will be preserved.
-          </p>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div className="max-w-xl">
+            <h2 className="text-xl font-bold tracking-tight text-foreground">Player Management</h2>
+            <p className="text-muted-foreground text-sm mt-1">
+              Freeze players who have stopped playing to exclude them from "No Response" stats.
+              Their past attendance history will be preserved.
+            </p>
+          </div>
+          <button
+            onClick={() => setShowManagement(!showManagement)}
+            className="flex-shrink-0 px-4 py-2 text-sm font-semibold rounded-md border border-border bg-surface hover:bg-surface-elevated transition-colors text-foreground"
+          >
+            {showManagement ? 'Hide Players' : 'Show Players'}
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {users.map(user => (
-            <div 
-              key={user.id} 
-              className={`p-4 rounded-lg border flex items-center justify-between transition-colors ${
-                user.isActive 
-                  ? 'bg-surface border-border' 
-                  : 'bg-surface/30 border-border/50 opacity-60'
-              }`}
-            >
-              <div className="min-w-0 mr-4">
-                <p className="font-semibold text-foreground truncate">{user.username}</p>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? 'bg-success' : 'bg-[#6b7280]'}`}></span>
-                  <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                    {user.isActive ? 'Active' : 'Frozen'}
-                  </span>
-                </div>
-              </div>
-              
-              <button
-                onClick={() => handleToggleUserActive(user.id, user.isActive)}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+        {showManagement && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 pt-6 border-t border-border mt-6">
+            {users.map(user => (
+              <div 
+                key={user.id} 
+                className={`p-4 rounded-lg border flex items-center justify-between transition-colors ${
                   user.isActive 
-                    ? 'bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive' 
-                    : 'bg-primary/10 text-primary hover:bg-primary/20'
+                    ? 'bg-surface border-border' 
+                    : 'bg-surface/30 border-border/50 opacity-60'
                 }`}
               >
-                {user.isActive ? 'Freeze' : 'Activate'}
-              </button>
-            </div>
-          ))}
-        </div>
+                <div className="min-w-0 mr-4">
+                  <p className="font-semibold text-foreground truncate">{user.username}</p>
+                  <div className="flex items-center gap-1.5 mt-1">
+                    <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? 'bg-success' : 'bg-[#6b7280]'}`}></span>
+                    <span className="text-[10px] text-muted-foreground uppercase font-semibold">
+                      {user.isActive ? 'Active' : 'Frozen'}
+                    </span>
+                  </div>
+                </div>
+                
+                <button
+                  onClick={() => handleToggleUserActive(user.id, user.isActive)}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-md transition-colors ${
+                    user.isActive 
+                      ? 'bg-muted text-muted-foreground hover:bg-destructive/15 hover:text-destructive' 
+                      : 'bg-primary/10 text-primary hover:bg-primary/20'
+                  }`}
+                >
+                  {user.isActive ? 'Freeze' : 'Activate'}
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   )
