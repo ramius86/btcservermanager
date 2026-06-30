@@ -418,6 +418,21 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		return
 	}
 
+	// If the event datetime has passed, do not process the interaction and freeze the message
+	if eventTime, err := time.ParseInLocation("2006-01-02T15:04", event.DateTime, time.Local); err == nil && time.Now().After(eventTime) {
+		err = sess.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+			Type: discordgo.InteractionResponseUpdateMessage,
+			Data: &discordgo.InteractionResponseData{
+				Embeds:     []*discordgo.MessageEmbed{embed},
+				Components: []discordgo.MessageComponent{}, // clear components
+			},
+		})
+		if err != nil {
+			log.Printf("⚠️  Failed to freeze expired event via interaction: %v", err)
+		}
+		return
+	}
+
 	if err := s.repo.UpsertUser(ctx, userID, username); err != nil {
 		log.Printf("⚠️  Failed to upsert discord user: %v", err)
 	}
@@ -469,7 +484,7 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		},
 	})
 	if err != nil {
-		log.Printf("⚠️  Failed to respond to discord interaction: %v", err)
+		log.Printf("⚠️  Failed to respond to interaction: %v", err)
 	}
 }
 
