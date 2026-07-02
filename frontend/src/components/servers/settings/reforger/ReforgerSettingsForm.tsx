@@ -9,7 +9,7 @@
  * - Scenario and mod selection logic specific to Reforger is managed within this form.
  */
 import { useState } from 'react'
-import { ServerCog, ShieldCheck, Activity, Package, Cpu, FileText, Database } from 'lucide-react'
+import { ServerCog, ShieldCheck, Activity, Package, Cpu, FileText, Database, Users, AlertTriangle } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs'
 import { ReforgerSavesManager } from './ReforgerSavesManager'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
@@ -23,6 +23,7 @@ import { LaunchParameter } from "../../../../dtos/ServerDto"
 import { CustomLaunchParametersInput } from '../../CustomLaunchParametersInput'
 import { ReforgerModSelector } from '../../ReforgerModSelector'
 import { ReforgerScenariosAutocomplete } from '../../ReforgerScenariosAutocomplete'
+import { ReforgerCustomNames } from './ReforgerCustomNames'
 
 interface ReforgerSettingsFormProps {
   server: any
@@ -52,7 +53,8 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
           { value: 'properties', label: 'Properties', icon: Cpu },
           ...(server.id && isInstalled ? [
             { value: 'configs', label: 'Configs', icon: FileText },
-            { value: 'saves', label: 'Saved Scenarios', icon: Database }
+            { value: 'saves', label: 'Saved Scenarios', icon: Database },
+            { value: 'custom_names', label: 'Change Names', icon: Users }
           ] : []),
         ].map(tab => (
           <TabsTrigger 
@@ -539,6 +541,28 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
       {server.id && (
         <TabsContent value="saves" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <ReforgerSavesManager serverId={server.id} />
+        </TabsContent>
+      )}
+
+      {/* CUSTOM NAMES TAB */}
+      {server.id && (
+        <TabsContent value="custom_names" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+          {server.activeMods?.some((mod: any) => mod.id === '69C4F1D85803A966') ? (
+            <ReforgerCustomNames serverId={server.id} />
+          ) : (
+            <div className="flex items-start gap-3 p-4 bg-warning/10 border border-warning/20 text-warning rounded-xl text-sm">
+              <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-base mb-1">Mod Not Active</p>
+                <p className="opacity-90">
+                  The <strong className="font-black">BTC_custom_names</strong> mod (ID: 69C4F1D85803A966) is not currently active on this server.
+                </p>
+                <p className="opacity-90 mt-2">
+                  You must add it to the active mods list in the "Mods" tab and restart the server to manage custom in-game names.
+                </p>
+              </div>
+            </div>
+          )}
         </TabsContent>
       )}
     </Tabs>

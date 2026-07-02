@@ -59,6 +59,8 @@ export const ServerService = {
     const query = name ? '?name=' + encodeURIComponent(name) : ''
     return fetchApi(`/server/${id}/reforger/saves${query}`, { method: 'DELETE' })
   },
+  getCustomNames: (id: number): Promise<Record<string, { playerName: string, customName: string }>> => fetchApi(`/server/${id}/reforger/custom-names`),
+  updateCustomNames: (id: number, data: Record<string, { playerName: string, customName: string }>): Promise<void> => fetchApi(`/server/${id}/reforger/custom-names`, { method: 'PUT', body: JSON.stringify(data) }),
   
   getInstallations: (): Promise<ServerInstallationDto[]> => fetchApi('/server/installation'),
   getInstallation: (type: string): Promise<ServerInstallationDto> => fetchApi(`/server/installation/${type}`),

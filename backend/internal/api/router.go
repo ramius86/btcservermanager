@@ -172,6 +172,8 @@ func (r *Router) serverRoutes() chi.Router {
 	mux.Route("/{id}/reforger", func(mux chi.Router) {
 		mux.Get("/saves", r.handleGetReforgerSaves)
 		mux.Delete("/saves", r.handleDeleteReforgerSaves)
+		mux.Get("/custom-names", r.handleGetReforgerCustomNames)
+		mux.Put("/custom-names", r.handleUpdateReforgerCustomNames)
 	})
 
 	mux.Route("/installation", func(mux chi.Router) {
