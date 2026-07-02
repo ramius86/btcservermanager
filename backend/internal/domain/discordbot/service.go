@@ -203,6 +203,13 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 		Embeds:     []*discordgo.MessageEmbed{embed},
 		Components: components,
 		Files:      files,
+		AllowedMentions: &discordgo.MessageAllowedMentions{
+			Parse: []discordgo.AllowedMentionType{
+				discordgo.AllowedMentionTypeRoles,
+				discordgo.AllowedMentionTypeUsers,
+				discordgo.AllowedMentionTypeEveryone,
+			},
+		},
 	}
 	msg, err := s.session.ChannelMessageSendComplex(channelID, msgSend)
 	if err != nil {
