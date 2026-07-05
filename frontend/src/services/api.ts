@@ -246,6 +246,12 @@ export interface DiscordUser {
 	updatedAt: string
 }
 
+export interface DiscordGuildMember {
+	id: string
+	username: string
+	displayName: string
+}
+
 export const DiscordService = {
 	getStatus: (): Promise<{ connected: boolean, configured: boolean }> => fetchApi('/discord/status'),
 	getChannels: (): Promise<DiscordChannel[]> => fetchApi('/discord/channels'),
@@ -258,4 +264,7 @@ export const DiscordService = {
 	deleteEvent: (id: number): Promise<void> => fetchApi(`/discord/events/${id}`, { method: 'DELETE' }),
 	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
 	setUserActive: (id: string, active: boolean): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active }) }),
+	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),
+	updateEventParticipation: (eventId: number, data: { userId: string, username: string, status: string }): Promise<void> => fetchApi(`/discord/events/${eventId}/participants`, { method: 'PUT', body: JSON.stringify(data) }),
 }
+

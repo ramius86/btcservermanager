@@ -225,3 +225,10 @@ func (r *Repository) SetUserActive(ctx context.Context, userID string, active bo
 	_, err := r.db.ExecContext(ctx, query, activeVal, userID)
 	return err
 }
+
+func (r *Repository) DeleteParticipation(ctx context.Context, eventID int64, userID string) error {
+	query := `DELETE FROM discord_event_participations WHERE event_id = ? AND user_id = ?`
+	_, err := r.db.ExecContext(ctx, query, eventID, userID)
+	return err
+}
+

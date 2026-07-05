@@ -30,6 +30,8 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Delete(eventIDRoute, r.handleDeleteDiscordEvent)
 	mux.Get("/users", r.handleGetDiscordUsers)
 	mux.Patch("/users/{id}/active", r.handleUpdateDiscordUserActive)
+	mux.Get("/members", r.handleGetDiscordGuildMembers)
+	mux.Put("/events/{id}/participants", r.handleUpdateDiscordEventParticipation)
 
 	return mux
 }
@@ -263,3 +265,56 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 
 	w.WriteHeader(http.StatusOK)
 }
+
+func (r *Router) handleGetDiscordGuildMembers(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil || !r.discordService.IsConfigured() {
+		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
+		return
+	}
+
+	members, err := r.discordService.GetGuildMembers(req.Context())
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if members == nil {
+		members = []discordbot.GuildMember{}
+	}
+
+	r.json(w, members)
+}
+
+func (r *Router) handleUpdateDiscordEventParticipation(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil || !r.discordService.IsConfigured() {
+		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
+		return
+	}
+
+	idStr := chi.URLParam(req, "id")
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		http.Error(w, errInvalidEventID, http.StatusBadRequest)
+		return
+	}
+
+	var payload discordbot.ManualParticipationRequest
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if payload.UserID == "" || payload.Username == "" || payload.Status == "" {
+		http.Error(w, "userId, username, and status are required", http.StatusBadRequest)
+		return
+	}
+
+	err = r.discordService.UpdateManualParticipation(req.Context(), id, payload.UserID, payload.Username, payload.Status)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+

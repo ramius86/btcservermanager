@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
-import { CalendarDays, Plus, Trash2, X, Pencil, BarChart3 } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, X, Pencil, BarChart3, Users } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -8,6 +8,7 @@ import { useToast } from '../components/ui/Toast'
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog'
 import { ImageCropperModal } from '../components/ui/ImageCropperModal'
+import { ManageRSVPModal } from '../components/events/ManageRSVPModal'
 import {
   DiscordService,
   DiscordEventDetail,
@@ -47,6 +48,7 @@ export function EventsPage() {
   const [editDate, setEditDate] = useState('')
   const [editTime, setEditTime] = useState('')
   const [editGameType, setEditGameType] = useState('ArmA III')
+  const [rsvpEvent, setRsvpEvent] = useState<{ id: number; title: string } | null>(null)
 
   useEffect(() => {
     // Initialize defaults from localStorage
@@ -515,7 +517,16 @@ export function EventsPage() {
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-primary hover:bg-primary/10 ml-auto"
+                    className="text-success hover:bg-success/10 ml-auto"
+                    onClick={() => setRsvpEvent({ id: event.id, title: event.title })}
+                    title="Manage RSVPs"
+                  >
+                    <Users className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    className="text-primary hover:bg-primary/10"
                     onClick={() => handleOpenEdit(event)}
                     title="Edit Event"
                   >
@@ -609,6 +620,14 @@ export function EventsPage() {
           </form>
         </DialogContent>
       </Dialog>
+
+      <ManageRSVPModal
+        isOpen={!!rsvpEvent}
+        onClose={() => setRsvpEvent(null)}
+        eventId={rsvpEvent?.id || 0}
+        eventTitle={rsvpEvent?.title || ''}
+        onUpdate={() => loadData(false)}
+      />
     </div>
   )
 }

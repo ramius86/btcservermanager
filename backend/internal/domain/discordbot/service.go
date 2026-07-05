@@ -33,6 +33,7 @@ const (
 
 	errBotNotConfigured = "discord bot not configured"
 	attachmentURL       = "attachment://event_image.jpg"
+	dateTimeFormat      = "2006-01-02T15:04"
 )
 
 type Service struct {
@@ -129,7 +130,7 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 	}
 
 	formattedDateTime := datetime
-	if t, err := time.ParseInLocation("2006-01-02T15:04", datetime, time.Local); err == nil {
+	if t, err := time.ParseInLocation(dateTimeFormat, datetime, time.Local); err == nil {
 		formattedDateTime = fmt.Sprintf("%s (<t:%d:R>)", t.Format("02/01/2006 15:04"), t.Unix())
 	}
 
@@ -315,7 +316,7 @@ func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datet
 	embed := msg.Embeds[0]
 
 	formattedDateTime := datetime
-	if t, err := time.ParseInLocation("2006-01-02T15:04", datetime, time.Local); err == nil {
+	if t, err := time.ParseInLocation(dateTimeFormat, datetime, time.Local); err == nil {
 		formattedDateTime = fmt.Sprintf("%s (<t:%d:R>)", t.Format("02/01/2006 15:04"), t.Unix())
 	}
 
@@ -426,7 +427,7 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 	}
 
 	// If the event datetime has passed, do not process the interaction and freeze the message
-	if eventTime, err := time.ParseInLocation("2006-01-02T15:04", event.DateTime, time.Local); err == nil && time.Now().After(eventTime) {
+	if eventTime, err := time.ParseInLocation(dateTimeFormat, event.DateTime, time.Local); err == nil && time.Now().After(eventTime) {
 		err = sess.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 			Type: discordgo.InteractionResponseUpdateMessage,
 			Data: &discordgo.InteractionResponseData{
@@ -448,9 +449,27 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		log.Printf("⚠️  Failed to upsert participation: %v", err)
 	}
 
-	parts, err := s.repo.GetEventParticipations(ctx, event.ID)
+	if err := s.buildEmbedFields(ctx, event.ID, embed); err != nil {
+		log.Printf("⚠️  Failed to build embed fields: %v", err)
+	}
+
+	// Respond with the updated embed.
+	err = sess.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseUpdateMessage,
+		Data: &discordgo.InteractionResponseData{
+			Embeds:     []*discordgo.MessageEmbed{embed},
+			Components: i.Message.Components,
+		},
+	})
 	if err != nil {
-		log.Printf("⚠️  Failed to fetch participations: %v", err)
+		log.Printf("⚠️  Failed to respond to interaction: %v", err)
+	}
+}
+
+func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *discordgo.MessageEmbed) error {
+	parts, err := s.repo.GetEventParticipations(ctx, eventID)
+	if err != nil {
+		return err
 	}
 
 	going, notGoing, maybe := groupParticipants(parts)
@@ -481,19 +500,97 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		// By forcing it back to the attachment:// scheme, we retain the proper link.
 		embed.Image.URL = attachmentURL
 	}
-
-	// Respond with the updated embed.
-	err = sess.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseUpdateMessage,
-		Data: &discordgo.InteractionResponseData{
-			Embeds:     []*discordgo.MessageEmbed{embed},
-			Components: i.Message.Components,
-		},
-	})
-	if err != nil {
-		log.Printf("⚠️  Failed to respond to interaction: %v", err)
-	}
+	return nil
 }
+
+func (s *Service) updateEventMessageEmbed(ctx context.Context, event *Event) error {
+	msg, err := s.session.ChannelMessage(event.ChannelID, event.MessageID)
+	if err != nil {
+		return err
+	}
+
+	if len(msg.Embeds) == 0 {
+		return errors.New("original message has no embeds")
+	}
+
+	embed := msg.Embeds[0]
+	if err := s.buildEmbedFields(ctx, event.ID, embed); err != nil {
+		return err
+	}
+
+	embeds := []*discordgo.MessageEmbed{embed}
+	_, err = s.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+		Channel:    event.ChannelID,
+		ID:         event.MessageID,
+		Embeds:     &embeds,
+		Components: &msg.Components,
+	})
+	return err
+}
+
+func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
+	if s.session == nil {
+		return nil, errors.New(errBotNotConfigured)
+	}
+
+	var allMembers []*discordgo.Member
+	var after string
+	for {
+		members, err := s.session.GuildMembers(s.guildID, after, 1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch guild members: %w", err)
+		}
+		if len(members) == 0 {
+			break
+		}
+		allMembers = append(allMembers, members...)
+		if len(members) < 1000 {
+			break
+		}
+		after = members[len(members)-1].User.ID
+	}
+
+	var result []GuildMember
+	for _, m := range allMembers {
+		if m.User.Bot {
+			continue
+		}
+		displayName := m.User.Username
+		if m.Nick != "" {
+			displayName = m.Nick
+		}
+		result = append(result, GuildMember{
+			ID:          m.User.ID,
+			Username:    m.User.Username,
+			DisplayName: displayName,
+		})
+	}
+
+	return result, nil
+}
+
+func (s *Service) UpdateManualParticipation(ctx context.Context, eventID int64, userID, username, status string) error {
+	event, err := s.repo.GetEventByID(ctx, eventID)
+	if err != nil {
+		return err
+	}
+
+	if status == "none" {
+		if err := s.repo.DeleteParticipation(ctx, eventID, userID); err != nil {
+			return err
+		}
+	} else {
+		if err := s.repo.UpsertUser(ctx, userID, username); err != nil {
+			return err
+		}
+		if err := s.repo.UpsertParticipation(ctx, eventID, userID, status); err != nil {
+			return err
+		}
+	}
+
+	return s.updateEventMessageEmbed(ctx, event)
+}
+
 
 func formatUsersForField(users []string) string {
 	if len(users) == 0 {

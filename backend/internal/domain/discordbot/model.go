@@ -65,3 +65,16 @@ type DiscordRole struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
 }
+
+type GuildMember struct {
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	DisplayName string `json:"displayName"`
+}
+
+type ManualParticipationRequest struct {
+	UserID   string `json:"userId"`
+	Username string `json:"username"`
+	Status   string `json:"status"` // "going" | "not_going" | "maybe" | "none"
+}
+
