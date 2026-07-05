@@ -4,7 +4,8 @@ import { useToast } from '../../../ui/Toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
 import { Button } from '../../../ui/Button'
 import { Input } from '../../../ui/Input'
-import { Users, Save, RefreshCw } from 'lucide-react'
+import { Users, Save, RefreshCw, Trash2 } from 'lucide-react'
+import { ConfirmationDialog } from '../../../ui/ConfirmationDialog'
 
 interface CustomNameEntry {
   playerName: string
@@ -19,6 +20,7 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
   const [namesMap, setNamesMap] = useState<Record<string, CustomNameEntry>>({})
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
   const { showToast } = useToast()
 
   const fetchCustomNames = async () => {
@@ -47,10 +49,10 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
     }))
   }
 
-  const handleSave = async () => {
+  const handleSave = async (mapToSave = namesMap) => {
     setSaving(true)
     try {
-      await ServerService.updateCustomNames(serverId, namesMap)
+      await ServerService.updateCustomNames(serverId, mapToSave)
       showToast('Custom names saved successfully', 'success')
       fetchCustomNames() // Reload to ensure sync
     } catch (err: any) {
@@ -58,6 +60,15 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
     } finally {
       setSaving(false)
     }
+  }
+
+  const handleDeleteConfirm = () => {
+    if (!deleteTargetId) return
+    const newNamesMap = { ...namesMap }
+    delete newNamesMap[deleteTargetId]
+    setNamesMap(newNamesMap)
+    setDeleteTargetId(null)
+    handleSave(newNamesMap) // Automatically save after deletion
   }
 
   const entries = Object.entries(namesMap)
@@ -85,8 +96,9 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
           <table className="w-full text-sm text-left">
             <thead className="text-[10px] uppercase font-black tracking-widest text-muted-foreground bg-muted/30 border-b border-border/50">
               <tr>
-                <th className="px-6 py-4 w-1/2">Player Name</th>
-                <th className="px-6 py-4 w-1/2">Custom Name</th>
+                <th className="px-6 py-4 w-[45%]">Player Name</th>
+                <th className="px-6 py-4 w-[45%]">Custom Name</th>
+                <th className="px-6 py-4 w-[10%] text-right">Delete</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
@@ -102,6 +114,17 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
                       className="bg-background border-border/50 focus:border-primary transition-colors h-9"
                       placeholder="Enter custom name..."
                     />
+                  </td>
+                  <td className="px-6 py-3 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setDeleteTargetId(id)}
+                      className="h-8 w-8 p-0 text-muted-foreground hover:text-danger hover:bg-danger/10"
+                      title="Delete Entry"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
                   </td>
                 </tr>
               ))}
@@ -142,7 +165,7 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
               type="button"
               variant="primary"
               size="sm"
-              onClick={handleSave}
+              onClick={() => handleSave()}
               disabled={loading || saving}
               className="h-9 font-bold uppercase tracking-widest text-[9px] gap-2"
             >
@@ -155,6 +178,20 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
       <CardContent className="space-y-6 p-6 lg:p-8">
         {renderContent()}
       </CardContent>
+
+      <ConfirmationDialog
+        open={deleteTargetId !== null}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        title="Delete Custom Name Entry"
+        description={
+          deleteTargetId && namesMap[deleteTargetId]
+            ? `Are you sure you want to completely remove the entry for "${namesMap[deleteTargetId].playerName}"? This action cannot be undone.`
+            : "Are you sure you want to completely remove this entry?"
+        }
+        onConfirm={handleDeleteConfirm}
+        confirmLabel="Delete"
+        variant="danger"
+      />
     </Card>
   )
 }
