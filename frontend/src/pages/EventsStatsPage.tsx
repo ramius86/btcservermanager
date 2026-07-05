@@ -1,8 +1,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '../components/ui/Card'
 import { DiscordService, DiscordRawAttendance, DiscordUser } from '../services/api'
-import { ArrowLeft, ArrowUpDown, CalendarDays } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, CalendarDays, UserX } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog'
+import { Button } from '../components/ui/Button'
+import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -43,8 +46,11 @@ export function EventsStatsPage() {
   const [sortField, setSortField] = useState<SortField>('going')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
   const [showManagement, setShowManagement] = useState(false)
+  const [selectedUserForAction, setSelectedUserForAction] = useState<DiscordUser | null>(null)
+  const [userToDelete, setUserToDelete] = useState<DiscordUser | null>(null)
 
-  useEffect(() => {
+  const loadData = () => {
+    setLoading(true)
     Promise.all([
       DiscordService.getAttendanceStats(),
       DiscordService.getUsers()
@@ -58,6 +64,10 @@ export function EventsStatsPage() {
         setError(err.message || 'Failed to load stats')
         setLoading(false)
       })
+  }
+
+  useEffect(() => {
+    loadData()
   }, [])
 
   // Extract available filter options from the raw data
@@ -496,7 +506,17 @@ export function EventsStatsPage() {
                 tableData.map((row, index) => (
                   <tr key={row.id} className="hover:bg-surface/50 transition-colors">
                     <td className="px-4 py-3 text-muted-foreground">{index + 1}</td>
-                    <td className="px-4 py-3 font-medium text-foreground">{row.username}</td>
+                    <td className="px-4 py-3">
+                      <button 
+                        onClick={() => {
+                          const u = users.find(x => x.id === row.id)
+                          if (u) setSelectedUserForAction(u)
+                        }}
+                        className="font-medium text-foreground hover:text-primary hover:underline transition-colors text-left"
+                      >
+                        {row.username}
+                      </button>
+                    </td>
                     <td className="px-4 py-3">
                       <span className="inline-flex items-center justify-center min-w-[2rem] px-2 py-1 rounded-md bg-success/10 text-success font-mono font-bold text-xs">
                         {row.going}
@@ -579,6 +599,85 @@ export function EventsStatsPage() {
           </div>
         )}
       </Card>
+
+      <Dialog open={!!selectedUserForAction} onOpenChange={(open) => !open && setSelectedUserForAction(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserX className="w-5 h-5 text-muted-foreground" />
+              Manage {selectedUserForAction?.username}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Choose how you want to manage this user in the stats.
+            </p>
+            <div className="space-y-3">
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-left h-auto py-3 border-muted-foreground/20 hover:bg-muted"
+                onClick={() => {
+                  if (selectedUserForAction) {
+                    handleToggleUserActive(selectedUserForAction.id, selectedUserForAction.isActive)
+                    setSelectedUserForAction(null)
+                  }
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-semibold text-foreground">
+                    {selectedUserForAction?.isActive ? 'Deactivate (Hide from future)' : 'Reactivate User'}
+                  </span>
+                  <span className="text-xs text-muted-foreground font-normal mt-1">
+                    {selectedUserForAction?.isActive 
+                      ? 'Keep past history but stop counting as "No Response" in future events.' 
+                      : 'Restore the user as active in future events.'}
+                  </span>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="w-full justify-start text-left h-auto py-3 border-destructive/20 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => {
+                  setUserToDelete(selectedUserForAction)
+                  setSelectedUserForAction(null)
+                }}
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-semibold text-destructive">Delete Completely (Purge)</span>
+                  <span className="text-xs text-destructive/70 font-normal mt-1">
+                    Delete all traces and history of this user. This action is irreversible.
+                  </span>
+                </div>
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setSelectedUserForAction(null)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmationDialog
+        open={!!userToDelete}
+        onOpenChange={(open) => {
+          if (!open) setUserToDelete(null)
+        }}
+        title="Delete user completely?"
+        description={`You are about to permanently delete ${userToDelete?.username}. All historical stats for this user will be deleted (Hard Delete). Confirm?`}
+        confirmLabel="Delete (Purge)"
+        variant="danger"
+        onConfirm={async () => {
+          if (!userToDelete) return
+          try {
+            await DiscordService.deleteUser(userToDelete.id)
+            loadData()
+          } catch (err: any) {
+            setError(err.message || 'Failed to delete user')
+          }
+          setUserToDelete(null)
+        }}
+      />
     </div>
   )
 }
+

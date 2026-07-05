@@ -30,6 +30,7 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Delete(eventIDRoute, r.handleDeleteDiscordEvent)
 	mux.Get("/users", r.handleGetDiscordUsers)
 	mux.Patch("/users/{id}/active", r.handleUpdateDiscordUserActive)
+	mux.Delete("/users/{id}", r.handleDeleteDiscordUser)
 	mux.Get("/members", r.handleGetDiscordGuildMembers)
 	mux.Put("/events/{id}/participants", r.handleUpdateDiscordEventParticipation)
 
@@ -266,6 +267,26 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 	w.WriteHeader(http.StatusOK)
 }
 
+func (r *Router) handleDeleteDiscordUser(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil {
+		http.Error(w, "Discord service not configured", http.StatusInternalServerError)
+		return
+	}
+
+	id := chi.URLParam(req, "id")
+	if id == "" {
+		http.Error(w, "User ID is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.discordService.DeleteUser(req.Context(), id); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
 func (r *Router) handleGetDiscordGuildMembers(w http.ResponseWriter, req *http.Request) {
 	if r.discordService == nil || !r.discordService.IsConfigured() {
 		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
@@ -317,4 +338,3 @@ func (r *Router) handleUpdateDiscordEventParticipation(w http.ResponseWriter, re
 
 	w.WriteHeader(http.StatusOK)
 }
-

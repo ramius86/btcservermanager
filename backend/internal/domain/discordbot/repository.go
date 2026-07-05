@@ -232,3 +232,22 @@ func (r *Repository) DeleteParticipation(ctx context.Context, eventID int64, use
 	return err
 }
 
+func (r *Repository) DeleteUserAndParticipations(ctx context.Context, userID string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_event_participations WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_users WHERE id = ?`, userID); err != nil {
+		return err
+	}
+
+	return tx.Commit()
+}

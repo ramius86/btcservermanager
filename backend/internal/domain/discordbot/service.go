@@ -591,6 +591,9 @@ func (s *Service) UpdateManualParticipation(ctx context.Context, eventID int64, 
 	return s.updateEventMessageEmbed(ctx, event)
 }
 
+func (s *Service) DeleteUser(ctx context.Context, userID string) error {
+	return s.repo.DeleteUserAndParticipations(ctx, userID)
+}
 
 func formatUsersForField(users []string) string {
 	if len(users) == 0 {

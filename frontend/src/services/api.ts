@@ -264,6 +264,7 @@ export const DiscordService = {
 	deleteEvent: (id: number): Promise<void> => fetchApi(`/discord/events/${id}`, { method: 'DELETE' }),
 	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
 	setUserActive: (id: string, active: boolean): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active }) }),
+	deleteUser: (id: string): Promise<void> => fetchApi(`/discord/users/${id}`, { method: 'DELETE' }),
 	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),
 	updateEventParticipation: (eventId: number, data: { userId: string, username: string, status: string }): Promise<void> => fetchApi(`/discord/events/${eventId}/participants`, { method: 'PUT', body: JSON.stringify(data) }),
 }
