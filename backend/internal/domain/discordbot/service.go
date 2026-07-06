@@ -556,6 +556,9 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 			continue
 		}
 		displayName := m.User.Username
+		if m.User.GlobalName != "" {
+			displayName = m.User.GlobalName
+		}
 		if m.Nick != "" {
 			displayName = m.Nick
 		}
