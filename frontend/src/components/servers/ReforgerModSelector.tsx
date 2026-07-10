@@ -3,6 +3,7 @@ import { Search, Plus, Trash2, Globe, Loader2, ExternalLink, Info, Package, Save
 import { Input } from '../ui/Input'
 import { Button, cn } from '../ui/Button'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '../ui/Dialog'
+import { ConfirmationDialog } from '../ui/ConfirmationDialog'
 import { WorkshopService, ScenarioService, ModPresetService } from '../../services/api'
 import { useToast } from '../ui/Toast'
 import { Select } from '../ui/Select'
@@ -35,10 +36,27 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [newPresetName, setNewPresetName] = useState('')
   const [isSavingPreset, setIsSavingPreset] = useState(false)
+  const [presetToDelete, setPresetToDelete] = useState<any>(null)
 
   useEffect(() => {
     loadPresets()
   }, [])
+
+  const handleDeletePreset = async () => {
+    if (!presetToDelete) return
+    try {
+      await ModPresetService.delete(presetToDelete.id)
+      showToast(`Preset '${presetToDelete.name}' deleted.`, 'success')
+      if (selectedPresetId === String(presetToDelete.id)) {
+        setSelectedPresetId('')
+      }
+      setPresetToDelete(null)
+      loadPresets()
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to delete preset.', 'error')
+    }
+  }
 
   const loadPresets = async () => {
     try {
@@ -189,6 +207,17 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
             className="h-10 px-4 font-bold uppercase tracking-widest text-[10px]"
           >
             Apply
+          </Button>
+          <Button 
+            type="button"
+            variant="danger" 
+            size="icon" 
+            onClick={() => setPresetToDelete(presets.find(p => String(p.id) === selectedPresetId))}
+            disabled={!selectedPresetId}
+            className="h-10 w-10 shrink-0"
+            title="Delete Preset"
+          >
+            <Trash2 className="w-4 h-4" />
           </Button>
         </div>
 
@@ -467,6 +496,16 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* DELETE PRESET CONFIRMATION */}
+      <ConfirmationDialog
+        open={!!presetToDelete}
+        onOpenChange={(open) => !open && setPresetToDelete(null)}
+        title="Delete Preset"
+        description={`Are you sure you want to delete preset '${presetToDelete?.name}'?`}
+        onConfirm={handleDeletePreset}
+        confirmLabel="Delete Preset"
+      />
     </div>
   )
 }
