@@ -8,9 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v2/jwa"
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func BenchmarkCFAccessMiddleware(b *testing.B) {
@@ -20,44 +18,28 @@ func BenchmarkCFAccessMiddleware(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	key, err := jwk.FromRaw(privateKey)
-	if err != nil {
-		b.Fatal(err)
-	}
-	_ = key.Set(jwk.KeyIDKey, "test-key-id")
-	_ = key.Set(jwk.AlgorithmKey, jwa.RS256)
-
-	keySet := jwk.NewSet()
-	_ = keySet.AddKey(key)
-
-	publicKey, _ := jwk.FromRaw(privateKey.PublicKey)
-	_ = publicKey.Set(jwk.KeyIDKey, "test-key-id")
-	_ = publicKey.Set(jwk.AlgorithmKey, jwa.RS256)
-	publicSet := jwk.NewSet()
-	_ = publicSet.AddKey(publicKey)
+	kid := "test-key-id"
 
 	// Create a signed token
-	tok, err := jwt.NewBuilder().
-		Subject("benchmark-user").
-		Issuer("cloudflare-access").
-		IssuedAt(time.Now()).
-		Expiration(time.Now().Add(time.Hour)).
-		Build()
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
+		"sub": "benchmark-user",
+		"iss": "cloudflare-access",
+		"iat": time.Now().Unix(),
+		"exp": time.Now().Add(time.Hour).Unix(),
+	})
+	tok.Header["kid"] = kid
+
+	tokenStr, err := tok.SignedString(privateKey)
 	if err != nil {
 		b.Fatal(err)
 	}
 
-	signed, err := jwt.Sign(tok, jwt.WithKey(jwa.RS256, key))
-	if err != nil {
-		b.Fatal(err)
-	}
-	tokenStr := string(signed)
-
-	// 2. Setup Validator
+	// 2. Setup Validator with a mocked Keyfunc
 	validator := &cfAccessValidator{
 		teamDomain: "https://test.cloudflareaccess.com",
-		keySet:     publicSet,
-		lastFetch:  time.Now(),
+		jwks: func(token *jwt.Token) (interface{}, error) {
+			return &privateKey.PublicKey, nil
+		},
 	}
 
 	// Mock Handler
@@ -83,23 +65,20 @@ func BenchmarkCFAccessMiddleware(b *testing.B) {
 func BenchmarkJWTParsingOnly(b *testing.B) {
 	// Same setup but benchmark only the core jwt.Parse call
 	privateKey, _ := rsa.GenerateKey(rand.Reader, 2048)
-	key, _ := jwk.FromRaw(privateKey)
-	_ = key.Set(jwk.KeyIDKey, "test")
-	_ = key.Set(jwk.AlgorithmKey, jwa.RS256)
+	kid := "test"
 
-	publicKey, _ := jwk.FromRaw(privateKey.PublicKey)
-	_ = publicKey.Set(jwk.KeyIDKey, "test")
-	_ = publicKey.Set(jwk.AlgorithmKey, jwa.RS256)
-	ks := jwk.NewSet()
-	_ = ks.AddKey(publicKey)
+	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{"sub": "user"})
+	tok.Header["kid"] = kid
+	tokenStr, _ := tok.SignedString(privateKey)
 
-	tok, _ := jwt.NewBuilder().Subject("user").Build()
-	signed, _ := jwt.Sign(tok, jwt.WithKey(jwa.RS256, key))
+	mockKeyFunc := func(token *jwt.Token) (interface{}, error) {
+		return &privateKey.PublicKey, nil
+	}
 
 	b.ResetTimer()
 	b.ReportAllocs()
 
 	for b.Loop() {
-		_, _ = jwt.Parse(signed, jwt.WithKeySet(ks), jwt.WithValidate(true))
+		_, _ = jwt.Parse(tokenStr, mockKeyFunc)
 	}
 }

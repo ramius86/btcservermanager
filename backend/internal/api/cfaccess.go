@@ -1,27 +1,22 @@
 package api
 
 import (
-	"context"
 	"log"
 	"net/http"
 	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/lestrrat-go/jwx/v2/jwk"
-	"github.com/lestrrat-go/jwx/v2/jwt"
+	"github.com/MicahParks/keyfunc/v3"
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// cfAccessValidator verifica i JWT emessi da Cloudflare Access.
-// Scarica le chiavi pubbliche dal team domain e le aggiorna ogni ora.
+// cfAccessValidator verifies JWTs issued by Cloudflare Access.
+// It uses keyfunc to handle the fetching and auto-refreshing of public keys (JWK Set) in the background.
 type cfAccessValidator struct {
-	teamDomain  string
-	debugMode   bool
-	keySet      jwk.Set
-	mu          sync.RWMutex
-	lastFetch   time.Time
-	lastAttempt time.Time
-	refreshing  atomic.Bool
+	teamDomain string
+	debugMode  bool
+	jwks       jwt.Keyfunc
+	mu         sync.RWMutex
 }
 
 func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator {
@@ -29,12 +24,23 @@ func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator 
 		teamDomain: teamDomain,
 		debugMode:  debugMode,
 	}
+
 	if teamDomain != "" {
 		go func() {
-			if err := v.refreshKeys(); err != nil {
-				log.Printf("Warning: Failed to fetch Cloudflare Access keys: %v", err)
-				// Log dell'errore ma non panic: il middleware rifiuterà tutte le request
-				// finché le chiavi non sono disponibili
+			jwksURL := teamDomain + "/cdn-cgi/access/certs"
+			for {
+				// keyfunc.NewDefault performs the initial fetch and starts a timer for automatic refresh
+				k, err := keyfunc.NewDefault([]string{jwksURL})
+				if err == nil {
+					v.mu.Lock()
+					v.jwks = k.Keyfunc
+					v.mu.Unlock()
+					break
+				}
+				
+				log.Printf("Warning: Failed to fetch Cloudflare Access keys, retrying in 1m: %v", err)
+				// Retry if Cloudflare is temporarily unreachable or the network is not yet ready
+				time.Sleep(1 * time.Minute)
 			}
 		}()
 	}
@@ -42,32 +48,13 @@ func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator 
 	return v
 }
 
-func (v *cfAccessValidator) refreshKeys() error {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	set, err := jwk.Fetch(ctx, v.teamDomain+"/cdn-cgi/access/certs")
-	if err != nil {
-		return err
-	}
-
-	v.mu.Lock()
-	v.keySet = set
-	v.lastFetch = time.Now()
-	v.mu.Unlock()
-
-	return nil
-}
-
-// Middleware da applicare a tutte le route /api.
-// Rifiuta le request prive di un JWT Cloudflare Access valido.
+// Middleware to apply to all /api routes.
+// Rejects requests without a valid Cloudflare Access JWT.
 func (v *cfAccessValidator) middleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if v.handleDebugMode(w, r, next) {
 			return
 		}
-
-		v.refreshKeysIfNeeded()
 
 		tokenStr := v.getToken(r)
 		if tokenStr == "" {
@@ -77,7 +64,7 @@ func (v *cfAccessValidator) middleware(next http.Handler) http.Handler {
 
 		if status, ok := v.validateToken(tokenStr); !ok {
 			if status == http.StatusServiceUnavailable {
-				http.Error(w, "Service Unavailable: cannot validate token", http.StatusServiceUnavailable)
+				http.Error(w, "Service Unavailable: cannot validate token (keys not fetched yet)", http.StatusServiceUnavailable)
 				return
 			}
 			http.Error(w, "Forbidden: invalid CF Access token", http.StatusForbidden)
@@ -100,28 +87,6 @@ func (v *cfAccessValidator) handleDebugMode(w http.ResponseWriter, r *http.Reque
 	return false
 }
 
-func (v *cfAccessValidator) refreshKeysIfNeeded() {
-	v.mu.RLock()
-	stale := time.Since(v.lastFetch) > time.Hour
-	rateLimited := time.Since(v.lastAttempt) < 5*time.Minute
-	v.mu.RUnlock()
-
-	shouldRefresh := stale && !rateLimited
-	if shouldRefresh && v.refreshing.CompareAndSwap(false, true) {
-		v.mu.Lock()
-		v.lastAttempt = time.Now()
-		v.mu.Unlock()
-
-		go func() {
-			defer v.refreshing.Store(false)
-
-			if err := v.refreshKeys(); err != nil {
-				log.Printf("Error refreshing CF Access keys in background: %v", err)
-			}
-		}()
-	}
-}
-
 func (v *cfAccessValidator) getToken(r *http.Request) string {
 	tokenStr := r.Header.Get("Cf-Access-Jwt-Assertion")
 	if tokenStr == "" {
@@ -134,19 +99,16 @@ func (v *cfAccessValidator) getToken(r *http.Request) string {
 
 func (v *cfAccessValidator) validateToken(tokenStr string) (int, bool) {
 	v.mu.RLock()
-	ks := v.keySet
+	k := v.jwks
 	v.mu.RUnlock()
 
-	if ks == nil {
+	if k == nil {
+		// Keys have not been successfully downloaded yet
 		return http.StatusServiceUnavailable, false
 	}
 
-	_, err := jwt.Parse(
-		[]byte(tokenStr),
-		jwt.WithKeySet(ks),
-		jwt.WithValidate(true),
-	)
-	if err != nil {
+	token, err := jwt.Parse(tokenStr, k)
+	if err != nil || !token.Valid {
 		return http.StatusForbidden, false
 	}
 
