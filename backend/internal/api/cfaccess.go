@@ -37,7 +37,7 @@ func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator 
 					v.mu.Unlock()
 					break
 				}
-				
+
 				log.Printf("Warning: Failed to fetch Cloudflare Access keys, retrying in 1m: %v", err)
 				// Retry if Cloudflare is temporarily unreachable or the network is not yet ready
 				time.Sleep(1 * time.Minute)
