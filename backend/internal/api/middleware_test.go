@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lestrrat-go/jwx/v2/jwk"
+	"github.com/golang-jwt/jwt/v5"
 )
 
 func TestSecurityHeaders(t *testing.T) {
@@ -88,7 +88,9 @@ func TestCFAccessValidatorCookieFallback(t *testing.T) {
 	v := &cfAccessValidator{
 		teamDomain: "https://my-team.cloudflareaccess.com",
 		debugMode:  false,
-		keySet:     jwk.NewSet(), // Empty keyset so validation will fail with 403 Forbidden instead of 401 Unauthorized
+		jwks: func(token *jwt.Token) (interface{}, error) {
+			return nil, nil // Return empty key to intentionally fail validation with 403 instead of 401
+		},
 	}
 
 	handler := v.middleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
