@@ -8,6 +8,7 @@ import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { useToast } from '../components/ui/Toast'
 import { LogRetentionForm } from '../components/appConfig/LogRetentionForm'
 import { EventsSettingsForm } from '../components/appConfig/EventsSettingsForm'
+import { MembersSettingsForm } from '../components/appConfig/MembersSettingsForm'
 import { SteamQRAuthView } from '../components/settings/SteamQRAuthView'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
@@ -25,7 +26,9 @@ export function AppConfigPage() {
     logRetentionDays: 30,
     logMaxTotalSizeMB: 1024,
     discordReminderHours: 0,
-    discordReminderMessage: 'Reminder: Please update your RSVP for the upcoming event!'
+    discordReminderMessage: 'Reminder: Please update your RSVP for the upcoming event!',
+    memberRoleIds: [] as string[],
+    qualificationNames: [] as string[]
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)
@@ -112,6 +115,7 @@ export function AppConfigPage() {
           <TabsTrigger value="steam" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Steam</TabsTrigger>
           <TabsTrigger value="system" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">System</TabsTrigger>
           <TabsTrigger value="events" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Events</TabsTrigger>
+          <TabsTrigger value="members" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Members</TabsTrigger>
         </TabsList>
 
         <TabsContent value="steam" className="space-y-6 outline-none">
@@ -294,6 +298,20 @@ export function AppConfigPage() {
               const merged = { ...settings, ...newSettings };
               setSettings(merged)
               await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Events settings saved successfully.', 'Failed to save settings')
+            }} 
+          />
+        </TabsContent>
+
+        <TabsContent value="members" className="space-y-6 outline-none">
+          <MembersSettingsForm 
+            settings={{
+              memberRoleIds: settings.memberRoleIds,
+              qualificationNames: settings.qualificationNames,
+            }}
+            onSave={async (newSettings: { memberRoleIds: string[], qualificationNames: string[] }) => {
+              const merged = { ...settings, ...newSettings };
+              setSettings(merged)
+              await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Members settings saved successfully.', 'Failed to save members settings')
             }} 
           />
         </TabsContent>

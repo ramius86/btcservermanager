@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, Server, Package, Map, Settings, FileText, Sun, Moon, Clock, CalendarDays } from 'lucide-react'
+import { LayoutDashboard, Server, Package, Map, Settings, FileText, Sun, Moon, Clock, CalendarDays, Users } from 'lucide-react'
 import { cn } from './ui/Button'
 import { useTheme } from '../hooks/useTheme'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
@@ -14,6 +14,7 @@ const navItems = [
   { icon: Map, label: 'Scenarios', href: '/scenarios' },
   { icon: FileText, label: 'Logs', href: '/logs' },
   { icon: CalendarDays, label: 'Events', href: '/events' },
+  { icon: Users, label: 'Members', href: '/members' },
   { icon: Settings, label: 'Settings', href: '/config' },
 ]
 

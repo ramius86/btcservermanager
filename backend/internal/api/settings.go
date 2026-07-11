@@ -3,6 +3,7 @@ package api
 import (
 	"btcservermanager/internal/domain/appsettings"
 	"encoding/json"
+	"log"
 	"net/http"
 )
 
@@ -28,6 +29,12 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 	if err := r.systemService.UpdateAppSettings(ctx, &s); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
+	}
+
+	if r.discordRepo != nil {
+		if err := r.discordRepo.CleanupOrphanedQualifications(ctx, s.QualificationNames); err != nil {
+			log.Printf("Warning: failed to cleanup orphaned qualifications: %v", err)
+		}
 	}
 
 	r.json(w, s)

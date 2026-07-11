@@ -33,6 +33,8 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Delete("/users/{id}", r.handleDeleteDiscordUser)
 	mux.Get("/members", r.handleGetDiscordGuildMembers)
 	mux.Put("/events/{id}/participants", r.handleUpdateDiscordEventParticipation)
+	mux.Get("/clan-members", r.handleGetClanMembers)
+	mux.Put("/clan-members/qualifications", r.handleSaveClanQualifications)
 
 	return mux
 }

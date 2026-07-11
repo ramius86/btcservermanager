@@ -316,3 +316,95 @@ func (r *Repository) DeleteUserAndParticipations(ctx context.Context, userID str
 
 	return tx.Commit()
 }
+
+func (r *Repository) GetMemberQualifications(ctx context.Context, userIDs []string) (map[string][]string, error) {
+	result := make(map[string][]string)
+	if len(userIDs) == 0 {
+		return result, nil
+	}
+
+	query := `SELECT user_id, qualification_name FROM member_qualifications`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var userID, qualName string
+		if err := rows.Scan(&userID, &qualName); err != nil {
+			return nil, err
+		}
+		result[userID] = append(result[userID], qualName)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return result, nil
+}
+
+func (r *Repository) SaveMemberQualifications(ctx context.Context, userIDs []string, qualifications []MemberQualification) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	if len(userIDs) > 0 {
+		query := `DELETE FROM member_qualifications WHERE user_id IN (`
+		args := make([]interface{}, len(userIDs))
+		for i, id := range userIDs {
+			if i > 0 {
+				query += `,`
+			}
+			query += `?`
+			args[i] = id
+		}
+		query += `)`
+		if _, err := tx.ExecContext(ctx, query, args...); err != nil {
+			return err
+		}
+	}
+
+	if len(qualifications) > 0 {
+		stmt, err := tx.PrepareContext(ctx, `INSERT INTO member_qualifications (user_id, qualification_name) VALUES (?, ?)`)
+		if err != nil {
+			return err
+		}
+		defer stmt.Close()
+
+		for _, q := range qualifications {
+			if _, err := stmt.ExecContext(ctx, q.UserID, q.QualificationName); err != nil {
+				return err
+			}
+		}
+	}
+
+	return tx.Commit()
+}
+
+func (r *Repository) CleanupOrphanedQualifications(ctx context.Context, validNames []string) error {
+	if len(validNames) == 0 {
+		_, err := r.db.ExecContext(ctx, `DELETE FROM member_qualifications`)
+		return err
+	}
+
+	// Build IN clause
+	query := `DELETE FROM member_qualifications WHERE qualification_name NOT IN (`
+	args := make([]interface{}, len(validNames))
+	for i, name := range validNames {
+		if i > 0 {
+			query += `,`
+		}
+		query += `?`
+		args[i] = name
+	}
+	query += `)`
+
+	_, err := r.db.ExecContext(ctx, query, args...)
+	return err
+}

@@ -17,6 +17,7 @@ const LogExplorerPage = lazy(() => import('./pages/LogExplorerPage').then(m => (
 const AppConfigPage = lazy(() => import('./pages/AppConfigPage').then(m => ({ default: m.AppConfigPage })))
 const EventsPage = lazy(() => import('./pages/EventsPage').then(m => ({ default: m.EventsPage })))
 const EventsStatsPage = lazy(() => import('./pages/EventsStatsPage').then(m => ({ default: m.EventsStatsPage })))
+const MembersPage = lazy(() => import('./pages/MembersPage').then(m => ({ default: m.MembersPage })))
 
 const PageLoader = () => (
   <div className="flex items-center justify-center min-h-[400px]">
@@ -48,6 +49,7 @@ export default function App() {
                       <Route path="/logs" element={<LogExplorerPage />} />
                       <Route path="/events" element={<EventsPage />} />
                       <Route path="/events/stats" element={<EventsStatsPage />} />
+                      <Route path="/members" element={<MembersPage />} />
                       <Route path="/config" element={<AppConfigPage />} />
                       <Route path="/settings" element={<Navigate to="/config" replace />} />
                       <Route path="*" element={<Navigate to="/" replace />} />

@@ -252,6 +252,12 @@ export interface DiscordGuildMember {
 	displayName: string
 }
 
+export interface ClanMember {
+	id: string
+	displayName: string
+	qualifications: string[]
+}
+
 export const DiscordService = {
 	getStatus: (): Promise<{ connected: boolean, configured: boolean }> => fetchApi('/discord/status'),
 	getChannels: (): Promise<DiscordChannel[]> => fetchApi('/discord/channels'),
@@ -267,5 +273,7 @@ export const DiscordService = {
 	deleteUser: (id: string): Promise<void> => fetchApi(`/discord/users/${id}`, { method: 'DELETE' }),
 	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),
 	updateEventParticipation: (eventId: number, data: { userId: string, username: string, status: string }): Promise<void> => fetchApi(`/discord/events/${eventId}/participants`, { method: 'PUT', body: JSON.stringify(data) }),
+	getClanMembers: (): Promise<ClanMember[]> => fetchApi('/discord/clan-members'),
+	saveClanQualifications: (data: { userIds: string[], qualifications: { userId: string, qualificationName: string }[] }): Promise<void> => fetchApi('/discord/clan-members/qualifications', { method: 'PUT', body: JSON.stringify(data) }),
 }
 

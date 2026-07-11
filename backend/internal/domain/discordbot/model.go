@@ -78,3 +78,14 @@ type ManualParticipationRequest struct {
 	Username string `json:"username"`
 	Status   string `json:"status"` // "going" | "not_going" | "maybe" | "none"
 }
+
+type MemberQualification struct {
+	UserID            string `json:"userId"`
+	QualificationName string `json:"qualificationName"`
+}
+
+type ClanMember struct {
+	ID             string   `json:"id"`
+	DisplayName    string   `json:"displayName"`
+	Qualifications []string `json:"qualifications"`
+}

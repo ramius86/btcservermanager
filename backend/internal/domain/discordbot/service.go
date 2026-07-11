@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -37,9 +39,12 @@ const (
 )
 
 type Service struct {
-	session *discordgo.Session
-	guildID string
-	repo    *Repository
+	session            *discordgo.Session
+	guildID            string
+	repo               *Repository
+	membersCache       []*discordgo.Member
+	membersCacheExpiry time.Time
+	membersCacheMu     sync.RWMutex
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -619,6 +624,122 @@ func formatUsersForField(users []string) string {
 		result += newLine
 	}
 	return result
+}
+
+func (s *Service) fetchAllGuildMembers() ([]*discordgo.Member, error) {
+	var allMembers []*discordgo.Member
+	var after string
+	for {
+		members, err := s.session.GuildMembers(s.guildID, after, 1000)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch guild members: %w", err)
+		}
+		if len(members) == 0 {
+			break
+		}
+		allMembers = append(allMembers, members...)
+		if len(members) < 1000 {
+			break
+		}
+		after = members[len(members)-1].User.ID
+	}
+	return allMembers, nil
+}
+
+func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanMember, error) {
+	if s.session == nil {
+		return nil, errors.New(errBotNotConfigured)
+	}
+
+	var allMembers []*discordgo.Member
+	var err error
+
+	s.membersCacheMu.RLock()
+	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+		allMembers = s.membersCache
+		s.membersCacheMu.RUnlock()
+	} else {
+		s.membersCacheMu.RUnlock()
+		s.membersCacheMu.Lock()
+		// Double check within write lock
+		if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+			allMembers = s.membersCache
+			s.membersCacheMu.Unlock()
+		} else {
+			allMembers, err = s.fetchAllGuildMembers()
+			if err != nil {
+				s.membersCacheMu.Unlock()
+				return nil, err
+			}
+			s.membersCache = allMembers
+			s.membersCacheExpiry = time.Now().Add(5 * time.Minute)
+			s.membersCacheMu.Unlock()
+		}
+	}
+
+	// Build a fast lookup for requested roleIDs
+	roleMap := make(map[string]bool)
+	for _, id := range roleIDs {
+		roleMap[id] = true
+	}
+
+	// Filter and build result list
+	var clanMembers []ClanMember
+	var userIDs []string
+	for _, m := range allMembers {
+		if m.User.Bot {
+			continue
+		}
+
+		hasRole := false
+		if len(roleIDs) == 0 {
+			// If no roles configured, maybe return empty or all? The requirement says "filter by configured roles".
+			// If no roles are configured, it means no one is considered a clan member yet.
+		} else {
+			for _, rID := range m.Roles {
+				if roleMap[rID] {
+					hasRole = true
+					break
+				}
+			}
+		}
+
+		if hasRole {
+			displayName := m.User.Username
+			if m.User.GlobalName != "" {
+				displayName = m.User.GlobalName
+			}
+			if m.Nick != "" {
+				displayName = m.Nick
+			}
+
+			clanMembers = append(clanMembers, ClanMember{
+				ID:             m.User.ID,
+				DisplayName:    displayName,
+				Qualifications: []string{}, // Will be populated next
+			})
+			userIDs = append(userIDs, m.User.ID)
+		}
+	}
+
+	// Fetch qualifications from DB
+	qualsMap, err := s.repo.GetMemberQualifications(ctx, userIDs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch member qualifications: %w", err)
+	}
+
+	// Populate qualifications
+	for i, cm := range clanMembers {
+		if qs, ok := qualsMap[cm.ID]; ok {
+			clanMembers[i].Qualifications = qs
+		}
+	}
+
+	sort.Slice(clanMembers, func(i, j int) bool {
+		return strings.ToLower(clanMembers[i].DisplayName) < strings.ToLower(clanMembers[j].DisplayName)
+	})
+
+	return clanMembers, nil
 }
 
 func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, customMessage string) error {
