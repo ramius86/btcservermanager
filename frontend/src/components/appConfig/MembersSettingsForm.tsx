@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Save, Info, Plus, X, Shield, Medal } from 'lucide-react'
+import { Users, Save, Info, Plus, X, Shield, Medal, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -73,6 +73,19 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
     setLocalSettings(prev => ({
       ...prev,
       qualificationNames: prev.qualificationNames.filter(q => q !== name)
+    }))
+  }
+
+  const moveQual = (index: number, direction: -1 | 1) => {
+    const targetIndex = index + direction
+    if (targetIndex < 0 || targetIndex >= localSettings.qualificationNames.length) return
+    const newQuals = [...localSettings.qualificationNames]
+    const temp = newQuals[index]
+    newQuals[index] = newQuals[targetIndex]
+    newQuals[targetIndex] = temp
+    setLocalSettings(prev => ({
+      ...prev,
+      qualificationNames: newQuals
     }))
   }
 
@@ -181,16 +194,39 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
               {localSettings.qualificationNames.length === 0 ? (
                 <span className="text-xs text-muted-foreground italic">No qualifications defined.</span>
               ) : (
-                localSettings.qualificationNames.map(q => (
-                  <Badge key={q} variant="outline" className="pl-3 pr-1 py-1 flex items-center gap-2 text-xs border-primary/30 bg-primary/5 text-primary">
-                    {q}
-                    <button
-                      type="button"
-                      onClick={() => removeQual(q)}
-                      className="p-0.5 hover:bg-primary/20 rounded-full transition-colors text-primary/70 hover:text-primary"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
+                localSettings.qualificationNames.map((q, idx) => (
+                  <Badge key={q} variant="outline" className="pl-3 pr-2 py-1 flex items-center gap-2 text-xs border-primary/30 bg-primary/5 text-primary">
+                    <span>{q}</span>
+                    <div className="flex items-center gap-0.5 border-l border-primary/20 pl-1.5 ml-1">
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => moveQual(idx, -1)}
+                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          title="Move Left"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      {idx < localSettings.qualificationNames.length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => moveQual(idx, 1)}
+                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          title="Move Right"
+                        >
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => removeQual(q)}
+                        className="p-0.5 hover:bg-primary/20 rounded-full transition-colors text-primary/70 hover:text-primary ml-1"
+                        title="Remove"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </div>
                   </Badge>
                 ))
               )}
