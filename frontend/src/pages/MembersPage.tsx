@@ -401,17 +401,20 @@ function MemberRow({
     <tr className={`transition-colors ${isLocked ? 'hover:bg-accent/5' : 'hover:bg-primary/5'}`}>
       <td className="py-3 px-6 font-bold text-foreground border-r border-border/50">
         <div className="flex items-center justify-between group h-full">
-          <span>{member.displayName}</span>
-          {!isLocked && (
-            <button
-              type="button"
-              onClick={() => onFreeze(member)}
-              className="p-1 hover:bg-destructive/20 text-destructive/70 hover:text-destructive rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
-              title="Freeze Member (remove from active roster)"
-            >
-              <Snowflake className="w-3.5 h-3.5" />
-            </button>
-          )}
+          <span className="truncate pr-2">{member.displayName}</span>
+          <button
+            type="button"
+            onClick={() => !isLocked && onFreeze(member)}
+            disabled={isLocked}
+            className={`p-1 rounded transition-colors ${
+              isLocked 
+                ? 'invisible' 
+                : 'hover:bg-destructive/20 text-destructive/70 hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100'
+            }`}
+            title={isLocked ? undefined : "Freeze Member (remove from active roster)"}
+          >
+            <Snowflake className="w-3.5 h-3.5" />
+          </button>
         </div>
       </td>
       {qualifications.map(q => {
