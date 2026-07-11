@@ -751,7 +751,7 @@ func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanM
 	return clanMembers, nil
 }
 
-func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, customMessage string) error {
+func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, customMessage string, roleIDs []string) error {
 	if s.session == nil {
 		return errors.New(errBotNotConfigured)
 	}
@@ -762,13 +762,13 @@ func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, custo
 	}
 
 	for _, event := range events {
-		s.sendReminderForEvent(ctx, event, customMessage)
+		s.sendReminderForEvent(ctx, event, customMessage, roleIDs)
 	}
 
 	return nil
 }
 
-func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customMessage string) {
+func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customMessage string, roleIDs []string) {
 	userIDs, err := s.repo.GetNoResponseUserIDs(ctx, event.ID)
 	if err != nil {
 		log.Printf("⚠️  Failed to get no response users for event %d: %v", event.ID, err)
@@ -779,6 +779,28 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 		return
 	}
 
+	clanMembers, err := s.GetClanMembers(ctx, roleIDs)
+	if err != nil {
+		log.Printf("⚠️  Failed to fetch clan members for reminders: %v", err)
+		return
+	}
+
+	clanMemberMap := make(map[string]bool)
+	for _, cm := range clanMembers {
+		clanMemberMap[cm.ID] = true
+	}
+
+	var filteredUserIDs []string
+	for _, uid := range userIDs {
+		if clanMemberMap[uid] {
+			filteredUserIDs = append(filteredUserIDs, uid)
+		}
+	}
+
+	if len(filteredUserIDs) == 0 {
+		return
+	}
+
 	formattedDateTime := event.DateTime
 	if t, err := time.ParseInLocation(dateTimeFormat, event.DateTime, time.Local); err == nil {
 		formattedDateTime = fmt.Sprintf("<t:%d:F>", t.Unix())
@@ -786,7 +808,7 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 
 	msgContent := fmt.Sprintf("%s\n\n**Event:** %s\n**When:** %s", customMessage, event.Title, formattedDateTime)
 
-	for _, userID := range userIDs {
+	for _, userID := range filteredUserIDs {
 		ch, err := s.session.UserChannelCreate(userID)
 		if err != nil {
 			log.Printf("⚠️  Failed to create DM channel for user %s: %v", userID, err)

@@ -103,7 +103,7 @@ func (s *Scheduler) runDiscordReminders() {
 			if err != nil || settings.DiscordReminderHours <= 0 {
 				continue // disabled or error
 			}
-			if err := s.discordService.SendEventReminders(ctx, settings.DiscordReminderHours, settings.DiscordReminderMessage); err != nil {
+			if err := s.discordService.SendEventReminders(ctx, settings.DiscordReminderHours, settings.DiscordReminderMessage, settings.MemberRoleIDs); err != nil {
 				log.Printf("[Scheduler] Discord reminder error: %v", err)
 			}
 		}
