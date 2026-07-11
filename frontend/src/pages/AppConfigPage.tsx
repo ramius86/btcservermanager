@@ -304,10 +304,7 @@ export function AppConfigPage() {
 
         <TabsContent value="members" className="space-y-6 outline-none">
           <MembersSettingsForm 
-            settings={{
-              memberRoleIds: settings.memberRoleIds,
-              qualificationNames: settings.qualificationNames,
-            }}
+            settings={settings}
             onSave={async (newSettings: { memberRoleIds: string[], qualificationNames: string[] }) => {
               const merged = { ...settings, ...newSettings };
               setSettings(merged)
