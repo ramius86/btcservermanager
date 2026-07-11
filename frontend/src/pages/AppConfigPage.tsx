@@ -305,7 +305,7 @@ export function AppConfigPage() {
         <TabsContent value="members" className="space-y-6 outline-none">
           <MembersSettingsForm 
             settings={settings}
-            onSave={async (newSettings: { memberRoleIds: string[], qualificationNames: string[] }) => {
+            onSave={async (newSettings: { memberRoleIds: string[], qualificationNames: string[], renames?: { oldName: string, newName: string }[] }) => {
               const merged = { ...settings, ...newSettings };
               setSettings(merged)
               await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Members settings saved successfully.', 'Failed to save members settings')

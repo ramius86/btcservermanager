@@ -281,14 +281,50 @@ func (r *Repository) GetAllUsersForManagement(ctx context.Context) ([]DiscordUse
 	return users, nil
 }
 
-func (r *Repository) SetUserActive(ctx context.Context, userID string, active bool) error {
+func (r *Repository) SetUserActive(ctx context.Context, userID, username string, active bool) error {
 	activeVal := 0
 	if active {
 		activeVal = 1
 	}
+
+	if username != "" {
+		query := `
+			INSERT INTO discord_users (id, username, is_active, updated_at)
+			VALUES (?, ?, ?, datetime('now'))
+			ON CONFLICT(id) DO UPDATE SET
+				username = excluded.username,
+				is_active = excluded.is_active,
+				updated_at = excluded.updated_at
+		`
+		_, err := r.db.ExecContext(ctx, query, userID, username, activeVal)
+		return err
+	}
+
 	query := `UPDATE discord_users SET is_active = ?, updated_at = datetime('now') WHERE id = ?`
 	_, err := r.db.ExecContext(ctx, query, activeVal, userID)
 	return err
+}
+
+func (r *Repository) GetInactiveUserIDs(ctx context.Context) (map[string]bool, error) {
+	query := `SELECT id FROM discord_users WHERE is_active = 0`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	inactive := make(map[string]bool)
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		inactive[id] = true
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return inactive, nil
 }
 
 func (r *Repository) DeleteParticipation(ctx context.Context, eventID int64, userID string) error {
@@ -407,4 +443,36 @@ func (r *Repository) CleanupOrphanedQualifications(ctx context.Context, validNam
 
 	_, err := r.db.ExecContext(ctx, query, args...)
 	return err
+}
+
+func (r *Repository) RenameQualification(ctx context.Context, oldName, newName string) error {
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// 1. Delete old qualification rows for users who already have the new one
+	deleteDupQuery := `
+		DELETE FROM member_qualifications 
+		WHERE qualification_name = ? 
+		  AND user_id IN (
+			  SELECT user_id FROM member_qualifications WHERE qualification_name = ?
+		  )`
+	if _, err := tx.ExecContext(ctx, deleteDupQuery, oldName, newName); err != nil {
+		return err
+	}
+
+	// 2. Update remaining old qualification rows to the new name
+	updateQuery := `
+		UPDATE member_qualifications 
+		SET qualification_name = ? 
+		WHERE qualification_name = ?`
+	if _, err := tx.ExecContext(ctx, updateQuery, newName, oldName); err != nil {
+		return err
+	}
+
+	return tx.Commit()
 }

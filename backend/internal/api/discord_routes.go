@@ -254,14 +254,15 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 	}
 
 	var payload struct {
-		Active bool `json:"active"`
+		Username string `json:"username"`
+		Active   bool   `json:"active"`
 	}
 	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	if err := r.discordRepo.SetUserActive(req.Context(), id, payload.Active); err != nil {
+	if err := r.discordRepo.SetUserActive(req.Context(), id, payload.Username, payload.Active); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

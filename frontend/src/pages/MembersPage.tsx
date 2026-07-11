@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Lock, Loader2, Save, Search, X } from 'lucide-react'
+import { Users, Lock, Loader2, Save, Search, X, Snowflake } from 'lucide-react'
 import { Card, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Badge } from '../components/ui/Badge'
@@ -23,6 +23,25 @@ export function MembersPage() {
   const [localMembers, setLocalMembers] = useState<ClanMember[]>([])
   const [originalMembers, setOriginalMembers] = useState<ClanMember[]>([])
   const [searchTerm, setSearchTerm] = useState('')
+  const [selectedFilters, setSelectedFilters] = useState<string[]>([])
+  const [pendingFreezes, setPendingFreezes] = useState<string[]>([])
+
+  const toggleFilter = (qualName: string) => {
+    setSelectedFilters(prev => 
+      prev.includes(qualName)
+        ? prev.filter(q => q !== qualName)
+        : [...prev, qualName]
+    )
+  }
+
+  const clearFilters = () => {
+    setSelectedFilters([])
+  }
+
+  const handleFreeze = (member: ClanMember) => {
+    setLocalMembers(prev => prev.filter(m => m.id !== member.id))
+    setPendingFreezes(prev => [...prev, member.id])
+  }
 
   useEffect(() => {
     fetchData()
@@ -61,15 +80,24 @@ export function MembersPage() {
             payload.push({ userId: m.id, qualificationName: q })
           }
         }
-        await DiscordService.saveClanQualifications({
-          userIds: localMembers.map(m => m.id),
-          qualifications: payload
-        })
+
+        await Promise.all([
+          DiscordService.saveClanQualifications({
+            userIds: localMembers.map(m => m.id),
+            qualifications: payload
+          }),
+          ...pendingFreezes.map(id => {
+            const m = originalMembers.find(member => member.id === id)
+            return DiscordService.setUserActive(id, false, m?.displayName)
+          })
+        ])
+
         setOriginalMembers(structuredClone(localMembers))
+        setPendingFreezes([])
         setIsLocked(true)
-        showToast('Qualifications saved successfully', 'success')
+        showToast('Qualifications and active members saved successfully', 'success')
       } catch (err: any) {
-        showToast(`Failed to save qualifications: ${err.message}`, 'error')
+        showToast(`Failed to save changes: ${err.message}`, 'error')
       } finally {
         setSaving(false)
       }
@@ -78,6 +106,7 @@ export function MembersPage() {
 
   const handleCancel = () => {
     setLocalMembers(structuredClone(originalMembers))
+    setPendingFreezes([])
     setIsLocked(true)
   }
 
@@ -132,9 +161,11 @@ export function MembersPage() {
       )
     }
 
-    const filtered = localMembers.filter(m => 
-      m.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-    )
+    const filtered = localMembers.filter(m => {
+      const matchesSearch = m.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesQuals = selectedFilters.every(q => m.qualifications.includes(q))
+      return matchesSearch && matchesQuals
+    })
 
     if (filtered.length === 0) {
       return (
@@ -156,16 +187,28 @@ export function MembersPage() {
               <th className="py-4 px-6 font-bold uppercase tracking-widest text-[10px] text-muted-foreground whitespace-nowrap min-w-[200px] border-r border-border/50">
                 Nickname
               </th>
-              {qualifications.map(q => (
-                <th 
-                  key={q} 
-                  className="py-4 px-3 font-bold text-[10px] uppercase tracking-widest text-center min-w-[80px] border-r border-border/50 last:border-0"
-                >
-                  <div className="rotate-[-45deg] origin-left translate-x-6 translate-y-2 pb-6 inline-block w-4">
-                    {q}
-                  </div>
-                </th>
-              ))}
+              {qualifications.map(q => {
+                const isActive = selectedFilters.includes(q)
+                return (
+                  <th 
+                    key={q} 
+                    className="py-4 px-2 text-center min-w-[95px] max-w-[125px] border-r border-border/50 last:border-0 align-middle"
+                  >
+                    <button 
+                      type="button"
+                      onClick={() => toggleFilter(q)}
+                      className={`inline-block px-2.5 py-1 rounded-md text-[9px] font-black uppercase tracking-wider max-w-full truncate cursor-pointer transition-all ${
+                        isActive 
+                          ? 'bg-primary/20 border border-primary text-primary shadow-[0_0_10px_rgba(var(--primary),0.3)]' 
+                          : 'bg-surface-elevated/80 border border-border/80 text-muted-foreground hover:text-foreground hover:border-primary/30'
+                      }`}
+                      title={isActive ? `Active filter: ${q} (Click to remove)` : `Click to filter by ${q}`}
+                    >
+                      {q}
+                    </button>
+                  </th>
+                )
+              })}
             </tr>
           </thead>
           <tbody className="divide-y divide-border/50">
@@ -176,6 +219,7 @@ export function MembersPage() {
                 qualifications={qualifications} 
                 isLocked={isLocked} 
                 toggleQualification={toggleQualification} 
+                onFreeze={handleFreeze}
               />
             ))}
           </tbody>
@@ -188,9 +232,11 @@ export function MembersPage() {
   if (saving) ButtonIcon = Loader2
   else if (isLocked) ButtonIcon = Lock
 
-  const filteredCount = localMembers.filter(m => 
-    m.displayName.toLowerCase().includes(searchTerm.toLowerCase())
-  ).length
+  const filteredCount = localMembers.filter(m => {
+    const matchesSearch = m.displayName.toLowerCase().includes(searchTerm.toLowerCase())
+    const matchesQuals = selectedFilters.every(q => m.qualifications.includes(q))
+    return matchesSearch && matchesQuals
+  }).length
 
   return (
     <div className="flex-1 overflow-auto bg-background p-4 md:p-6 lg:p-8">
@@ -247,23 +293,58 @@ export function MembersPage() {
           </div>
         </div>
 
-        {/* Search Bar */}
+        {/* Search & Active Filters Bar */}
         {!loading && localMembers.length > 0 && (
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input
-              placeholder="Search member by nickname..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-10"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded-full transition-colors text-muted-foreground"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <div className="relative max-w-md flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search member by nickname..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 pr-10"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-0.5 hover:bg-accent rounded-full transition-colors text-muted-foreground"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+
+            {selectedFilters.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 bg-surface-elevated/40 px-3 py-1.5 rounded-lg border border-border/60">
+                <span className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground">Filters (AND):</span>
+                {selectedFilters.map(q => (
+                  <Badge 
+                    key={q} 
+                    variant="secondary" 
+                    className="pl-2.5 pr-1 py-0.5 flex items-center gap-1.5 text-[9px] font-bold bg-primary/10 text-primary border border-primary/20"
+                  >
+                    {q}
+                    <button 
+                      type="button"
+                      onClick={() => toggleFilter(q)}
+                      className="p-0.5 hover:bg-primary/20 rounded-full transition-colors"
+                      title={`Remove filter: ${q}`}
+                    >
+                      <X className="w-2.5 h-2.5" />
+                    </button>
+                  </Badge>
+                ))}
+                <Button 
+                  type="button"
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={clearFilters}
+                  className="h-6 px-2 text-[9px] uppercase font-bold tracking-widest text-muted-foreground hover:text-foreground"
+                >
+                  Clear All
+                </Button>
+              </div>
             )}
           </div>
         )}
@@ -307,17 +388,31 @@ function MemberRow({
   member, 
   qualifications, 
   isLocked, 
-  toggleQualification 
+  toggleQualification,
+  onFreeze
 }: Readonly<{
   member: ClanMember;
   qualifications: string[];
   isLocked: boolean;
   toggleQualification: (id: string, q: string) => void;
+  onFreeze: (member: ClanMember) => void;
 }>) {
   return (
     <tr className={`transition-colors ${isLocked ? 'hover:bg-accent/5' : 'hover:bg-primary/5'}`}>
       <td className="py-3 px-6 font-bold text-foreground border-r border-border/50">
-        {member.displayName}
+        <div className="flex items-center justify-between group h-full">
+          <span>{member.displayName}</span>
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={() => onFreeze(member)}
+              className="p-1 hover:bg-destructive/20 text-destructive/70 hover:text-destructive rounded transition-colors opacity-0 group-hover:opacity-100 focus:opacity-100"
+              title="Freeze Member (remove from active roster)"
+            >
+              <Snowflake className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
       </td>
       {qualifications.map(q => {
         const hasQual = member.qualifications.includes(q)

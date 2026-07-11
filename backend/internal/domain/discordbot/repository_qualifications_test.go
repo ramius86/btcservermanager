@@ -110,3 +110,80 @@ func TestRepository_CleanupOrphanedQualifications(t *testing.T) {
 		t.Errorf("Expected user2 to have no qualifications, got %v", res["user2"])
 	}
 }
+
+func TestRepository_RenameQualification(t *testing.T) {
+	db := setupTestDB(t)
+	defer db.Close()
+
+	repo := discordbot.NewRepository(db)
+	ctx := context.Background()
+
+	// Initial data:
+	// user1 has: Medic, AT
+	// user2 has: Medic
+	quals := []discordbot.MemberQualification{
+		{UserID: "user1", QualificationName: "Medic"},
+		{UserID: "user1", QualificationName: "AT"},
+		{UserID: "user2", QualificationName: "Medic"},
+	}
+
+	_ = repo.SaveMemberQualifications(ctx, []string{"user1", "user2"}, quals)
+
+	// Test 1: Simple rename (AT -> AntiTank)
+	if err := repo.RenameQualification(ctx, "AT", "AntiTank"); err != nil {
+		t.Fatalf("Failed to rename AT: %v", err)
+	}
+
+	res, err := repo.GetMemberQualifications(ctx, []string{"user1", "user2"})
+	if err != nil {
+		t.Fatalf("Failed to get qualifications: %v", err)
+	}
+
+	// Verify user1 now has AntiTank instead of AT
+	hasAntiTank := false
+	for _, q := range res["user1"] {
+		if q == "AT" {
+			t.Errorf("user1 should not have old name AT")
+		}
+		if q == "AntiTank" {
+			hasAntiTank = true
+		}
+	}
+	if !hasAntiTank {
+		t.Errorf("user1 should have renamed qualification AntiTank")
+	}
+
+	// Test 2: Rename with collision (Medic -> AntiTank)
+	// user1 already has AntiTank. user2 only has Medic.
+	// This tests if the duplicate row for user1 gets deleted, while user2 is correctly renamed.
+	if err := repo.RenameQualification(ctx, "Medic", "AntiTank"); err != nil {
+		t.Fatalf("Failed to rename Medic with collision: %v", err)
+	}
+
+	res, err = repo.GetMemberQualifications(ctx, []string{"user1", "user2"})
+	if err != nil {
+		t.Fatalf("Failed to get qualifications: %v", err)
+	}
+
+	// Verify user1 only has AntiTank once (no duplicate and no constraint crash)
+	antiTankCount := 0
+	for _, q := range res["user1"] {
+		if q == "AntiTank" {
+			antiTankCount++
+		}
+	}
+	if antiTankCount != 1 {
+		t.Errorf("Expected user1 to have exactly 1 AntiTank, got %d", antiTankCount)
+	}
+
+	// Verify user2 now has AntiTank
+	hasAntiTank = false
+	for _, q := range res["user2"] {
+		if q == "AntiTank" {
+			hasAntiTank = true
+		}
+	}
+	if !hasAntiTank {
+		t.Errorf("user2 should have been renamed to AntiTank")
+	}
+}

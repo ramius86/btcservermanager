@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Save, Info, Plus, X, Shield, Medal, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Users, Save, Info, Plus, X, Shield, Medal, ChevronLeft, ChevronRight, Pencil, Snowflake, UserPlus } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Badge } from '../ui/Badge'
+import { useToast } from '../ui/Toast'
 import { DiscordService } from '../../services/api'
-import type { DiscordRole } from '../../services/api'
+import type { DiscordRole, DiscordUser } from '../../services/api'
 
 interface MembersSettings {
   memberRoleIds: string[]
   qualificationNames: string[]
+  renames?: { oldName: string, newName: string }[]
 }
 
 interface MembersSettingsFormProps {
@@ -18,6 +20,7 @@ interface MembersSettingsFormProps {
 }
 
 export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettingsFormProps>) {
+  const { showToast } = useToast()
   const [localSettings, setLocalSettings] = useState<MembersSettings>(settings)
   const [saving, setSaving] = useState(false)
   const [roles, setRoles] = useState<DiscordRole[]>([])
@@ -25,19 +28,30 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
   const [selectedRole, setSelectedRole] = useState('')
   const [newQual, setNewQual] = useState('')
 
+  const [editingIdx, setEditingIdx] = useState<number | null>(null)
+  const [editingValue, setEditingValue] = useState('')
+  const [pendingRenames, setPendingRenames] = useState<{ oldName: string, newName: string }[]>([])
+
+  const [frozenUsers, setFrozenUsers] = useState<DiscordUser[]>([])
+
   useEffect(() => {
     setLocalSettings(settings)
   }, [settings])
 
   useEffect(() => {
     DiscordService.getRoles().then(setRoles).catch(console.error)
+    fetchFrozenUsers()
   }, [])
 
   const handleSubmit = async (e: React.SyntheticEvent<HTMLFormElement>) => {
     e.preventDefault()
     setSaving(true)
     try {
-      await onSave(localSettings)
+      await onSave({
+        ...localSettings,
+        renames: pendingRenames
+      })
+      setPendingRenames([])
     } finally {
       setSaving(false)
     }
@@ -74,6 +88,70 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
       ...prev,
       qualificationNames: prev.qualificationNames.filter(q => q !== name)
     }))
+    setPendingRenames(prev => prev.filter(r => r.newName !== name && r.oldName !== name))
+  }
+
+  const startRename = (index: number, value: string) => {
+    setEditingIdx(index)
+    setEditingValue(value)
+  }
+
+  const fetchFrozenUsers = () => {
+    DiscordService.getUsers()
+      .then(users => {
+        setFrozenUsers(users.filter(u => !u.isActive))
+      })
+      .catch(console.error)
+  }
+
+  const reactivateUser = async (id: string, username: string) => {
+    try {
+      await DiscordService.setUserActive(id, true, username)
+      showToast(`${username} reactivated successfully.`, 'success')
+      fetchFrozenUsers()
+    } catch (err: any) {
+      showToast(`Failed to reactivate member: ${err.message}`, 'error')
+    }
+  }
+
+  const saveRename = (index: number) => {
+    const oldName = localSettings.qualificationNames[index]
+    const newName = editingValue.trim()
+    
+    if (!newName || newName === oldName) {
+      setEditingIdx(null)
+      return
+    }
+    
+    if (localSettings.qualificationNames.some((q, idx) => q === newName && idx !== index)) {
+      setEditingIdx(null)
+      return
+    }
+
+    setLocalSettings(prev => {
+      const arr = [...prev.qualificationNames]
+      arr[index] = newName
+      return {
+        ...prev,
+        qualificationNames: arr
+      }
+    })
+
+    setPendingRenames(prev => {
+      const existingIdx = prev.findIndex(r => r.newName === oldName)
+      if (existingIdx !== -1) {
+        const updated = [...prev]
+        if (updated[existingIdx].oldName === newName) {
+          updated.splice(existingIdx, 1)
+        } else {
+          updated[existingIdx] = { ...updated[existingIdx], newName }
+        }
+        return updated
+      }
+      return [...prev, { oldName, newName }]
+    })
+    
+    setEditingIdx(null)
   }
 
   const moveQual = (index: number, direction: -1 | 1) => {
@@ -196,7 +274,41 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
               ) : (
                 localSettings.qualificationNames.map((q, idx) => (
                   <Badge key={q} variant="outline" className="pl-3 pr-2 py-1 flex items-center gap-2 text-xs border-primary/30 bg-primary/5 text-primary">
-                    <span>{q}</span>
+                    {editingIdx === idx ? (
+                      <input
+                        type="text"
+                        value={editingValue}
+                        onChange={(e) => setEditingValue(e.target.value)}
+                        onBlur={() => saveRename(idx)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            saveRename(idx)
+                          } else if (e.key === 'Escape') {
+                            setEditingIdx(null)
+                          }
+                        }}
+                        className="bg-transparent border-b border-primary focus:outline-none w-[80px] text-xs text-primary"
+                        autoFocus
+                      />
+                    ) : (
+                      <>
+                        <span 
+                          className="font-medium cursor-pointer hover:underline"
+                          onDoubleClick={() => startRename(idx, q)}
+                        >
+                          {q}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => startRename(idx, q)}
+                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          title="Rename"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </>
+                    )}
                     <div className="flex items-center gap-0.5 border-l border-primary/20 pl-1.5 ml-1">
                       {idx > 0 && (
                         <button
@@ -227,6 +339,43 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
                         <X className="w-3 h-3" />
                       </button>
                     </div>
+                  </Badge>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Frozen Members */}
+          <div className="space-y-4 pt-6 border-t border-border/50">
+            <div className="space-y-1">
+              <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                <Snowflake className="w-3 h-3" />
+                Frozen / Absent Members
+              </label>
+              <p className="text-[10px] text-muted-foreground italic ml-1">
+                Members listed here are hidden from the active roster. Reactivate them to restore their active status.
+              </p>
+            </div>
+            
+            <div className="flex flex-wrap gap-2 min-h-[40px] p-4 bg-surface rounded-md border border-border">
+              {frozenUsers.length === 0 ? (
+                <span className="text-xs text-muted-foreground italic">No frozen members.</span>
+              ) : (
+                frozenUsers.map(u => (
+                  <Badge 
+                    key={u.id} 
+                    variant="outline" 
+                    className="pl-3 pr-2 py-1 flex items-center gap-2 text-xs border-destructive/20 bg-destructive/5 text-destructive/80 hover:text-destructive hover:bg-destructive/10 transition-colors"
+                  >
+                    <span>{u.username}</span>
+                    <button
+                      type="button"
+                      onClick={() => reactivateUser(u.id, u.username)}
+                      className="p-0.5 hover:bg-destructive/20 rounded-full transition-colors ml-1"
+                      title={`Reactivate ${u.username}`}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                    </button>
                   </Badge>
                 ))
               )}

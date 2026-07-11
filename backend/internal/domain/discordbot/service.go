@@ -651,8 +651,13 @@ func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanM
 		return nil, errors.New(errBotNotConfigured)
 	}
 
+	inactiveMap, err := s.repo.GetInactiveUserIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch inactive users: %w", err)
+	}
+
 	var allMembers []*discordgo.Member
-	var err error
+	var errFetch error
 
 	s.membersCacheMu.RLock()
 	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
@@ -666,10 +671,10 @@ func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanM
 			allMembers = s.membersCache
 			s.membersCacheMu.Unlock()
 		} else {
-			allMembers, err = s.fetchAllGuildMembers()
-			if err != nil {
+			allMembers, errFetch = s.fetchAllGuildMembers()
+			if errFetch != nil {
 				s.membersCacheMu.Unlock()
-				return nil, err
+				return nil, errFetch
 			}
 			s.membersCache = allMembers
 			s.membersCacheExpiry = time.Now().Add(5 * time.Minute)
@@ -705,6 +710,10 @@ func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanM
 		}
 
 		if hasRole {
+			if inactiveMap[m.User.ID] {
+				continue
+			}
+
 			displayName := m.User.Username
 			if m.User.GlobalName != "" {
 				displayName = m.User.GlobalName
