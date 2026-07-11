@@ -7,6 +7,7 @@ import { SteamCmdService, SettingsService, WorkshopService } from '../services/a
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { useToast } from '../components/ui/Toast'
 import { LogRetentionForm } from '../components/appConfig/LogRetentionForm'
+import { EventsSettingsForm } from '../components/appConfig/EventsSettingsForm'
 import { SteamQRAuthView } from '../components/settings/SteamQRAuthView'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
@@ -22,7 +23,9 @@ export function AppConfigPage() {
   })
   const [settings, setSettings] = useState({
     logRetentionDays: 30,
-    logMaxTotalSizeMB: 1024
+    logMaxTotalSizeMB: 1024,
+    discordReminderHours: 0,
+    discordReminderMessage: 'Reminder: Please update your RSVP for the upcoming event!'
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)
@@ -108,6 +111,7 @@ export function AppConfigPage() {
         <TabsList className="bg-surface-elevated/50 p-0.5 border border-border rounded-md mb-6 flex overflow-x-auto no-scrollbar w-full md:w-fit">
           <TabsTrigger value="steam" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Steam</TabsTrigger>
           <TabsTrigger value="system" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">System</TabsTrigger>
+          <TabsTrigger value="events" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Events</TabsTrigger>
         </TabsList>
 
         <TabsContent value="steam" className="space-y-6 outline-none">
@@ -272,13 +276,24 @@ export function AppConfigPage() {
             </CardContent>
           </Card>
         </TabsContent>
-
         <TabsContent value="system" className="space-y-6 outline-none">
           <LogRetentionForm 
             settings={settings} 
             onSave={async (newSettings) => {
-              setSettings(newSettings)
-              await executeAction(() => SettingsService.updateSettings(newSettings), () => {}, 'Settings saved successfully.', 'Failed to save settings')
+              const merged = { ...settings, ...newSettings };
+              setSettings(merged)
+              await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Settings saved successfully.', 'Failed to save settings')
+            }} 
+          />
+        </TabsContent>
+
+        <TabsContent value="events" className="space-y-6 outline-none">
+          <EventsSettingsForm 
+            settings={settings as any} 
+            onSave={async (newSettings) => {
+              const merged = { ...settings, ...newSettings };
+              setSettings(merged)
+              await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Events settings saved successfully.', 'Failed to save settings')
             }} 
           />
         </TabsContent>

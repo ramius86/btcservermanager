@@ -15,8 +15,8 @@ func NewRepository(db *sql.DB) *Repository {
 
 func (r *Repository) SaveEvent(ctx context.Context, e *Event) (int64, error) {
 	query := `
-		INSERT INTO discord_events (channel_id, message_id, title, date_time, game_type)
-		VALUES (?, ?, ?, ?, ?)
+		INSERT INTO discord_events (channel_id, message_id, title, date_time, game_type, reminder_sent)
+		VALUES (?, ?, ?, ?, ?, 0)
 	`
 	res, err := r.db.ExecContext(ctx, query, e.ChannelID, e.MessageID, e.Title, e.DateTime, e.GameType)
 	if err != nil {
@@ -27,7 +27,7 @@ func (r *Repository) SaveEvent(ctx context.Context, e *Event) (int64, error) {
 
 func (r *Repository) GetAllEvents(ctx context.Context) ([]Event, error) {
 	query := `
-		SELECT id, channel_id, message_id, title, date_time, game_type, created_at
+		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
 		FROM discord_events
 		WHERE date_time >= datetime('now', '-30 days') OR created_at >= datetime('now', '-30 days')
 		ORDER BY created_at DESC
@@ -41,7 +41,7 @@ func (r *Repository) GetAllEvents(ctx context.Context) ([]Event, error) {
 	var events []Event
 	for rows.Next() {
 		var e Event
-		if err := rows.Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt, &e.ReminderSent); err != nil {
 			return nil, err
 		}
 		events = append(events, e)
@@ -54,12 +54,12 @@ func (r *Repository) GetAllEvents(ctx context.Context) ([]Event, error) {
 
 func (r *Repository) GetEventByID(ctx context.Context, id int64) (*Event, error) {
 	query := `
-		SELECT id, channel_id, message_id, title, date_time, game_type, created_at
+		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
 		FROM discord_events
 		WHERE id = ?
 	`
 	var e Event
-	if err := r.db.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt, &e.ReminderSent); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -133,12 +133,12 @@ func (r *Repository) GetEventParticipations(ctx context.Context, eventID int64) 
 
 func (r *Repository) GetEventByMessageID(ctx context.Context, messageID string) (*Event, error) {
 	query := `
-		SELECT id, channel_id, message_id, title, date_time, game_type, created_at
+		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
 		FROM discord_events
 		WHERE message_id = ?
 	`
 	var e Event
-	if err := r.db.QueryRowContext(ctx, query, messageID).Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt); err != nil {
+	if err := r.db.QueryRowContext(ctx, query, messageID).Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt, &e.ReminderSent); err != nil {
 		return nil, err
 	}
 	return &e, nil
@@ -170,6 +170,71 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 		return nil, err
 	}
 	return result, nil
+}
+
+func (r *Repository) GetPendingReminderEvents(ctx context.Context, hours int) ([]Event, error) {
+	query := `
+		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
+		FROM discord_events
+		WHERE reminder_sent = 0
+		  AND datetime(date_time) > datetime('now', 'localtime')
+		  AND datetime(date_time) <= datetime('now', 'localtime', '+' || ? || ' hours')
+	`
+	rows, err := r.db.QueryContext(ctx, query, hours)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt, &e.ReminderSent); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return events, nil
+}
+
+func (r *Repository) MarkReminderSent(ctx context.Context, eventID int64) error {
+	query := `UPDATE discord_events SET reminder_sent = 1 WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, eventID)
+	return err
+}
+
+func (r *Repository) GetNoResponseUserIDs(ctx context.Context, eventID int64) ([]string, error) {
+	query := `
+		SELECT u.id
+		FROM discord_users u
+		WHERE u.is_active = 1
+		  AND u.id NOT IN (
+		      SELECT p.user_id 
+		      FROM discord_event_participations p 
+		      WHERE p.event_id = ?
+		  )
+	`
+	rows, err := r.db.QueryContext(ctx, query, eventID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var userIDs []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		userIDs = append(userIDs, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return userIDs, nil
 }
 
 func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {

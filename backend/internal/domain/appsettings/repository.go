@@ -17,13 +17,18 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 	var s AppSettings
 
-	query := `SELECT id, log_retention_days, log_max_total_size_mb FROM app_settings LIMIT 1`
+	query := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message FROM app_settings LIMIT 1`
 
-	err := r.db.QueryRowContext(ctx, query).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB)
+	err := r.db.QueryRowContext(ctx, query).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB, &s.DiscordReminderHours, &s.DiscordReminderMessage)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Return default
-			return &AppSettings{LogRetentionDays: 30, LogMaxTotalSizeMB: 1024}, nil
+			return &AppSettings{
+				LogRetentionDays:       30,
+				LogMaxTotalSizeMB:      1024,
+				DiscordReminderHours:   0,
+				DiscordReminderMessage: "Reminder: Please update your RSVP for the upcoming event!",
+			}, nil
 		}
 
 		return nil, err
@@ -37,11 +42,11 @@ func (r *Repository) Save(ctx context.Context, s *AppSettings) error {
 	err := r.db.QueryRowContext(ctx, "SELECT id FROM app_settings LIMIT 1").Scan(&id)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		_, err = r.db.ExecContext(ctx, "INSERT INTO app_settings (log_retention_days, log_max_total_size_mb) VALUES (?, ?)", s.LogRetentionDays, s.LogMaxTotalSizeMB)
+		_, err = r.db.ExecContext(ctx, "INSERT INTO app_settings (log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message) VALUES (?, ?, ?, ?)", s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage)
 	} else if err != nil {
 		return err
 	} else {
-		_, err = r.db.ExecContext(ctx, "UPDATE app_settings SET log_retention_days = ?, log_max_total_size_mb = ? WHERE id = ?", s.LogRetentionDays, s.LogMaxTotalSizeMB, id)
+		_, err = r.db.ExecContext(ctx, "UPDATE app_settings SET log_retention_days = ?, log_max_total_size_mb = ?, discord_reminder_hours = ?, discord_reminder_message = ? WHERE id = ?", s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, id)
 	}
 
 	return err

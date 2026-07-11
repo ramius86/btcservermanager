@@ -19,15 +19,13 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	_ "net/http/pprof"
+	_ "net/http/pprof" //nolint:gosec // NOSONAR: conditionally exposed via PPROF_ENABLED
 	"os"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
-	// Register the pprof HTTP handlers
-	// NOSONAR: conditionally exposed via PPROF_ENABLED
 )
 
 func main() {
@@ -198,6 +196,7 @@ func run() error {
 	if discordService != nil {
 		defer discordService.Close()
 	}
+	scheduler.SetDiscordService(discordService)
 
 	// 7. Initialize Router
 	router := api.NewRouter(api.RouterDeps{

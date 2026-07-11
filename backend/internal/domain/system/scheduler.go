@@ -1,6 +1,7 @@
 package system
 
 import (
+	"btcservermanager/internal/domain/discordbot"
 	"btcservermanager/internal/domain/logs"
 	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/workshop"
@@ -15,6 +16,7 @@ type Scheduler struct {
 	workshopService *workshop.Service
 	systemService   *Service
 	logManager      *logs.LogManager
+	discordService  *discordbot.Service
 	broadcaster     Broadcaster
 	stopCh          chan struct{}
 }
@@ -44,6 +46,10 @@ func (s *Scheduler) SetBroadcaster(b Broadcaster) {
 	s.broadcaster = b
 }
 
+func (s *Scheduler) SetDiscordService(svc *discordbot.Service) {
+	s.discordService = svc
+}
+
 func (s *Scheduler) Stop() {
 	close(s.stopCh)
 }
@@ -54,6 +60,7 @@ func (s *Scheduler) Start() {
 	go s.runWorkshopUpdate()
 	go s.runMetricsTicker()
 	go s.runSourceQueryTicker()
+	go s.runDiscordReminders()
 }
 
 func (s *Scheduler) runMetricsTicker() {
@@ -74,6 +81,30 @@ func (s *Scheduler) runMetricsTicker() {
 				} else {
 					s.broadcaster.Broadcast("system_info", info)
 				}
+			}
+		}
+	}
+}
+
+func (s *Scheduler) runDiscordReminders() {
+	ticker := time.NewTicker(15 * time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-s.stopCh:
+			return
+		case <-ticker.C:
+			if s.discordService == nil {
+				continue // bot not configured, skip silently
+			}
+			ctx := context.Background()
+			settings, err := s.systemService.GetAppSettings(ctx)
+			if err != nil || settings.DiscordReminderHours <= 0 {
+				continue // disabled or error
+			}
+			if err := s.discordService.SendEventReminders(ctx, settings.DiscordReminderHours, settings.DiscordReminderMessage); err != nil {
+				log.Printf("[Scheduler] Discord reminder error: %v", err)
 			}
 		}
 	}

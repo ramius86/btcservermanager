@@ -6,13 +6,14 @@ type Channel struct {
 }
 
 type Event struct {
-	ID        int64  `json:"id"`
-	ChannelID string `json:"channelId"`
-	MessageID string `json:"messageId"`
-	Title     string `json:"title"`
-	DateTime  string `json:"dateTime"`
-	GameType  string `json:"gameType"` // "arma3" | "reforger"
-	CreatedAt string `json:"createdAt"`
+	ID           int64  `json:"id"`
+	ChannelID    string `json:"channelId"`
+	MessageID    string `json:"messageId"`
+	Title        string `json:"title"`
+	DateTime     string `json:"dateTime"`
+	GameType     string `json:"gameType"` // "arma3" | "reforger"
+	CreatedAt    string `json:"createdAt"`
+	ReminderSent bool   `json:"reminderSent"`
 }
 
 type DiscordEventDetail struct {

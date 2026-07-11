@@ -620,3 +620,56 @@ func formatUsersForField(users []string) string {
 	}
 	return result
 }
+
+func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, customMessage string) error {
+	if s.session == nil {
+		return errors.New(errBotNotConfigured)
+	}
+
+	events, err := s.repo.GetPendingReminderEvents(ctx, hoursBefore)
+	if err != nil {
+		return fmt.Errorf("failed to get pending reminder events: %w", err)
+	}
+
+	for _, event := range events {
+		s.sendReminderForEvent(ctx, event, customMessage)
+	}
+
+	return nil
+}
+
+func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customMessage string) {
+	userIDs, err := s.repo.GetNoResponseUserIDs(ctx, event.ID)
+	if err != nil {
+		log.Printf("⚠️  Failed to get no response users for event %d: %v", event.ID, err)
+		return
+	}
+
+	if len(userIDs) == 0 {
+		return
+	}
+
+	formattedDateTime := event.DateTime
+	if t, err := time.ParseInLocation(dateTimeFormat, event.DateTime, time.Local); err == nil {
+		formattedDateTime = fmt.Sprintf("<t:%d:F>", t.Unix())
+	}
+
+	msgContent := fmt.Sprintf("%s\n\n**Event:** %s\n**When:** %s", customMessage, event.Title, formattedDateTime)
+
+	for _, userID := range userIDs {
+		ch, err := s.session.UserChannelCreate(userID)
+		if err != nil {
+			log.Printf("⚠️  Failed to create DM channel for user %s: %v", userID, err)
+			continue
+		}
+
+		_, err = s.session.ChannelMessageSend(ch.ID, msgContent)
+		if err != nil {
+			log.Printf("⚠️  Failed to send DM to user %s: %v", userID, err)
+		}
+	}
+
+	if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
+		log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
+	}
+}

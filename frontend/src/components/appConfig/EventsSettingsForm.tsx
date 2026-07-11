@@ -1,20 +1,21 @@
 import React from 'react'
-import { Clock, Database, Save, AlertTriangle } from 'lucide-react'
+import { Clock, MessageSquare, Save, Info } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
+import { Textarea } from '../ui/Textarea'
 
-interface LogRetentionSettings {
-  logRetentionDays: number
-  logMaxTotalSizeMB: number
+interface EventsSettings {
+  discordReminderHours: number
+  discordReminderMessage: string
 }
 
-interface LogRetentionFormProps {
-  settings: LogRetentionSettings
-  onSave: (settings: LogRetentionSettings) => Promise<void>
+interface EventsSettingsFormProps {
+  settings: EventsSettings
+  onSave: (settings: EventsSettings) => Promise<void>
 }
 
-export function LogRetentionForm({ settings, onSave }: Readonly<LogRetentionFormProps>) {
+export function EventsSettingsForm({ settings, onSave }: Readonly<EventsSettingsFormProps>) {
   const [localSettings, setLocalSettings] = React.useState(settings)
   const [saving, setSaving] = React.useState(false)
 
@@ -37,12 +38,12 @@ export function LogRetentionForm({ settings, onSave }: Readonly<LogRetentionForm
       <CardHeader className="pb-4 border-b border-border bg-surface/30">
         <div className="flex items-center gap-3">
           <div className="w-8 h-8 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-            <Clock className="w-4 h-4 text-primary" />
+            <MessageSquare className="w-4 h-4 text-primary" />
           </div>
           <div>
-            <CardTitle className="text-md font-bold">Log Retention Policy</CardTitle>
+            <CardTitle className="text-md font-bold">Event Reminders</CardTitle>
             <CardDescription className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
-              Automatic Cleanup Rules
+              No Response Reminders
             </CardDescription>
           </div>
         </div>
@@ -53,45 +54,40 @@ export function LogRetentionForm({ settings, onSave }: Readonly<LogRetentionForm
             <div className="space-y-2">
               <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
                 <Clock className="w-3 h-3" />
-                Max Age (Days)
+                Hours Before Event
               </label>
               <div className="relative">
                 <Input 
                   type="number"
                   min="0"
                   className="bg-surface border-border focus:border-primary/50 h-10 text-sm pr-12"
-                  value={localSettings.logRetentionDays} 
-                  onChange={e => setLocalSettings({ ...localSettings, logRetentionDays: Number.parseInt(e.target.value, 10) || 0 })}
+                  value={localSettings.discordReminderHours} 
+                  onChange={e => setLocalSettings({ ...localSettings, discordReminderHours: Number.parseInt(e.target.value, 10) || 0 })}
                 />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Days</span>
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Hours</span>
               </div>
-              <p className="text-[9px] text-muted-foreground italic px-1">Set to 0 to disable age-based cleanup.</p>
+              <p className="text-[9px] text-muted-foreground italic px-1">Set to 0 to disable automatic reminders.</p>
             </div>
-
-            <div className="space-y-2">
-              <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
-                <Database className="w-3 h-3" />
-                Max Total Size (MB)
-              </label>
-              <div className="relative">
-                <Input 
-                  type="number"
-                  min="0"
-                  className="bg-surface border-border focus:border-primary/50 h-10 text-sm pr-12"
-                  value={localSettings.logMaxTotalSizeMB} 
-                  onChange={e => setLocalSettings({ ...localSettings, logMaxTotalSizeMB: Number.parseInt(e.target.value, 10) || 0 })}
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold text-muted-foreground uppercase tracking-widest">MB</span>
-              </div>
-              <p className="text-[9px] text-muted-foreground italic px-1">Deletes oldest files if directory exceeds this size.</p>
-            </div>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+              <MessageSquare className="w-3 h-3" />
+              Custom Reminder Message
+            </label>
+            <Textarea
+              className="bg-surface border-border focus:border-primary/50 text-sm min-h-[100px]"
+              placeholder="Reminder: Please update your RSVP for the upcoming event!"
+              value={localSettings.discordReminderMessage}
+              onChange={e => setLocalSettings({ ...localSettings, discordReminderMessage: e.target.value })}
+            />
+            <p className="text-[9px] text-muted-foreground italic px-1">This text will be prepended to the event details in the DM.</p>
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-border">
-            <div className="flex items-center gap-3 px-3 py-2 bg-amber-500/5 rounded-lg border border-amber-500/10 max-w-sm">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <div className="flex items-center gap-3 px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 max-w-sm">
+              <Info className="w-3.5 h-3.5 text-primary shrink-0" />
               <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest leading-normal">
-                Files deleted by these rules cannot be recovered.
+                Reminders are only sent once per event to users who haven't RSVP'd.
               </p>
             </div>
             
@@ -103,7 +99,7 @@ export function LogRetentionForm({ settings, onSave }: Readonly<LogRetentionForm
               {saving ? 'Saving...' : (
                 <>
                   <Save className="w-3.5 h-3.5 mr-2" />
-                  Save Policy
+                  Save Settings
                 </>
               )}
             </Button>
