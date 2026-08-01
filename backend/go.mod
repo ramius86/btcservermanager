@@ -14,7 +14,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/goleak v1.3.0
 	golang.org/x/net v0.57.0
-	modernc.org/sqlite v1.53.0
+	modernc.org/sqlite v1.55.0
 )
 
 require (
@@ -33,7 +33,7 @@ require (
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/time v0.12.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	modernc.org/libc v1.73.5 // indirect
+	modernc.org/libc v1.74.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 )
