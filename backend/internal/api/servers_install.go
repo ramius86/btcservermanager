@@ -140,9 +140,44 @@ func (r *Router) handleGetInstallation(w http.ResponseWriter, req *http.Request)
 	r.json(w, inst)
 }
 
+func (r *Router) hasRunningServerOfType(ctx context.Context, t server.Type) (bool, error) {
+	servers, err := r.serverService.GetAllServers(ctx)
+	if err != nil {
+		return false, err
+	}
+	for _, srv := range servers {
+		var (
+			sType server.Type
+			sID   int64
+		)
+		switch v := srv.(type) {
+		case *server.Arma3Server:
+			sType = v.Type
+			sID = v.ID
+		case *server.DayZServer:
+			sType = v.Type
+			sID = v.ID
+		case *server.ReforgerServer:
+			sType = v.Type
+			sID = v.ID
+		}
+
+		if sType == t && r.serverService.GetInstanceInfo(sID) != nil {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 func (r *Router) handleInstallOrUpdateServer(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	t := server.Type(chi.URLParam(req, "type"))
+
+	if running, err := r.hasRunningServerOfType(ctx, t); err == nil && running {
+		http.Error(w, fmt.Sprintf("Cannot install or update %s while a server instance is running. Please stop it first.", t), http.StatusConflict)
+		return
+	}
+
 	inst, err := r.installationService.GetInstallation(ctx, t)
 	if err != nil {
 		// If not found, create a default one to allow installation
@@ -181,6 +216,11 @@ func (r *Router) handleSetServerBranch(w http.ResponseWriter, req *http.Request)
 func (r *Router) handleUninstallServer(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	t := server.Type(chi.URLParam(req, "type"))
+
+	if running, err := r.hasRunningServerOfType(ctx, t); err == nil && running {
+		http.Error(w, fmt.Sprintf("Cannot uninstall %s while a server instance is running. Please stop it first.", t), http.StatusConflict)
+		return
+	}
 
 	// Strict Validation: Ensure there are NO configured server instances for this game type.
 	servers, err := r.serverService.GetAllServers(ctx)

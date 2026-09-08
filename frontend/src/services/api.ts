@@ -143,6 +143,8 @@ export const SteamCmdService = {
   getStatus: (): Promise<Record<string, SteamCmdItemInfoDto>> => fetchApi('/steamcmd'),
   getLog: (count = 100): Promise<{ content: string }> => fetchApi(`/steamcmd/log?count=${count}`),
   update: (): Promise<void> => fetchApi('/steamcmd/update', { method: 'POST' }),
+  checkForUpdates: (type?: string): Promise<void> => 
+    fetchApi(type ? `/steamcmd/check-updates?type=${encodeURIComponent(type)}` : '/steamcmd/check-updates', { method: 'POST' }),
   beginQr: (): Promise<any> => fetchApi('/config/auth/qr/begin', { method: 'POST' }),
   pollQr: (clientId: string, requestId: string): Promise<any> => fetchApi('/config/auth/qr/poll', { method: 'POST', body: JSON.stringify({ client_id: clientId, request_id: requestId }) }),
   login: (credentials: any): Promise<any> => fetchApi('/config/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),

@@ -112,6 +112,8 @@ func (s *Service) InstallOrUpdateServer(si *installation.ServerInstallation) *Jo
 			log.Printf("[SteamCMD] Failed to update status to error: %v", err)
 		}
 
+		s.executor.ClearItemInfo("server:" + string(si.Type))
+
 		if s.broadcaster != nil {
 			s.broadcaster.Broadcast("install_progress", map[string]any{
 				"itemId":    server.ServerIDs[si.Type],

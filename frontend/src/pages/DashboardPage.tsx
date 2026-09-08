@@ -1,18 +1,20 @@
 import { useCallback, useEffect, useState, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { formatUptime } from '../utils/time'
 
-import { Cpu, MemoryStick as Memory, Server, ShieldCheck, Download, RefreshCw, Layers, MoreVertical } from 'lucide-react'
+import { Cpu, MemoryStick as Memory, Server, ShieldCheck, Download, RefreshCw, Layers, MoreVertical, RotateCcw, FileText, Trash2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
-import { ServerService } from '../services/api'
+import { ServerService, SteamCmdService } from '../services/api'
 import { Progress } from '../components/ui/Progress'
 import { useToast } from '../components/ui/Toast'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { useServerStatus } from '../contexts/ServerStatusContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
 import { AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
+import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { FoxEasterEgg } from '../components/FoxEasterEgg'
 
 // Map of Steam AppIDs to game types for WebSocket sync
@@ -73,6 +75,14 @@ function applyInstallationsUpdate(installations: ServerInstallationDto[], wsInst
         }
       }
 
+      if (wsInfo.status === 'ERROR') {
+        return {
+          ...inst,
+          progress: 0,
+          installationStatus: 'ERROR'
+        }
+      }
+
       let status = 'INSTALLING'
       if (wsInfo.status === 'VERIFYING') status = 'VERIFYING'
       else if (wsInfo.status === 'PREALLOCATING') status = 'PREALLOCATING'
@@ -94,20 +104,26 @@ function applyInstallationsUpdate(installations: ServerInstallationDto[], wsInst
 }
 
 function useInstallationsSync(wsInstallations: any) {
-  const [installations, setInstallations] = useState<ServerInstallationDto[]>([])
+  const [rawInstallations, setRawInstallations] = useState<ServerInstallationDto[]>([])
 
-  const fetchInstallations = useCallback(() => {
-    ServerService.getInstallations().then(setInstallations).catch(console.error)
+  const fetchInstallations = useCallback(async () => {
+    try {
+      const data = await ServerService.getInstallations()
+      setRawInstallations(data || [])
+    } catch (err) {
+      console.error(err)
+    }
   }, [])
 
-  useEffect(() => {
-    setInstallations(prev => applyInstallationsUpdate(prev, wsInstallations))
-  }, [wsInstallations])
+  const installations = useMemo(() => {
+    return applyInstallationsUpdate(rawInstallations, wsInstallations)
+  }, [rawInstallations, wsInstallations])
 
   return { installations, fetchInstallations }
 }
 
 export function DashboardPage() {
+  const navigate = useNavigate()
   const { showToast } = useToast()
   const { systemInfo: sysInfo } = useSystemInfo()
   const { installations: wsInstallations, statuses: wsStatuses } = useServerStatus()
@@ -115,6 +131,8 @@ export function DashboardPage() {
   const { servers, fetchServers } = useServersStatusSync(wsStatuses)
   const { installations, fetchInstallations } = useInstallationsSync(wsInstallations)
   const { subscribe } = useWebSocket()
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [uninstallTarget, setUninstallTarget] = useState<string | null>(null)
 
   useEffect(() => {
     fetchServers()
@@ -128,14 +146,41 @@ export function DashboardPage() {
     return () => unsubscribe()
   }, [subscribe, fetchServers, fetchInstallations])
 
+  const handleRefreshAll = async () => {
+    if (isRefreshing) return
+    setIsRefreshing(true)
+    try {
+      await SteamCmdService.checkForUpdates().catch(err => console.warn('Could not trigger steamcmd check-updates:', err))
+      await Promise.all([fetchServers(), fetchInstallations()])
+      showToast('Installations and update status refreshed.', 'info')
+    } catch (err) {
+      console.error(err)
+      showToast('Failed to refresh updates.', 'error')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleCheckUpdatesForType = async (type: string) => {
+    try {
+      showToast(`Checking Steam updates for ${type}...`, 'info')
+      await SteamCmdService.checkForUpdates(type)
+      await fetchInstallations()
+      showToast(`Steam updates checked for ${type}.`, 'success')
+    } catch (err) {
+      console.error(err)
+      showToast(`Failed to check updates for ${type}.`, 'error')
+    }
+  }
+
   const handleUpdate = async (type: string) => {
     try {
       await ServerService.installOrUpdate(type)
       showToast(`${type} installation/update started.`, 'success')
       fetchInstallations()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      showToast(`Failed to start ${type} update.`, 'error')
+      showToast(err.message || `Failed to start ${type} update.`, 'error')
     }
   }
   
@@ -144,9 +189,9 @@ export function DashboardPage() {
       await ServerService.setBranch(type, branch)
       showToast(`Branch set to ${branch} for ${type}.`, 'success')
       fetchInstallations()
-    } catch (err) {
+    } catch (err: any) {
       console.error(err)
-      showToast(`Failed to set branch for ${type}.`, 'error')
+      showToast(err.message || `Failed to set branch for ${type}.`, 'error')
     }
   }
 
@@ -300,22 +345,33 @@ export function DashboardPage() {
               </CardTitle>
               <CardDescription>Managed game binary versions and branches</CardDescription>
             </div>
-            <Button size="icon" variant="ghost" onClick={() => fetchInstallations()} className="text-muted-foreground">
-              <RefreshCw className="w-4 h-4" />
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={handleRefreshAll} 
+              disabled={isRefreshing}
+              className="text-muted-foreground hover:text-foreground"
+              title="Refresh installations and check Steam for updates"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-primary' : ''}`} />
             </Button>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {installations.map((inst) => {
                 const serversConfiguredCount = servers.filter(s => s.type === inst.type).length;
+                const hasRunningServer = servers.some(s => s.type === inst.type && s.status === 'Running');
                 return (
                   <InstallationItem 
                     key={inst.type} 
                     inst={inst} 
                     serversConfiguredCount={serversConfiguredCount}
+                    hasRunningServer={hasRunningServer}
                     onUpdate={handleUpdate} 
                     onSetBranch={handleSetBranch} 
-                    onUninstall={handleUninstall}
+                    onRequestUninstall={(type) => setUninstallTarget(type)}
+                    onCheckUpdates={handleCheckUpdatesForType}
+                    onViewLogs={() => navigate('/logs?type=steamcmd')}
                   />
                 )
               })}
@@ -324,6 +380,19 @@ export function DashboardPage() {
         </Card>
       </div>
 
+      <ConfirmationDialog
+        open={Boolean(uninstallTarget)}
+        onOpenChange={(open) => { if (!open) setUninstallTarget(null) }}
+        title={`Uninstall ${uninstallTarget === 'DAYZ_EXP' ? 'DayZ Experimental' : (uninstallTarget || '')}`}
+        description={`DANGER: You are about to uninstall ${uninstallTarget}.\n\nThis will permanently delete all game files, including custom scenarios in mpmissions and saved profiles.\n\nAre you absolutely sure?`}
+        onConfirm={() => {
+          if (uninstallTarget) {
+            handleUninstall(uninstallTarget)
+          }
+        }}
+        confirmLabel="Uninstall"
+        variant="danger"
+      />
     </div>
   )
 }
@@ -396,15 +465,27 @@ function hasNewVersion(inst: ServerInstallationDto) {
   return inst.version && /^\d+$/.test(inst.availableVersion) === /^\d+$/.test(inst.version) && inst.availableVersion !== inst.version
 }
 
-function BranchSelector({ inst, onSetBranch }: Readonly<{ inst: ServerInstallationDto, onSetBranch: (type: string, branch: string) => void }>) {
+function BranchSelector({ 
+  inst, 
+  onSetBranch,
+  disabled = false
+}: Readonly<{ 
+  inst: ServerInstallationDto, 
+  onSetBranch: (type: string, branch: string) => void,
+  disabled?: boolean
+}>) {
   if (inst.availableBranches && inst.availableBranches.length > 1) {
     return (
       <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button className="outline-none group/branch flex items-center gap-1.5">
-            <Badge variant="secondary" className="h-5 text-[9px] font-bold tracking-widest px-2 cursor-pointer border-transparent hover:border-primary/30 transition-all flex items-center gap-1 bg-surface-elevated">
+        <DropdownMenuTrigger asChild disabled={disabled}>
+          <button 
+            type="button"
+            disabled={disabled}
+            className={`outline-none group/branch flex items-center gap-1.5 ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <Badge variant="secondary" className={`h-5 text-[9px] font-bold tracking-widest px-2 border-transparent transition-all flex items-center gap-1 bg-surface-elevated ${disabled ? 'cursor-not-allowed' : 'cursor-pointer hover:border-primary/30'}`}>
               {inst.branch}
-              <Layers className="w-2.5 h-2.5 opacity-40 group-hover/branch:opacity-100 transition-opacity" />
+              {!disabled && <Layers className="w-2.5 h-2.5 opacity-40 group-hover/branch:opacity-100 transition-opacity" />}
             </Badge>
           </button>
         </DropdownMenuTrigger>
@@ -429,20 +510,27 @@ function BranchSelector({ inst, onSetBranch }: Readonly<{ inst: ServerInstallati
 function InstallationItem({ 
   inst, 
   serversConfiguredCount,
+  hasRunningServer,
   onUpdate, 
   onSetBranch,
-  onUninstall
+  onRequestUninstall,
+  onCheckUpdates,
+  onViewLogs
 }: Readonly<{ 
   inst: ServerInstallationDto, 
   serversConfiguredCount: number,
+  hasRunningServer: boolean,
   onUpdate: (type: string) => void, 
   onSetBranch: (type: string, branch: string) => void,
-  onUninstall: (type: string) => void
+  onRequestUninstall: (type: string) => void,
+  onCheckUpdates: (type: string) => void,
+  onViewLogs: () => void
 }>) {
   const { showToast } = useToast()
   const isInstalling = ['INSTALLATION_IN_PROGRESS', 'INSTALLING', 'VERIFYING', 'PREALLOCATING', 'COMMITTING'].includes(inst.installationStatus)
   const isFinished = inst.installationStatus === 'FINISHED'
-  const isDifferentBranch = inst.installedBranch && inst.branch !== inst.installedBranch
+  const isError = inst.installationStatus === 'ERROR'
+  const isDifferentBranch = isFinished && Boolean(inst.installedBranch && inst.branch !== inst.installedBranch)
   const hasUpdate = hasNewVersion(inst)
 
   const handleUninstallClick = () => {
@@ -450,30 +538,56 @@ function InstallationItem({
       showToast(`You must delete all configured ${inst.type} instances before uninstalling.`, 'error')
       return
     }
-
-    if (globalThis.confirm(`DANGER: You are about to uninstall ${inst.type}.\n\nThis will permanently delete all game files, including custom scenarios in mpmissions and saved profiles.\n\nAre you absolutely sure?`)) {
-      onUninstall(inst.type)
+    if (hasRunningServer) {
+      showToast(`Cannot uninstall ${inst.type} while a server instance is running. Stop it first.`, 'error')
+      return
     }
+    onRequestUninstall(inst.type)
   }
 
   return (
     <div className="group relative flex flex-col md:flex-row items-start md:items-center justify-between p-4 pr-12 md:p-6 md:pr-14 gap-4 md:gap-0 bg-surface/50 rounded-md border border-border hover:border-primary/30 transition-all duration-300">
       
       {inst.installationStatus !== 'NOT_INSTALLED' && !isInstalling && (
-        <div className="absolute top-3 right-3 md:top-4 md:right-4 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-all duration-200 z-10">
+        <div className="absolute top-3 right-3 md:top-4 md:right-4 z-10">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground">
+              <Button size="icon" variant="ghost" className="h-7 w-7 rounded-full text-muted-foreground hover:text-foreground opacity-70 hover:opacity-100 transition-opacity">
                 <span className="sr-only">Open menu</span>
                 <MoreVertical className="w-4 h-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="bg-surface-elevated border-border min-w-[140px] mt-1">
+            <DropdownMenuContent align="end" className="bg-surface-elevated border-border min-w-[160px] p-1 shadow-lg">
+              <DropdownMenuItem 
+                onClick={() => onUpdate(inst.type)}
+                disabled={hasRunningServer}
+                className="cursor-pointer text-xs py-2 font-medium flex items-center gap-2"
+              >
+                <RotateCcw className="w-3.5 h-3.5 opacity-70" />
+                <span>Verify Files</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => onCheckUpdates(inst.type)}
+                className="cursor-pointer text-xs py-2 font-medium flex items-center gap-2"
+              >
+                <RefreshCw className="w-3.5 h-3.5 opacity-70" />
+                <span>Check Updates</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={onViewLogs}
+                className="cursor-pointer text-xs py-2 font-medium flex items-center gap-2"
+              >
+                <FileText className="w-3.5 h-3.5 opacity-70" />
+                <span>View Logs</span>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem 
                 onClick={handleUninstallClick}
-                className="text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer font-bold text-xs py-2"
+                disabled={serversConfiguredCount > 0 || hasRunningServer}
+                className="text-red-500 focus:text-red-500 focus:bg-red-500/10 cursor-pointer font-bold text-xs py-2 flex items-center gap-2"
               >
-                Uninstall Game
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Uninstall Game</span>
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -502,16 +616,27 @@ function InstallationItem({
 
           <div className="flex flex-col">
             <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Branch</span>
-            <div className="flex items-center gap-2">
-              <BranchSelector inst={inst} onSetBranch={onSetBranch} />
+            <div className="flex items-center gap-2 flex-wrap">
+              <BranchSelector inst={inst} onSetBranch={onSetBranch} disabled={isInstalling} />
+              {isDifferentBranch && (
+                <Badge variant="outline" className="h-5 text-[9px] text-amber-500 border-amber-500/30 bg-amber-500/10 font-mono tracking-tight" title="Installed branch on disk">
+                  Installed: {inst.installedBranch}
+                </Badge>
+              )}
             </div>
           </div>
 
           <div className="flex flex-col">
             <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold mb-1">Last Updated</span>
             <div className="flex flex-col">
-              <span className="text-xs text-foreground/70">
-                {inst.lastUpdatedAt ? new Date(inst.lastUpdatedAt).toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : 'Never'}
+              <span className="text-xs text-foreground/70 font-mono">
+                {inst.lastUpdatedAt ? new Date(inst.lastUpdatedAt).toLocaleString('it-IT', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric',
+                  hour: '2-digit',
+                  minute: '2-digit'
+                }) : 'Never'}
               </span>
               {hasUpdate && (
                 <Badge className="mt-1 w-fit h-3.5 text-[8px] bg-yellow-500/20 text-yellow-500 border-yellow-500/30 px-1 font-bold uppercase tracking-tighter">
@@ -534,26 +659,37 @@ function InstallationItem({
               <Progress value={inst.progress || 0.1} className="h-1.5 bg-primary/10" />
             </div>
           ) : (
-            <Badge variant={isFinished ? 'success' : 'secondary'} className="px-3 py-1 text-[9px] font-bold uppercase tracking-[0.15em]">
-              {isFinished ? 'INSTALLED' : (inst.installationStatus?.replace('_', ' ') || 'NOT INSTALLED')}
+            <Badge 
+              variant={isFinished ? 'success' : isError ? 'danger' : 'secondary'} 
+              className="px-3 py-1 text-[9px] font-bold uppercase tracking-[0.15em]"
+            >
+              {isFinished ? 'INSTALLED' : isError ? 'ERROR' : (inst.installationStatus?.replace('_', ' ') || 'NOT INSTALLED')}
             </Badge>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col items-end gap-1">
           <Button 
             size="sm" 
-            variant={(isFinished && !isDifferentBranch) ? 'outline' : 'primary'}
+            variant={(isFinished && !isDifferentBranch && !isError) ? 'outline' : 'primary'}
             onClick={() => onUpdate(inst.type)}
-            disabled={isInstalling}
+            disabled={isInstalling || hasRunningServer}
+            title={hasRunningServer ? 'Server running - stop before update' : undefined}
             className={`min-w-[100px] transition-all duration-500 ${
               isDifferentBranch ? 'animate-pulse shadow-[0_0_20px_var(--color-primary)]/40 border-primary' : ''
             }`}
           >
             {inst.installationStatus === 'NOT_INSTALLED' && 'Install'}
-            {inst.installationStatus !== 'NOT_INSTALLED' && isDifferentBranch && 'Switch branch'}
-            {inst.installationStatus !== 'NOT_INSTALLED' && !isDifferentBranch && hasUpdate && 'Update'}
-            {inst.installationStatus !== 'NOT_INSTALLED' && !isDifferentBranch && !hasUpdate && 'Verify'}
+            {isError && 'Retry'}
+            {inst.installationStatus !== 'NOT_INSTALLED' && !isError && isDifferentBranch && 'Switch branch'}
+            {inst.installationStatus !== 'NOT_INSTALLED' && !isError && !isDifferentBranch && hasUpdate && 'Update'}
+            {inst.installationStatus !== 'NOT_INSTALLED' && !isError && !isDifferentBranch && !hasUpdate && 'Verify'}
           </Button>
+          {hasRunningServer && (
+            <span className="text-[9px] text-amber-500 font-bold uppercase tracking-wider flex items-center gap-1">
+              <AlertCircle className="w-2.5 h-2.5" />
+              Server running
+            </span>
+          )}
         </div>
       </div>
     </div>
