@@ -1,0 +1,49 @@
+#!/bin/sh
+set -e
+
+ROOT_DIR=$(pwd)
+
+# Backend
+cd "$ROOT_DIR/backend"
+
+UNFORMATTED=$(gofmt -l .)
+if [ -n "$UNFORMATTED" ]; then
+    echo "Unformatted Go files found:"
+    echo "$UNFORMATTED"
+    echo "Run 'gofmt -w .' in backend to fix."
+    exit 1
+fi
+
+go mod tidy
+if ! git diff --exit-code go.mod go.sum >/dev/null 2>&1; then
+    echo "go.mod or go.sum has uncommitted changes. Run 'go mod tidy' and stage changes."
+    exit 1
+fi
+
+if command -v golangci-lint >/dev/null 2>&1; then
+    golangci-lint run
+else
+    go vet ./...
+fi
+
+go test ./... -short
+
+VULNCHECK_BIN="govulncheck"
+if ! command -v "$VULNCHECK_BIN" >/dev/null 2>&1; then
+    GOPATH_BIN="$(go env GOPATH)/bin"
+    if [ -x "$GOPATH_BIN/govulncheck.exe" ]; then
+        VULNCHECK_BIN="$GOPATH_BIN/govulncheck.exe"
+    elif [ -x "$GOPATH_BIN/govulncheck" ]; then
+        VULNCHECK_BIN="$GOPATH_BIN/govulncheck"
+    fi
+fi
+
+if command -v "$VULNCHECK_BIN" >/dev/null 2>&1 || [ -x "$VULNCHECK_BIN" ]; then
+    "$VULNCHECK_BIN" ./...
+fi
+
+# Frontend
+cd "$ROOT_DIR/frontend"
+npx tsc --noEmit
+
+exit 0

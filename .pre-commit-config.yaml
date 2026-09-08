@@ -21,3 +21,12 @@ repos:
     hooks:
       - id: eslint
         args: [--ext, .js,.jsx,.ts,.tsx]
+
+  - repo: local
+    hooks:
+      - id: govulncheck
+        name: govulncheck
+        entry: bash -c "cd backend && govulncheck ./..."
+        language: system
+        pass_filenames: false
+        files: (^backend/|go\.mod$|go\.sum$)

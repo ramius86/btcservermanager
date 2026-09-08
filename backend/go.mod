@@ -1,6 +1,6 @@
 module btcservermanager
 
-go 1.26.5
+go 1.26.8
 
 require (
 	github.com/MicahParks/keyfunc/v3 v3.8.2
