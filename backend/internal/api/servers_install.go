@@ -92,7 +92,11 @@ func (r *Router) buildQueryPortMap(servers []any) map[server.Type]int {
 }
 
 func (r *Router) refreshInstallationDetails(inst *installation.ServerInstallation, typeToQueryPort map[server.Type]int) {
-	inst.Progress = r.steamCmdService.GetProgress("server:" + string(inst.Type))
+	if inst.InstallationStatus == workshop.InstallationInProgress {
+		inst.Progress = r.steamCmdService.GetProgress("server:" + string(inst.Type))
+	} else {
+		inst.Progress = 0
+	}
 
 	// Ensure InstalledBuildID is up to date from manifest if we have a finished installation
 	if inst.InstallationStatus == workshop.InstallationFinished {
@@ -126,8 +130,12 @@ func (r *Router) handleGetInstallation(w http.ResponseWriter, req *http.Request)
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	// Inject progress
-	inst.Progress = r.steamCmdService.GetProgress("server:" + string(inst.Type))
+	// Inject progress only if currently in progress
+	if inst.InstallationStatus == workshop.InstallationInProgress {
+		inst.Progress = r.steamCmdService.GetProgress("server:" + string(inst.Type))
+	} else {
+		inst.Progress = 0
+	}
 
 	r.json(w, inst)
 }

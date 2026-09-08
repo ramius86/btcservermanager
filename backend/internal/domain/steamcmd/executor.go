@@ -442,6 +442,10 @@ func (e *Executor) GetAllItemInfo() map[string]ItemInfo {
 	return result
 }
 
+func (e *Executor) ClearItemInfo(key string) {
+	e.itemInfo.Delete(key)
+}
+
 func (e *Executor) TestLogin(ctx context.Context, username, password, guardToken string) error {
 	params := []string{"+@NoPromptForPassword", "1", "+login", username, password}
 	if guardToken != "" {

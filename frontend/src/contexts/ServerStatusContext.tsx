@@ -61,12 +61,24 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
 
     const unsubInstall = subscribe('install_progress', (e) => {
       const i = e.payload as InstallProgress
-      setInstallations((prev) => ({ ...prev, [i.itemId]: i }))
+      setInstallations((prev) => {
+        if (i.status === 'FINISHED' || i.status === 'SUCCESS') {
+          const next = { ...prev }
+          delete next[i.itemId]
+          return next
+        }
+        return { ...prev, [i.itemId]: i }
+      })
+    })
+
+    const unsubServerUpdated = subscribe('server_updated', () => {
+      // Re-sync or clean completed server items if any remain
     })
 
     return () => {
       unsubStatus()
       unsubInstall()
+      unsubServerUpdated()
     }
   }, [subscribe])
 

@@ -65,9 +65,16 @@ function applyInstallationsUpdate(installations: ServerInstallationDto[], wsInst
     }
     
     if (wsInfo) {
+      if (wsInfo.status === 'FINISHED' || wsInfo.status === 'SUCCESS') {
+        return { 
+          ...inst, 
+          progress: 0,
+          installationStatus: 'FINISHED'
+        }
+      }
+
       let status = 'INSTALLING'
-      if (wsInfo.status === 'SUCCESS') status = 'FINISHED'
-      else if (wsInfo.status === 'VERIFYING') status = 'VERIFYING'
+      if (wsInfo.status === 'VERIFYING') status = 'VERIFYING'
       else if (wsInfo.status === 'PREALLOCATING') status = 'PREALLOCATING'
       else if (wsInfo.status === 'COMMITTING') status = 'COMMITTING'
 

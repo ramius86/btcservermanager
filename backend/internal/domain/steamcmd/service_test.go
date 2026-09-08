@@ -243,3 +243,35 @@ func TestService_BackgroundChecks(t *testing.T) {
 	env.svc.StartBackgroundUpdateCheck()
 	time.Sleep(10 * time.Millisecond) // Let it run briefly
 }
+
+func TestService_InstallSuccess_UpdatesBranchAndClearsProgress(t *testing.T) {
+	env := setupSteamCmdService(t)
+
+	// Set initial installation as public branch
+	err := env.svc.installations.UpdateInstalledBranch(t.Context(), server.TypeArma3, installation.BranchPublic)
+	require.NoError(t, err)
+
+	// Simulate progress stored in executor
+	env.executor.itemInfo.Store("server:ARMA3", ItemInfo{
+		ItemID:   server.ServerIDs[server.TypeArma3],
+		Status:   StatusFinished,
+		Progress: 100.0,
+	})
+	assert.Equal(t, 100.0, env.executor.GetProgress("server:ARMA3"))
+
+	// Trigger install success with BranchProfiling
+	si := &installation.ServerInstallation{
+		Type:   server.TypeArma3,
+		Branch: installation.BranchProfiling,
+	}
+	env.svc.handleInstallSuccess(t.Context(), si, env.svc.paths.GetServerPath(si.Type))
+
+	// Verify installed_branch is now profiling and status is finished
+	updated, err := env.svc.installations.GetInstallation(t.Context(), server.TypeArma3)
+	require.NoError(t, err)
+	assert.Equal(t, installation.BranchProfiling, updated.InstalledBranch)
+	assert.Equal(t, workshop.InstallationFinished, updated.InstallationStatus)
+
+	// Verify executor progress cache was cleared
+	assert.Equal(t, 0.0, env.executor.GetProgress("server:ARMA3"))
+}

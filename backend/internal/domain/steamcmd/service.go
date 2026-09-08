@@ -132,10 +132,24 @@ func (s *Service) handleInstallSuccess(ctx context.Context, si *installation.Ser
 		log.Printf("[SteamCMD] Failed to update status to finished: %v", err)
 	}
 
-	version := s.performServerDryRun(ctx, si.Type)
+	// 1. Immediately update branch and buildID from manifest so database and UI reflect success
+	s.updateInstalledServerMetadata(ctx, si.Type, si.Branch, serverPath)
 
+	// 2. Clean up executor itemInfo so subsequent queries return 0 progress
+	s.executor.ClearItemInfo("server:" + string(si.Type))
+
+	// 3. Dry run to extract game version if possible (won't block branch/build update)
+	version := s.performServerDryRun(ctx, si.Type)
 	if version != "" {
-		s.updateInstalledServerMetadata(ctx, si.Type, si.Branch, version, serverPath)
+		if err := s.installations.UpdateVersion(ctx, si.Type, version); err != nil {
+			log.Printf("[SteamCMD] Failed to update version: %v", err)
+		}
+		if s.broadcaster != nil {
+			s.broadcaster.Broadcast("server_updated", map[string]any{
+				"type":    si.Type,
+				"version": version,
+			})
+		}
 	}
 }
 
@@ -173,12 +187,8 @@ func (s *Service) saveReforgerScenarios(ctx context.Context, version string, sce
 	return err
 }
 
-func (s *Service) updateInstalledServerMetadata(ctx context.Context, gameType server.Type, branch installation.Branch, version, serverPath string) {
-	if err := s.installations.UpdateVersion(ctx, gameType, version); err != nil {
-		log.Printf("[SteamCMD] Failed to update version: %v", err)
-	}
-
-	// 3. Update BuildID from manifest
+func (s *Service) updateInstalledServerMetadata(ctx context.Context, gameType server.Type, branch installation.Branch, serverPath string) {
+	// 1. Update BuildID from manifest
 	buildID := installation.ReadBuildIDFromManifest(serverPath, server.ServerIDs[gameType])
 	if buildID != "" {
 		if err := s.installations.UpdateBuildID(ctx, gameType, buildID); err != nil {
@@ -189,7 +199,7 @@ func (s *Service) updateInstalledServerMetadata(ctx context.Context, gameType se
 			log.Printf("[SteamCMD] Failed to update available version: %v", err)
 		}
 	}
-	// 4. Update InstalledBranch
+	// 2. Update InstalledBranch
 	if err := s.installations.UpdateInstalledBranch(ctx, gameType, branch); err != nil {
 		log.Printf("[SteamCMD] Failed to update installed branch: %v", err)
 	}
@@ -197,8 +207,7 @@ func (s *Service) updateInstalledServerMetadata(ctx context.Context, gameType se
 	// Notify frontend
 	if s.broadcaster != nil {
 		s.broadcaster.Broadcast("server_updated", map[string]any{
-			"type":    gameType,
-			"version": version,
+			"type": gameType,
 		})
 	}
 }
@@ -433,6 +442,10 @@ func (s *Service) GetItemInfo(key string) *ItemInfo {
 
 func (s *Service) GetProgress(key string) float64 {
 	return s.executor.GetProgress(key)
+}
+
+func (s *Service) ClearItemInfo(key string) {
+	s.executor.ClearItemInfo(key)
 }
 
 func (s *Service) StartBackgroundUpdateCheck() {
