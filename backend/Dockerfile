@@ -32,8 +32,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends \
           expect \
           lib32gcc-s1 \
-          lib32stdc++6  \
+          lib32stdc++6 \
           libcap2 \
+          libavahi-client3 \
+          libavahi-common3 \
+          libavahi-client3:i386 \
+          libavahi-common3:i386 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app /app/storage/logs /app/storage/data /home/steam/Steam \
