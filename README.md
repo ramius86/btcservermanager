@@ -1,8 +1,8 @@
 # <img src="frontend/public/btclogo.png" width="54" height="54" valign="middle" /> BTC Server Manager
 
 ![Go Version](https://img.shields.io/badge/Go-1.26.5-00ADD8?style=flat-square&logo=go&logoColor=white)
-![React Version](https://img.shields.io/badge/React-19.2.7-61DAFB?style=flat-square&logo=react&logoColor=black)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.3.1-38B2AC?style=flat-square&logo=tailwind-css)
+![React Version](https://img.shields.io/badge/React-19.2.8-61DAFB?style=flat-square&logo=react&logoColor=black)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-v4.3.3-38B2AC?style=flat-square&logo=tailwind-css)
 ![Docker Support](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat-square&logo=docker)
 ![License](https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey?style=flat-square&logo=creative-commons&logoColor=black)
 
@@ -71,10 +71,11 @@ Here's a quick look at the main features of the BTC Server Manager interface:
 * **Headless Client Orchestration**: Automatically spin up and link local Headless Clients (HC) to offload AI processing and maintain high server FPS.
 
 ### Discord Events Integration
-* **Interactive Event Posting**: Administrators can post Arma 3 and Reforger game events directly to Discord channels from the web dashboard.
+* **Event Creation & Management**: Administrators can easily create, schedule, and post Arma 3 and Reforger game events directly to Discord channels from the web dashboard.
 * **Interactive RSVP System**: Discord messages include interactive buttons ("Going", "Not Going", "Maybe") allowing community members to RSVP directly.
 * **Automated Sync**: Real-time processing of Discord interactions keeps the RSVP lists updated and automatically deduplicates users.
-* **Attendance Stats**: Track and view detailed attendance statistics for events via the `/events/stats` endpoint.
+* **Attendance Tracking**: Track and view detailed attendance statistics and history for events via the `/events/stats` endpoint.
+* **Members & Qualifications**: Automatically fetches Discord roles to manage a dedicated clan members table. Administrators can assign and track specific player qualifications and licenses directly from the dashboard.
 * **Graceful Degradation**: The manager works perfectly even if the Discord bot is not configured, automatically hiding the events UI.
 
 ### Passwordless Steam Authentication
