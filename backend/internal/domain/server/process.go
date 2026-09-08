@@ -150,6 +150,7 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	}
 
 	if m.isServerAlreadyRunning(id) {
+		m.emitStatus(id, true)
 		return nil
 	}
 
@@ -715,6 +716,22 @@ func (m *ProcessManager) GetInstanceInfo(id int64) *ServerInstanceInfo {
 	}
 
 	return nil
+}
+
+func (m *ProcessManager) GetAllRunningInstances() map[int64]*ServerInstanceInfo {
+	instances := make(map[int64]*ServerInstanceInfo)
+	m.processes.Range(func(key, value any) bool {
+		id, okID := key.(int64)
+		proc, okProc := value.(*Process)
+		if okID && okProc && proc.IsAlive() {
+			proc.mu.RLock()
+			infoCopy := *proc.info
+			proc.mu.RUnlock()
+			instances[id] = &infoCopy
+		}
+		return true
+	})
+	return instances
 }
 
 func (m *ProcessManager) GetServerLogFile(t Type, id int64) string {

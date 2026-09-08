@@ -1,8 +1,8 @@
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react'
 import { useWebSocket } from './WebSocketContext'
 import { ServerService } from '../services/api'
 
-interface ServerStatus {
+export interface ServerStatus {
   server_id: number
   alive: boolean
   info?: {
@@ -16,7 +16,7 @@ interface ServerStatus {
   }
 }
 
-interface InstallProgress {
+export interface InstallProgress {
   itemId: number
   status: string
   progress: number
@@ -24,9 +24,14 @@ interface InstallProgress {
   total: number
 }
 
-interface ServerStatusContextType {
+export interface ServerStatusContextType {
   statuses: Record<number, ServerStatus>
   installations: Record<string, InstallProgress>
+  startingServers: Record<number, boolean>
+  stoppingServers: Record<number, boolean>
+  setServerStarting: (id: number, starting: boolean) => void
+  setServerStopping: (id: number, stopping: boolean) => void
+  refreshStatuses: () => Promise<void>
 }
 
 const ServerStatusContext = createContext<ServerStatusContextType | undefined>(undefined)
@@ -35,28 +40,77 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
   const { subscribe } = useWebSocket()
   const [statuses, setStatuses] = useState<Record<number, ServerStatus>>({})
   const [installations, setInstallations] = useState<Record<string, InstallProgress>>({})
+  const [startingServers, setStartingServers] = useState<Record<number, boolean>>({})
+  const [stoppingServers, setStoppingServers] = useState<Record<number, boolean>>({})
 
-  useEffect(() => {
-    // Fetch initial statuses via HTTP to avoid N+1 and provide immediate data
-    ServerService.getStatuses().then(allStatuses => {
-      const initial: Record<number, ServerStatus> = {}
+  const setServerStarting = useCallback((id: number, starting: boolean) => {
+    setStartingServers(prev => {
+      if (starting) {
+        return { ...prev, [id]: true }
+      }
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
+  const setServerStopping = useCallback((id: number, stopping: boolean) => {
+    setStoppingServers(prev => {
+      if (stopping) {
+        return { ...prev, [id]: true }
+      }
+      const next = { ...prev }
+      delete next[id]
+      return next
+    })
+  }, [])
+
+  const refreshStatuses = useCallback(async () => {
+    try {
+      const allStatuses = await ServerService.getStatuses()
       if (allStatuses) {
+        const updated: Record<number, ServerStatus> = {}
         Object.entries(allStatuses).forEach(([id, info]) => {
-          initial[Number(id)] = {
-            server_id: Number(id),
+          const numId = Number(id)
+          updated[numId] = {
+            server_id: numId,
             alive: !!info,
             info: info as any
           }
         })
+        setStatuses(prev => ({ ...prev, ...updated }))
       }
-      setStatuses(prev => ({ ...initial, ...prev }))
-    }).catch(console.error)
+    } catch (err) {
+      console.error("Failed to refresh server statuses:", err)
+    }
   }, [])
+
+  useEffect(() => {
+    // Fetch initial statuses via HTTP to avoid N+1 and provide immediate data
+    refreshStatuses()
+  }, [refreshStatuses])
 
   useEffect(() => {
     const unsubStatus = subscribe('server_status', (e) => {
       const s = e.payload as ServerStatus
+      if (!s || s.server_id === 0) return
       setStatuses((prev) => ({ ...prev, [s.server_id]: s }))
+
+      if (s.alive) {
+        setStartingServers(prev => {
+          if (!prev[s.server_id]) return prev
+          const next = { ...prev }
+          delete next[s.server_id]
+          return next
+        })
+      } else {
+        setStoppingServers(prev => {
+          if (!prev[s.server_id]) return prev
+          const next = { ...prev }
+          delete next[s.server_id]
+          return next
+        })
+      }
     })
 
     const unsubInstall = subscribe('install_progress', (e) => {
@@ -71,8 +125,9 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
       })
     })
 
-    const unsubServerUpdated = subscribe('server_updated', () => {
-      // Re-sync or clean completed server items if any remain
+    const unsubServerUpdated = subscribe('server_updated', (e) => {
+      if (e.payload?.type === 'reordered') return
+      refreshStatuses()
     })
 
     return () => {
@@ -80,9 +135,25 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
       unsubInstall()
       unsubServerUpdated()
     }
-  }, [subscribe])
+  }, [subscribe, refreshStatuses])
 
-  const value = React.useMemo(() => ({ statuses, installations }), [statuses, installations])
+  const value = useMemo(() => ({
+    statuses,
+    installations,
+    startingServers,
+    stoppingServers,
+    setServerStarting,
+    setServerStopping,
+    refreshStatuses
+  }), [
+    statuses,
+    installations,
+    startingServers,
+    stoppingServers,
+    setServerStarting,
+    setServerStopping,
+    refreshStatuses
+  ])
 
   return (
     <ServerStatusContext.Provider value={value}>

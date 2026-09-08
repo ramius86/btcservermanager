@@ -28,28 +28,47 @@ const appIdToType: Record<number, string> = {
   1874900: 'REFORGER',
 }
 
-function useServersStatusSync(wsStatuses: any) {
+function useServersStatusSync(
+  wsStatuses: any,
+  startingServers?: Record<number, boolean>,
+  stoppingServers?: Record<number, boolean>,
+  refreshStatuses?: () => Promise<void>
+) {
   const [servers, setServers] = useState<AnyServerDto[]>([])
 
   const fetchServers = useCallback(() => {
-    ServerService.getAll().then((data) => {
+    Promise.all([
+      ServerService.getAll(),
+      refreshStatuses ? refreshStatuses() : Promise.resolve()
+    ]).then(([data]) => {
       let list: any[] = []
       if (data) {
         list = Array.isArray(data) ? data : (data as any).servers || []
       }
       setServers(list)
     }).catch(console.error)
-  }, [])
+  }, [refreshStatuses])
 
   const serversWithStatus = useMemo(() => {
     return servers.map(srv => {
-      const wsStatus = wsStatuses[srv.id!]
-      if (wsStatus !== undefined) {
-        return { ...srv, status: wsStatus.alive ? 'Running' : 'Stopped' }
+      const sId = srv.id!
+      const wsStatus = wsStatuses[sId]
+      const isStarting = !!startingServers?.[sId]
+      const isStopping = !!stoppingServers?.[sId]
+      const isAlive = (wsStatus?.alive && !isStopping) || isStarting
+
+      if (isStarting) {
+        return { ...srv, status: 'Starting' }
+      }
+      if (isStopping) {
+        return { ...srv, status: 'Stopping' }
+      }
+      if (isAlive) {
+        return { ...srv, status: 'Running' }
       }
       return { ...srv, status: 'Stopped' }
     })
-  }, [servers, wsStatuses])
+  }, [servers, wsStatuses, startingServers, stoppingServers])
 
   return { servers: serversWithStatus, fetchServers }
 }
@@ -126,9 +145,15 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const { systemInfo: sysInfo } = useSystemInfo()
-  const { installations: wsInstallations, statuses: wsStatuses } = useServerStatus()
+  const { 
+    installations: wsInstallations, 
+    statuses: wsStatuses, 
+    startingServers, 
+    stoppingServers, 
+    refreshStatuses 
+  } = useServerStatus()
   
-  const { servers, fetchServers } = useServersStatusSync(wsStatuses)
+  const { servers, fetchServers } = useServersStatusSync(wsStatuses, startingServers, stoppingServers, refreshStatuses)
   const { installations, fetchInstallations } = useInstallationsSync(wsInstallations)
   const { subscribe } = useWebSocket()
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -206,7 +231,7 @@ export function DashboardPage() {
     }
   }
 
-  const activeServers = servers.filter(s => s.status === 'Running').length
+  const activeServers = servers.filter(s => s.status === 'Running' || s.status === 'Starting').length
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 relative">
@@ -360,7 +385,7 @@ export function DashboardPage() {
             <div className="space-y-4">
               {installations.map((inst) => {
                 const serversConfiguredCount = servers.filter(s => s.type === inst.type).length;
-                const hasRunningServer = servers.some(s => s.type === inst.type && s.status === 'Running');
+                const hasRunningServer = servers.some(s => s.type === inst.type && (s.status === 'Running' || s.status === 'Starting'));
                 return (
                   <InstallationItem 
                     key={inst.type} 

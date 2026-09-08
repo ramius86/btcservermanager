@@ -113,6 +113,18 @@ func run() error {
 	hub.SetServerStatusProvider(func(serverID int64) bool {
 		return processManager.GetInstanceInfo(serverID) != nil
 	})
+	hub.SetAllServerStatusesProvider(func() []map[string]any {
+		instances := processManager.GetAllRunningInstances()
+		res := make([]map[string]any, 0, len(instances))
+		for id, info := range instances {
+			res = append(res, map[string]any{
+				"server_id": id,
+				"alive":     true,
+				"info":      info,
+			})
+		}
+		return res
+	})
 
 	modPresetImporter := modpreset.NewImporter(modPresetRepo, workshopRepo)
 	modPresetExporter := modpreset.NewExporter()

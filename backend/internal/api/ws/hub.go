@@ -28,9 +28,10 @@ type Hub struct {
 	// Unsubscription requests
 	unsubscribe chan clientUnsub
 
-	statusProviderMu     sync.RWMutex
-	serverStatusProvider func(serverID int64) bool
-	systemInfoProvider   func() any
+	statusProviderMu          sync.RWMutex
+	serverStatusProvider      func(serverID int64) bool
+	allServerStatusesProvider func() []map[string]any
+	systemInfoProvider        func() any
 
 	stop chan struct{}
 }
@@ -49,6 +50,12 @@ func (h *Hub) SetServerStatusProvider(provider func(serverID int64) bool) {
 	h.statusProviderMu.Lock()
 	defer h.statusProviderMu.Unlock()
 	h.serverStatusProvider = provider
+}
+
+func (h *Hub) SetAllServerStatusesProvider(provider func() []map[string]any) {
+	h.statusProviderMu.Lock()
+	defer h.statusProviderMu.Unlock()
+	h.allServerStatusesProvider = provider
 }
 
 func (h *Hub) SetSystemInfoProvider(provider func() any) {
@@ -153,19 +160,30 @@ func (h *Hub) handleSubscribe(sub clientSub) {
 func (h *Hub) sendInitialStatus(sub clientSub) {
 	h.statusProviderMu.RLock()
 	provider := h.serverStatusProvider
+	allProvider := h.allServerStatusesProvider
 	sysProvider := h.systemInfoProvider
 	h.statusProviderMu.RUnlock()
 
-	if sub.sub.Domain == "server_status" && provider != nil {
-		alive := provider(sub.sub.ServerID)
-		event := Event{
-			Type: EvtServerStatus,
-			Payload: map[string]any{
-				"server_id": sub.sub.ServerID,
-				"alive":     alive,
-			},
+	if sub.sub.Domain == "server_status" {
+		if sub.sub.ServerID == 0 && allProvider != nil {
+			for _, payload := range allProvider() {
+				event := Event{
+					Type:    EvtServerStatus,
+					Payload: payload,
+				}
+				h.sendToClient(sub.client, event)
+			}
+		} else if sub.sub.ServerID != 0 && provider != nil {
+			alive := provider(sub.sub.ServerID)
+			event := Event{
+				Type: EvtServerStatus,
+				Payload: map[string]any{
+					"server_id": sub.sub.ServerID,
+					"alive":     alive,
+				},
+			}
+			h.sendToClient(sub.client, event)
 		}
-		h.sendToClient(sub.client, event)
 	}
 
 	if sub.sub.Domain == "system_info" && sysProvider != nil {

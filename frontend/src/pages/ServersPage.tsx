@@ -36,6 +36,8 @@ interface ServerCardItemProps {
     server: AnyServerDto
     status: {
       alive: boolean
+      isStarting?: boolean
+      isStopping?: boolean
       playersOnline: number
       map: string
       mission: string
@@ -91,10 +93,30 @@ function ServerControls({
     <div className="flex flex-col items-end gap-1.5 pl-0 md:pl-4 border-l-0 md:border-l border-border/30">
       <div className="flex items-center gap-1.5 flex-wrap justify-end">
         <div className="flex gap-1.5 items-center mr-1.5 pr-1.5 border-r border-border/30">
-          {status.alive ? (
+          {status.isStarting ? (
             <Button 
               variant="ghost" 
-              size="icon"
+              size="icon" 
+              disabled 
+              className="w-9 h-9 text-amber-500 cursor-wait bg-amber-500/10" 
+              title="Starting Server..."
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            </Button>
+          ) : status.isStopping ? (
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              disabled 
+              className="w-9 h-9 text-destructive cursor-wait bg-destructive/10" 
+              title="Stopping Server..."
+            >
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            </Button>
+          ) : status.alive ? (
+            <Button 
+              variant="ghost" 
+              size="icon" 
               onClick={(e) => { e.stopPropagation(); handleStop(sId); }} 
               className="w-9 h-9 text-destructive hover:bg-destructive/10"
               title="Stop Server"
@@ -123,7 +145,7 @@ function ServerControls({
             variant="ghost" 
             size="icon" 
             onClick={(e) => { e.stopPropagation(); handleRestart(sId); }} 
-            disabled={!status.alive} 
+            disabled={!status.alive || status.isStarting || status.isStopping} 
             className="w-9 h-9 text-muted-foreground hover:bg-accent hover:text-foreground"
             title="Restart Server"
           >
@@ -384,7 +406,11 @@ function ServerCardItem({
   const { server, status } = instance
 
   let statusText = "Offline"
-  if (status.alive) {
+  if (status.isStarting) {
+    statusText = "Starting"
+  } else if (status.isStopping) {
+    statusText = "Stopping"
+  } else if (status.alive) {
     statusText = "Online"
   } else if (installingGames[server.type]) {
     statusText = "Updating"
@@ -399,7 +425,7 @@ function ServerCardItem({
           className={cn(
             "group relative flex flex-col p-4 md:p-5 gap-4 border-border bg-surface-elevated/50 hover:border-primary/30",
             !snapshot.isDragging && "transition-[border-color,background-color,box-shadow] duration-300",
-            status.alive && "border-primary/20 bg-surface-elevated/80 shadow-lg shadow-primary/5",
+            (status.alive || status.isStarting) && "border-primary/20 bg-surface-elevated/80 shadow-lg shadow-primary/5",
             snapshot.isDragging && "z-50 border-primary/50 shadow-2xl scale-[1.01] bg-surface-elevated"
           )}
           style={provided.draggableProps.style as React.CSSProperties}
@@ -416,12 +442,12 @@ function ServerCardItem({
             <div className={cn(
               "w-16 h-16 rounded-2xl flex items-center justify-center border shrink-0",
               !snapshot.isDragging && "transition-all duration-500",
-              status.alive ? "bg-primary/10 border-primary/20 shadow-inner shadow-primary/5" : "bg-surface border-border opacity-60"
+              (status.alive || status.isStarting) ? "bg-primary/10 border-primary/20 shadow-inner shadow-primary/5" : "bg-surface border-border opacity-60"
             )}>
               <img 
                 src={getServerImage(server.type)} 
                 alt={server.type} 
-                className={cn("h-10 w-10 object-contain drop-shadow-md dark:invert-0 invert", !status.alive && "grayscale")}
+                className={cn("h-10 w-10 object-contain drop-shadow-md dark:invert-0 invert", !(status.alive || status.isStarting) && "grayscale")}
               />
             </div>
 
@@ -440,17 +466,29 @@ function ServerCardItem({
                 <div className={cn(
                   "flex items-center gap-1.5 px-2 py-0.5 rounded-md border backdrop-blur-sm select-none",
                   !snapshot.isDragging && "transition-all duration-500",
-                  status.alive ? "bg-success/10 border-success/20 text-success" : "bg-surface/50 border-border/50 text-muted-foreground/50"
+                  status.isStarting
+                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
+                    : status.isStopping
+                    ? "bg-destructive/10 border-destructive/20 text-destructive"
+                    : status.alive 
+                    ? "bg-success/10 border-success/20 text-success" 
+                    : "bg-surface/50 border-border/50 text-muted-foreground/50"
                 )}>
                   <div className={cn(
                     "w-1.5 h-1.5 rounded-full",
-                    status.alive ? "bg-success animate-pulse" : "bg-muted-foreground/30"
+                    status.isStarting
+                      ? "bg-amber-500 animate-ping"
+                      : status.isStopping
+                      ? "bg-destructive animate-pulse"
+                      : status.alive 
+                      ? "bg-success animate-pulse" 
+                      : "bg-muted-foreground/30"
                   )} />
                   <span className="text-[8px] font-black uppercase tracking-[0.2em]">
                     {statusText}
                   </span>
-                  {installingGames[server.type] && (
-                    <Loader2 className="w-2.5 h-2.5 animate-spin text-primary ml-1" />
+                  {(installingGames[server.type] || status.isStarting || status.isStopping) && (
+                    <Loader2 className="w-2.5 h-2.5 animate-spin text-current ml-1" />
                   )}
                 </div>
               </div>
@@ -471,7 +509,7 @@ function ServerCardItem({
           </div>
 
           {/* Information Bar */}
-          {status.alive && (
+          {(status.alive || status.isStarting) && (
             <ServerInfoBar
               server={server}
               status={status}
@@ -491,13 +529,19 @@ export function ServersPage() {
   const [servers, setServers] = useState<AnyServerDto[]>([])
   const [loading, setLoading] = useState(true)
   const [serverToDelete, setServerToDelete] = useState<AnyServerDto | null>(null)
-  const [optimisticStatuses, setOptimisticStatuses] = useState<Record<number, boolean>>({})
   const [activeHCMenu, setActiveHCMenu] = useState<number | null>(null)
   const [tick, setTick] = useState(0)
   
   const navigate = useNavigate()
   const { showToast } = useToast()
-  const { statuses: wsStatuses } = useServerStatus()
+  const { 
+    statuses: wsStatuses, 
+    startingServers, 
+    stoppingServers, 
+    setServerStarting, 
+    setServerStopping, 
+    refreshStatuses 
+  } = useServerStatus()
   const { subscribe } = useWebSocket()
   const [installingGames, setInstallingGames] = useState<Record<string, { status: string, progress: number }>>({})
 
@@ -543,16 +587,19 @@ export function ServersPage() {
     }
   }, [activeHCMenu])
 
-  const loadServers = async () => {
+  const loadServers = useCallback(async () => {
     try {
-      const data = await ServerService.getAll()
+      const [data] = await Promise.all([
+        ServerService.getAll(),
+        refreshStatuses()
+      ])
       setServers(data || [])
     } catch (err) {
       console.error("Failed to load servers", err)
     } finally {
       setLoading(false)
     }
-  }
+  }, [refreshStatuses])
 
   useEffect(() => {
     loadServers()
@@ -585,19 +632,23 @@ export function ServersPage() {
       unsubUpdated()
       unsubProgress()
     }
-  }, [subscribe])
+  }, [subscribe, loadServers])
 
   // Combine data into instances
   const serverInstances = useMemo(() => {
     return servers.map(server => {
       const sId = server.id!;
       const wsStatus = wsStatuses[sId];
-      const isAlive = optimisticStatuses[sId] ?? !!wsStatus?.alive;
+      const isStarting = !!startingServers[sId];
+      const isStopping = !!stoppingServers[sId];
+      const isAlive = (wsStatus?.alive && !isStopping) || isStarting;
         
       return {
         server,
         status: {
           alive: isAlive,
+          isStarting,
+          isStopping,
           playersOnline: wsStatus?.info?.players ?? 0,
           map: wsStatus?.info?.map ?? '',
           mission: wsStatus?.info?.mission ?? '',
@@ -607,7 +658,7 @@ export function ServersPage() {
         }
       };
     })
-  }, [servers, wsStatuses, optimisticStatuses, tick]);
+  }, [servers, wsStatuses, startingServers, stoppingServers, tick]);
 
   const isServerWithSamePortRunning = (server: AnyServerDto) => {
     return serverInstances.some((inst: any) => 
@@ -626,44 +677,38 @@ export function ServersPage() {
       return
     }
 
-    setOptimisticStatuses(prev => ({ ...prev, [id]: true }));
+    setServerStarting(id, true);
     try {
       await ServerService.start(id)
     } catch (err: any) {
-      setOptimisticStatuses(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      setServerStarting(id, false);
       showToast(err?.message || "Failed to start server", "error")
+    } finally {
+      refreshStatuses()
     }
   };
 
   const handleStop = async (id: number) => {
-    setOptimisticStatuses(prev => ({ ...prev, [id]: false }));
+    setServerStopping(id, true);
     try {
       await ServerService.stop(id)
     } catch (err: any) {
-      setOptimisticStatuses(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      setServerStopping(id, false);
       showToast(err?.message || "Failed to stop server", "error")
+    } finally {
+      refreshStatuses()
     }
   };
 
   const handleRestart = async (id: number) => {
-    setOptimisticStatuses(prev => ({ ...prev, [id]: false }));
+    setServerStopping(id, true);
     try {
       await ServerService.restart(id)
     } catch (err: any) {
-      setOptimisticStatuses(prev => {
-        const next = { ...prev };
-        delete next[id];
-        return next;
-      });
+      setServerStopping(id, false);
       showToast(err?.message || "Failed to restart server", "error")
+    } finally {
+      refreshStatuses()
     }
   };
 
