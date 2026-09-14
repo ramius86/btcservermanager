@@ -215,7 +215,7 @@ func (s *Service) saveReforgerScenarios(ctx context.Context, version string, sce
 	if err != nil {
 		log.Printf("[SteamCMD] Failed to save vanilla scenarios: %v", err)
 	} else {
-		fmt.Printf("[SteamCMD] Success: Extracted version %s and %d vanilla scenarios for Reforger\n", version, len(scenarios))
+		log.Printf("[SteamCMD] Success: Extracted version %s and %d vanilla scenarios for Reforger", version, len(scenarios))
 	}
 	return err
 }
@@ -301,7 +301,7 @@ func (s *Service) InstallOrUpdateWorkshopMods(mods []workshop.WorkshopMod) *Job 
 	for _, mod := range mods {
 		appID := server.GameIDs[mod.ServerType]
 		if appID == 0 {
-			fmt.Printf("[SteamCMD] Skipping mod %d: unknown server type '%s'\n", mod.ID, mod.ServerType)
+			log.Printf("[SteamCMD] Skipping mod %d: unknown server type '%s'", mod.ID, mod.ServerType)
 			continue
 		}
 
@@ -572,7 +572,7 @@ func (s *Service) CheckForUpdates(ctx context.Context, t server.Type) {
 
 	buildID, err := s.fetchBuildIDFromAPI(ctx, appID, branch)
 	if err != nil {
-		fmt.Printf("[SteamCMD] Failed to check updates for %s via API: %v\n", t, err)
+		log.Printf("[SteamCMD] Failed to check updates for %s via API: %v", t, err)
 		return
 	}
 
@@ -593,7 +593,7 @@ func (s *Service) CheckForUpdates(ctx context.Context, t server.Type) {
 
 		s.selfHealBuildID(ctx, t, appID)
 	} else {
-		fmt.Printf("[SteamCMD] Could not find buildid for %s (branch: %s) in API response\n", t, branch)
+		log.Printf("[SteamCMD] Could not find buildid for %s (branch: %s) in API response", t, branch)
 	}
 }
 

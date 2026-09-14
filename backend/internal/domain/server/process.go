@@ -491,6 +491,9 @@ func (m *ProcessManager) openStatsLogIfNeeded(s any, params []string, logFilePat
 }
 
 func (m *ProcessManager) stopHeadlessClients(id int64) {
+	m.hcMu.Lock()
+	defer m.hcMu.Unlock()
+
 	if val, ok := m.headlessClients.Load(id); ok {
 		if hcs, ok := val.([]*HeadlessClient); ok {
 			for _, hc := range hcs {

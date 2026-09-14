@@ -209,17 +209,17 @@ func run() error {
 		}
 	}
 
-	if os.Getenv("TEST_MODE") != "true" {
-		scheduler.Start()
-		steamCmdService.StartBackgroundUpdateCheck()
-	}
-
 	// 6.5 Discord Bot (optional — graceful skip if not configured)
 	discordService := setupDiscordBot(cfg, discordRepo)
 	if discordService != nil {
 		defer discordService.Close()
 	}
 	scheduler.SetDiscordService(discordService)
+
+	if os.Getenv("TEST_MODE") != "true" {
+		scheduler.Start()
+		steamCmdService.StartBackgroundUpdateCheck()
+	}
 
 	// Register Operational Alert Listeners
 	processManager.SetExitListener(func(serverID int64, serverName string, serverType server.Type, isCrash bool, exitErr error) {

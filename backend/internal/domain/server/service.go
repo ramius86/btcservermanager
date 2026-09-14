@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strconv"
 	"sync"
 )
@@ -398,7 +399,7 @@ func (s *Service) startServerLocked(ctx context.Context, id int64) error {
 
 	// Resolve mod names before starting
 	if err := s.resolveAndAttachModNames(ctx, srv); err != nil {
-		fmt.Printf("[Warning] Failed to resolve mod names for server %d: %v\n", id, err)
+		log.Printf("[Warning] Failed to resolve mod names for server %d: %v", id, err)
 		// We continue even if resolution fails, but mods won't be loaded
 	}
 
@@ -490,7 +491,7 @@ func (s *Service) AddHeadlessClient(ctx context.Context, id int64) error {
 
 	// Resolve mod names before passing it to PM
 	if err := s.resolveAndAttachModNames(ctx, a3); err != nil {
-		fmt.Printf("[Warning] Failed to resolve mod names for HC on server %d: %v\n", id, err)
+		log.Printf("[Warning] Failed to resolve mod names for HC on server %d: %v", id, err)
 	}
 
 	return s.processManager.AddHeadlessClient(ctx, a3)

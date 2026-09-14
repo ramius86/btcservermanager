@@ -133,7 +133,7 @@ func (s *Service) SendGameUpdateAlert(channelID, serverType, currentBuildID, new
 	return err
 }
 
-func (s *Service) SendTestAlert(ctx context.Context, channelID string) error {
+func (s *Service) SendTestAlert(_ context.Context, channelID string) error {
 	if s.session == nil {
 		return errors.New(errBotNotConfigured)
 	}

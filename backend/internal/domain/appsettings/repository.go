@@ -5,7 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 )
 
 type Repository struct {
@@ -56,20 +55,6 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 				GameUpdateCheckIntervalMinutes: 15,
 			}, nil
 		}
-		// If columns don't exist yet (e.g. before migration), return defaults for the new fields and try again without them
-		if strings.Contains(err.Error(), "no such column") {
-			fallbackQuery := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message FROM app_settings LIMIT 1`
-			err = r.db.QueryRowContext(ctx, fallbackQuery).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB, &s.DiscordReminderHours, &s.DiscordReminderMessage)
-			if err != nil {
-				return nil, err
-			}
-			s.MemberRoleIDs = []string{}
-			s.QualificationNames = []string{}
-			s.ModUpdateCheckIntervalMinutes = 360
-			s.GameUpdateCheckIntervalMinutes = 15
-			return &s, nil
-		}
-
 		return nil, err
 	}
 

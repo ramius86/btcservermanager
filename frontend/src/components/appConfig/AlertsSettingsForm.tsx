@@ -23,16 +23,20 @@ interface AlertsSettingsFormProps {
   onSave: (settings: AlertsSettings) => Promise<void>
 }
 
-export function AlertsSettingsForm({ settings, onSave }: Readonly<AlertsSettingsFormProps>) {
-  const { showToast } = useToast()
-  const [localSettings, setLocalSettings] = useState<AlertsSettings>({
+function toFormState(settings: AlertsSettings): AlertsSettings {
+  return {
     discordAlertChannelId: settings.discordAlertChannelId || '',
     discordAlertServerOffline: settings.discordAlertServerOffline ?? false,
     discordAlertModUpdates: settings.discordAlertModUpdates ?? false,
     discordAlertGameUpdates: settings.discordAlertGameUpdates ?? false,
     modUpdateCheckIntervalMinutes: settings.modUpdateCheckIntervalMinutes || 360,
     gameUpdateCheckIntervalMinutes: settings.gameUpdateCheckIntervalMinutes || 15,
-  })
+  }
+}
+
+export function AlertsSettingsForm({ settings, onSave }: Readonly<AlertsSettingsFormProps>) {
+  const { showToast } = useToast()
+  const [localSettings, setLocalSettings] = useState<AlertsSettings>(() => toFormState(settings))
 
   const [channels, setChannels] = useState<DiscordChannel[]>([])
   const [botStatus, setBotStatus] = useState<{ connected: boolean; configured: boolean } | null>(null)
@@ -41,14 +45,7 @@ export function AlertsSettingsForm({ settings, onSave }: Readonly<AlertsSettings
   const [testingAlert, setTestingAlert] = useState(false)
 
   useEffect(() => {
-    setLocalSettings({
-      discordAlertChannelId: settings.discordAlertChannelId || '',
-      discordAlertServerOffline: settings.discordAlertServerOffline ?? false,
-      discordAlertModUpdates: settings.discordAlertModUpdates ?? false,
-      discordAlertGameUpdates: settings.discordAlertGameUpdates ?? false,
-      modUpdateCheckIntervalMinutes: settings.modUpdateCheckIntervalMinutes || 360,
-      gameUpdateCheckIntervalMinutes: settings.gameUpdateCheckIntervalMinutes || 15,
-    })
+    setLocalSettings(toFormState(settings))
   }, [settings])
 
   useEffect(() => {
@@ -94,8 +91,9 @@ export function AlertsSettingsForm({ settings, onSave }: Readonly<AlertsSettings
     try {
       await DiscordService.sendTestAlert(localSettings.discordAlertChannelId)
       showToast('Test alert sent successfully to Discord.', 'success')
-    } catch (err: any) {
-      showToast('Failed to send test alert: ' + (err.message || 'Unknown error'), 'error')
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error'
+      showToast('Failed to send test alert: ' + message, 'error')
     } finally {
       setTestingAlert(false)
     }
