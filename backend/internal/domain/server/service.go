@@ -47,6 +47,7 @@ type ServerManager interface {
 	AddHeadlessClient(ctx context.Context, srv *Arma3Server) error
 	RemoveHeadlessClient(ctx context.Context, id int64) error
 	GetServerLogFile(t Type, id int64) string
+	SetExitListener(l ServerExitListener)
 }
 
 type Service struct {
@@ -525,4 +526,8 @@ func (s *Service) DeleteCBAPreset(ctx context.Context, id int64) error {
 
 func (s *Service) GetAllActiveReforgerModIDs(ctx context.Context) ([]string, error) {
 	return s.repo.GetAllActiveReforgerModIDs(ctx)
+}
+
+func (s *Service) SetServerExitListener(l ServerExitListener) {
+	s.processManager.SetExitListener(l)
 }

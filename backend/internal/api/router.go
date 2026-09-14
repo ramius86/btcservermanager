@@ -37,6 +37,7 @@ type Router struct {
 	steamQRService      *steamauth.QRAuthService
 	discordService      *discordbot.Service
 	discordRepo         *discordbot.Repository
+	scheduler           *system.Scheduler
 	config              *config.Config
 	paths               *config.Paths
 	hub                 *ws.Hub
@@ -54,6 +55,7 @@ type RouterDeps struct {
 	SteamQRService      *steamauth.QRAuthService
 	DiscordService      *discordbot.Service
 	DiscordRepo         *discordbot.Repository
+	Scheduler           *system.Scheduler
 	Config              *config.Config
 	Paths               *config.Paths
 	Hub                 *ws.Hub
@@ -72,6 +74,7 @@ func NewRouter(deps RouterDeps) *Router {
 		steamQRService:      deps.SteamQRService,
 		discordService:      deps.DiscordService,
 		discordRepo:         deps.DiscordRepo,
+		scheduler:           deps.Scheduler,
 		config:              deps.Config,
 		paths:               deps.Paths,
 		hub:                 deps.Hub,

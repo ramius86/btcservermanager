@@ -28,6 +28,8 @@ type ReforgerModProvider interface {
 	GetAllActiveReforgerModIDs(ctx context.Context) ([]string, error)
 }
 
+type ModUpdateListener func(mod *WorkshopMod)
+
 type Service struct {
 	repo                *Repository
 	installer           *Installer
@@ -36,6 +38,8 @@ type Service struct {
 	scenarioService     ScenarioService
 	reforgerModProvider ReforgerModProvider
 	broadcaster         Broadcaster
+	modUpdateListenerMu sync.RWMutex
+	modUpdateListener   ModUpdateListener
 	stopCh              chan struct{}
 	postInstallQueue    chan int64
 	once                sync.Once
@@ -255,6 +259,12 @@ func (s *Service) GetReforgerModDetails(ctx context.Context, modIDWithSlug strin
 	return s.scraper.FetchDetails(ctx, modIDWithSlug)
 }
 
+func (s *Service) SetModUpdateListener(l ModUpdateListener) {
+	s.modUpdateListenerMu.Lock()
+	defer s.modUpdateListenerMu.Unlock()
+	s.modUpdateListener = l
+}
+
 func (s *Service) FetchAndSaveMetadata(ctx context.Context, modID int64, allowCreate bool) (*WorkshopMod, error) {
 	mod, err := s.metadata.FetchMetadata(ctx, modID)
 	if err != nil {
@@ -262,7 +272,9 @@ func (s *Service) FetchAndSaveMetadata(ctx context.Context, modID int64, allowCr
 	}
 
 	existing, _ := s.repo.GetModByID(ctx, modID)
+	wasNeedsUpdate := false
 	if existing != nil {
+		wasNeedsUpdate = existing.NeedsUpdate
 		if existing.InstallationStatus == InstallationFinished &&
 			existing.LastUpdated != nil && mod.LastUpdated != nil &&
 			mod.LastUpdated.After(*existing.LastUpdated) {
@@ -283,6 +295,15 @@ func (s *Service) FetchAndSaveMetadata(ctx context.Context, modID int64, allowCr
 
 	if s.broadcaster != nil {
 		s.broadcaster.Broadcast("mod_metadata_updated", mod)
+	}
+
+	if !wasNeedsUpdate && mod.NeedsUpdate {
+		s.modUpdateListenerMu.RLock()
+		listener := s.modUpdateListener
+		s.modUpdateListenerMu.RUnlock()
+		if listener != nil {
+			go listener(mod)
+		}
 	}
 
 	return mod, nil

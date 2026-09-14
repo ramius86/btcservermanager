@@ -38,8 +38,12 @@ var bufferPool = sync.Pool{
 	},
 }
 
+type ServerExitListener func(serverID int64, serverName string, serverType Type, isCrash bool, exitErr error)
+
 type Process struct {
 	serverID            int64
+	serverName          string
+	serverType          Type
 	cmd                 *exec.Cmd
 	info                *ServerInstanceInfo
 	mu                  sync.RWMutex
@@ -67,6 +71,8 @@ type ProcessManager struct {
 	debugMode       bool
 	broadcasterMu   sync.RWMutex
 	broadcaster     Broadcaster
+	exitListenerMu  sync.RWMutex
+	exitListener    ServerExitListener
 
 	fastdlServer      *fastdl.Server
 	fastdlActiveCount int
@@ -98,6 +104,12 @@ func (m *ProcessManager) SetBroadcaster(b Broadcaster) {
 	m.broadcasterMu.Lock()
 	defer m.broadcasterMu.Unlock()
 	m.broadcaster = b
+}
+
+func (m *ProcessManager) SetExitListener(l ServerExitListener) {
+	m.exitListenerMu.Lock()
+	defer m.exitListenerMu.Unlock()
+	m.exitListener = l
 }
 
 func (m *ProcessManager) emitStatus(id int64, alive bool) {
@@ -144,7 +156,7 @@ func (m *ProcessManager) UpdateQueryInfo(id int64, players int, mapName, mission
 }
 
 func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
-	id, t, maxPlayers, port, queryPort, err := m.parseServerInstance(s)
+	id, name, t, maxPlayers, port, queryPort, err := m.parseServerInstance(s)
 	if err != nil {
 		return err
 	}
@@ -185,8 +197,10 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	a3, _ := s.(*Arma3Server)
 	now := time.Now()
 	p := &Process{
-		serverID: id,
-		cmd:      cmd,
+		serverID:   id,
+		serverName: name,
+		serverType: t,
+		cmd:        cmd,
 		info: &ServerInstanceInfo{
 			StartedAt:      &now,
 			MaxPlayers:     maxPlayers,
@@ -303,11 +317,22 @@ func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logF
 		closeFiles(logFile, statsFile)
 
 		p.mu.Lock()
+		wasStopping := p.stopping
 		p.exited = true
 		p.mu.Unlock()
 
 		close(p.stopCh)
 		m.emitStatus(p.serverID, false)
+
+		if !wasStopping {
+			m.exitListenerMu.RLock()
+			listener := m.exitListener
+			m.exitListenerMu.RUnlock()
+			if listener != nil {
+				isCrash := err != nil
+				go listener(p.serverID, p.serverName, p.serverType, isCrash, err)
+			}
+		}
 
 		// Pulizia dopo un delay (lascia tempo a GetInstanceInfo di rispondere correttamente)
 		time.AfterFunc(5*time.Second, func() {
@@ -327,16 +352,16 @@ func closeFiles(mainLog, statsLog *os.File) {
 	}
 }
 
-func (m *ProcessManager) parseServerInstance(s any) (id int64, t Type, maxPlayers, port, queryPort int, err error) {
+func (m *ProcessManager) parseServerInstance(s any) (id int64, name string, t Type, maxPlayers, port, queryPort int, err error) {
 	switch v := s.(type) {
 	case *Arma3Server:
-		return v.ID, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
+		return v.ID, v.Name, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
 	case *DayZServer:
-		return v.ID, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
+		return v.ID, v.Name, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
 	case *ReforgerServer:
-		return v.ID, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
+		return v.ID, v.Name, v.Type, v.MaxPlayers, v.Port, v.QueryPort, nil
 	default:
-		return 0, "", 0, 0, 0, errors.New("invalid server type for process manager")
+		return 0, "", "", 0, 0, 0, errors.New("invalid server type for process manager")
 	}
 }
 

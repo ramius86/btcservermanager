@@ -47,6 +47,13 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
+	if r.scheduler != nil && payload.ModUpdateCheckIntervalMinutes > 0 {
+		r.scheduler.UpdateWorkshopInterval(payload.ModUpdateCheckIntervalMinutes)
+	}
+	if r.steamCmdService != nil && payload.GameUpdateCheckIntervalMinutes > 0 {
+		r.steamCmdService.UpdateCheckInterval(payload.GameUpdateCheckIntervalMinutes)
+	}
+
 	if r.discordRepo != nil {
 		if err := r.discordRepo.CleanupOrphanedQualifications(ctx, payload.QualificationNames); err != nil {
 			log.Printf("Warning: failed to cleanup orphaned qualifications: %v", err)

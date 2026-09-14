@@ -7,6 +7,7 @@ import { SteamCmdService, SettingsService, WorkshopService } from '../services/a
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { useToast } from '../components/ui/Toast'
 import { LogRetentionForm } from '../components/appConfig/LogRetentionForm'
+import { AlertsSettingsForm } from '../components/appConfig/AlertsSettingsForm'
 import { EventsSettingsForm } from '../components/appConfig/EventsSettingsForm'
 import { MembersSettingsForm } from '../components/appConfig/MembersSettingsForm'
 import { SteamQRAuthView } from '../components/settings/SteamQRAuthView'
@@ -28,7 +29,13 @@ export function AppConfigPage() {
     discordReminderHours: 0,
     discordReminderMessage: 'Reminder: Please update your RSVP for the upcoming event!',
     memberRoleIds: [] as string[],
-    qualificationNames: [] as string[]
+    qualificationNames: [] as string[],
+    discordAlertChannelId: '',
+    discordAlertServerOffline: false,
+    discordAlertModUpdates: false,
+    discordAlertGameUpdates: false,
+    modUpdateCheckIntervalMinutes: 360,
+    gameUpdateCheckIntervalMinutes: 15,
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)
@@ -114,6 +121,7 @@ export function AppConfigPage() {
         <TabsList className="bg-surface-elevated/50 p-0.5 border border-border rounded-md mb-6 flex overflow-x-auto no-scrollbar w-full md:w-fit">
           <TabsTrigger value="steam" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Steam</TabsTrigger>
           <TabsTrigger value="system" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">System</TabsTrigger>
+          <TabsTrigger value="alerts" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Alerts</TabsTrigger>
           <TabsTrigger value="events" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Events</TabsTrigger>
           <TabsTrigger value="members" className="px-6 py-1.5 rounded-[4px] data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Members</TabsTrigger>
         </TabsList>
@@ -287,6 +295,17 @@ export function AppConfigPage() {
               const merged = { ...settings, ...newSettings };
               setSettings(merged)
               await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Settings saved successfully.', 'Failed to save settings')
+            }} 
+          />
+        </TabsContent>
+
+        <TabsContent value="alerts" className="space-y-6 outline-none">
+          <AlertsSettingsForm 
+            settings={settings} 
+            onSave={async (newSettings) => {
+              const merged = { ...settings, ...newSettings };
+              setSettings(merged)
+              await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Alerts settings saved successfully.', 'Failed to save alerts settings')
             }} 
           />
         </TabsContent>

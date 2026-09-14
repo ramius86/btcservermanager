@@ -8,17 +8,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 	"time"
 )
 
 type Scheduler struct {
-	serverService   *server.Service
-	workshopService *workshop.Service
-	systemService   *Service
-	logManager      *logs.LogManager
-	discordService  *discordbot.Service
-	broadcaster     Broadcaster
-	stopCh          chan struct{}
+	serverService      *server.Service
+	workshopService    *workshop.Service
+	systemService      *Service
+	logManager         *logs.LogManager
+	discordService     *discordbot.Service
+	broadcaster        Broadcaster
+	stopCh             chan struct{}
+	workshopIntervalMu sync.RWMutex
+	workshopInterval   time.Duration
+	workshopResetCh    chan time.Duration
 }
 
 type Broadcaster interface {
@@ -34,11 +38,13 @@ type SchedulerDeps struct {
 
 func NewScheduler(deps SchedulerDeps) *Scheduler {
 	return &Scheduler{
-		serverService:   deps.ServerService,
-		workshopService: deps.WorkshopService,
-		systemService:   deps.SystemService,
-		logManager:      deps.LogManager,
-		stopCh:          make(chan struct{}),
+		serverService:    deps.ServerService,
+		workshopService:  deps.WorkshopService,
+		systemService:    deps.SystemService,
+		logManager:       deps.LogManager,
+		stopCh:           make(chan struct{}),
+		workshopInterval: 360 * time.Minute,
+		workshopResetCh:  make(chan time.Duration, 10),
 	}
 }
 
@@ -50,11 +56,31 @@ func (s *Scheduler) SetDiscordService(svc *discordbot.Service) {
 	s.discordService = svc
 }
 
+func (s *Scheduler) UpdateWorkshopInterval(minutes int) {
+	if minutes < 5 {
+		minutes = 5
+	}
+	d := time.Duration(minutes) * time.Minute
+	s.workshopIntervalMu.Lock()
+	s.workshopInterval = d
+	s.workshopIntervalMu.Unlock()
+
+	select {
+	case s.workshopResetCh <- d:
+	default:
+	}
+}
+
 func (s *Scheduler) Stop() {
 	close(s.stopCh)
 }
 
 func (s *Scheduler) Start() {
+	ctx := context.Background()
+	if settings, err := s.systemService.GetAppSettings(ctx); err == nil && settings.ModUpdateCheckIntervalMinutes > 0 {
+		s.workshopInterval = time.Duration(settings.ModUpdateCheckIntervalMinutes) * time.Minute
+	}
+
 	go s.runLogCleanup()
 	go s.runAutoRestartCheck()
 	go s.runWorkshopUpdate()
@@ -250,14 +276,21 @@ func (s *Scheduler) queryGameServers() {
 }
 
 func (s *Scheduler) runWorkshopUpdate() {
-	// Every 6 hours
-	ticker := time.NewTicker(6 * time.Hour)
+	s.workshopIntervalMu.RLock()
+	interval := s.workshopInterval
+	s.workshopIntervalMu.RUnlock()
+	if interval <= 0 {
+		interval = 360 * time.Minute
+	}
+	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-s.stopCh:
 			return
+		case newInterval := <-s.workshopResetCh:
+			ticker.Reset(newInterval)
 		case <-ticker.C:
 			log.Println("Running workshop update cron...")
 
