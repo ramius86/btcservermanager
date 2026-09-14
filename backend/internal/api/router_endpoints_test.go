@@ -79,6 +79,7 @@ func (m *mockServerManager) RemoveHeadlessClient(ctx context.Context, id int64) 
 func (m *mockServerManager) GetServerLogFile(t server.Type, id int64) string {
 	return fmt.Sprintf("REFORGER_%d_2026-06-19.log", id)
 }
+func (m *mockServerManager) SetExitListener(l server.ServerExitListener) {}
 
 func helperProcess(scenario string) func(ctx context.Context, name string, arg ...string) *exec.Cmd {
 	return func(ctx context.Context, name string, arg ...string) *exec.Cmd {

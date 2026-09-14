@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"strings"
 )
 
 type Repository struct {
@@ -20,30 +21,52 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 	var memberRoleIDsJSON string
 	var qualificationNamesJSON string
 
-	query := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names FROM app_settings LIMIT 1`
+	query := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names, discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes FROM app_settings LIMIT 1`
 
-	err := r.db.QueryRowContext(ctx, query).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB, &s.DiscordReminderHours, &s.DiscordReminderMessage, &memberRoleIDsJSON, &qualificationNamesJSON)
+	err := r.db.QueryRowContext(ctx, query).Scan(
+		&s.ID,
+		&s.LogRetentionDays,
+		&s.LogMaxTotalSizeMB,
+		&s.DiscordReminderHours,
+		&s.DiscordReminderMessage,
+		&memberRoleIDsJSON,
+		&qualificationNamesJSON,
+		&s.DiscordAlertChannelID,
+		&s.DiscordAlertServerOffline,
+		&s.DiscordAlertModUpdates,
+		&s.DiscordAlertGameUpdates,
+		&s.ModUpdateCheckIntervalMinutes,
+		&s.GameUpdateCheckIntervalMinutes,
+	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			// Return default
 			return &AppSettings{
-				LogRetentionDays:       30,
-				LogMaxTotalSizeMB:      1024,
-				DiscordReminderHours:   0,
-				DiscordReminderMessage: "Reminder: Please update your RSVP for the upcoming event!",
-				MemberRoleIDs:          []string{},
-				QualificationNames:     []string{},
+				LogRetentionDays:               30,
+				LogMaxTotalSizeMB:              1024,
+				DiscordReminderHours:           0,
+				DiscordReminderMessage:         "Reminder: Please update your RSVP for the upcoming event!",
+				MemberRoleIDs:                  []string{},
+				QualificationNames:             []string{},
+				DiscordAlertChannelID:          "",
+				DiscordAlertServerOffline:      false,
+				DiscordAlertModUpdates:         false,
+				DiscordAlertGameUpdates:        false,
+				ModUpdateCheckIntervalMinutes:  360,
+				GameUpdateCheckIntervalMinutes: 15,
 			}, nil
 		}
 		// If columns don't exist yet (e.g. before migration), return defaults for the new fields and try again without them
-		if err.Error() == "no such column: member_role_ids" {
-			query = `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message FROM app_settings LIMIT 1`
-			err = r.db.QueryRowContext(ctx, query).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB, &s.DiscordReminderHours, &s.DiscordReminderMessage)
+		if strings.Contains(err.Error(), "no such column") {
+			fallbackQuery := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message FROM app_settings LIMIT 1`
+			err = r.db.QueryRowContext(ctx, fallbackQuery).Scan(&s.ID, &s.LogRetentionDays, &s.LogMaxTotalSizeMB, &s.DiscordReminderHours, &s.DiscordReminderMessage)
 			if err != nil {
 				return nil, err
 			}
 			s.MemberRoleIDs = []string{}
 			s.QualificationNames = []string{}
+			s.ModUpdateCheckIntervalMinutes = 360
+			s.GameUpdateCheckIntervalMinutes = 15
 			return &s, nil
 		}
 
@@ -64,6 +87,13 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 		s.QualificationNames = []string{}
 	}
 
+	if s.ModUpdateCheckIntervalMinutes <= 0 {
+		s.ModUpdateCheckIntervalMinutes = 360
+	}
+	if s.GameUpdateCheckIntervalMinutes <= 0 {
+		s.GameUpdateCheckIntervalMinutes = 15
+	}
+
 	return &s, nil
 }
 
@@ -77,6 +107,12 @@ func (r *Repository) Save(ctx context.Context, s *AppSettings) error {
 	if s.QualificationNames == nil {
 		s.QualificationNames = []string{}
 	}
+	if s.ModUpdateCheckIntervalMinutes <= 0 {
+		s.ModUpdateCheckIntervalMinutes = 360
+	}
+	if s.GameUpdateCheckIntervalMinutes <= 0 {
+		s.GameUpdateCheckIntervalMinutes = 15
+	}
 
 	rolesBytes, _ := json.Marshal(s.MemberRoleIDs)
 	qualBytes, _ := json.Marshal(s.QualificationNames)
@@ -84,11 +120,26 @@ func (r *Repository) Save(ctx context.Context, s *AppSettings) error {
 	qualJSON := string(qualBytes)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		_, err = r.db.ExecContext(ctx, "INSERT INTO app_settings (log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names) VALUES (?, ?, ?, ?, ?, ?)", s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON)
+		query := `INSERT INTO app_settings (
+			log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names,
+			discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		_, err = r.db.ExecContext(ctx, query,
+			s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON,
+			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes,
+		)
 	} else if err != nil {
 		return err
 	} else {
-		_, err = r.db.ExecContext(ctx, "UPDATE app_settings SET log_retention_days = ?, log_max_total_size_mb = ?, discord_reminder_hours = ?, discord_reminder_message = ?, member_role_ids = ?, qualification_names = ? WHERE id = ?", s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON, id)
+		query := `UPDATE app_settings SET
+			log_retention_days = ?, log_max_total_size_mb = ?, discord_reminder_hours = ?, discord_reminder_message = ?, member_role_ids = ?, qualification_names = ?,
+			discord_alert_channel_id = ?, discord_alert_server_offline = ?, discord_alert_mod_updates = ?, discord_alert_game_updates = ?, mod_update_check_interval_minutes = ?, game_update_check_interval_minutes = ?
+			WHERE id = ?`
+		_, err = r.db.ExecContext(ctx, query,
+			s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON,
+			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes,
+			id,
+		)
 	}
 
 	return err

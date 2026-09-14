@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -28,20 +29,48 @@ type steamCmdInfoResponse struct {
 	} `json:"data"`
 }
 
+type GameUpdateListener func(serverType server.Type, currentBuildID, newBuildID string)
+
 type Service struct {
-	executor      *Executor
-	paths         *config.Paths
-	installations *installation.Service
-	workshop      *workshop.Service
-	dryRun        *installation.DryRunService
-	scenarios     *scenario.Service
-	httpClient    *http.Client
-	broadcaster   Broadcaster
-	stopCh        chan struct{}
+	executor             *Executor
+	paths                *config.Paths
+	installations        *installation.Service
+	workshop             *workshop.Service
+	dryRun               *installation.DryRunService
+	scenarios            *scenario.Service
+	httpClient           *http.Client
+	broadcaster          Broadcaster
+	stopCh               chan struct{}
+	gameUpdateListenerMu sync.RWMutex
+	gameUpdateListener   GameUpdateListener
+	updateIntervalMu     sync.RWMutex
+	updateInterval       time.Duration
+	intervalResetCh      chan time.Duration
 }
 
 func (s *Service) SetBroadcaster(b Broadcaster) {
 	s.broadcaster = b
+}
+
+func (s *Service) SetGameUpdateListener(l GameUpdateListener) {
+	s.gameUpdateListenerMu.Lock()
+	defer s.gameUpdateListenerMu.Unlock()
+	s.gameUpdateListener = l
+}
+
+func (s *Service) UpdateCheckInterval(minutes int) {
+	if minutes < 5 {
+		minutes = 5
+	}
+	d := time.Duration(minutes) * time.Minute
+	s.updateIntervalMu.Lock()
+	s.updateInterval = d
+	s.updateIntervalMu.Unlock()
+
+	select {
+	case s.intervalResetCh <- d:
+	default:
+	}
 }
 
 type ServiceDeps struct {
@@ -55,14 +84,16 @@ type ServiceDeps struct {
 
 func NewService(deps ServiceDeps) *Service {
 	s := &Service{
-		executor:      deps.Executor,
-		paths:         deps.Paths,
-		installations: deps.Installations,
-		workshop:      deps.Workshop,
-		dryRun:        deps.DryRun,
-		scenarios:     deps.Scenarios,
-		httpClient:    &http.Client{Timeout: 10 * time.Second},
-		stopCh:        make(chan struct{}),
+		executor:        deps.Executor,
+		paths:           deps.Paths,
+		installations:   deps.Installations,
+		workshop:        deps.Workshop,
+		dryRun:          deps.DryRun,
+		scenarios:       deps.Scenarios,
+		httpClient:      &http.Client{Timeout: 10 * time.Second},
+		stopCh:          make(chan struct{}),
+		updateInterval:  15 * time.Minute,
+		intervalResetCh: make(chan time.Duration, 10),
 	}
 
 	return s
@@ -451,7 +482,13 @@ func (s *Service) ClearItemInfo(key string) {
 }
 
 func (s *Service) StartBackgroundUpdateCheck() {
-	ticker := time.NewTicker(15 * time.Minute)
+	s.updateIntervalMu.RLock()
+	interval := s.updateInterval
+	s.updateIntervalMu.RUnlock()
+	if interval <= 0 {
+		interval = 15 * time.Minute
+	}
+	ticker := time.NewTicker(interval)
 	go func() {
 		defer ticker.Stop()
 		bgCtx := context.Background()
@@ -469,6 +506,8 @@ func (s *Service) StartBackgroundUpdateCheck() {
 
 		for {
 			select {
+			case newInterval := <-s.intervalResetCh:
+				ticker.Reset(newInterval)
 			case <-ticker.C:
 				s.CheckAllServersForUpdates(bgCtx)
 			case <-s.stopCh:
@@ -538,8 +577,18 @@ func (s *Service) CheckForUpdates(ctx context.Context, t server.Type) {
 	}
 
 	if buildID != "" {
+		isNewUpdate := si != nil && si.InstalledBuildID != "" && buildID != si.InstalledBuildID && buildID != si.AvailableVersion
 		if err := s.installations.UpdateAvailableVersion(ctx, t, buildID); err != nil {
 			log.Printf("[SteamCMD] Failed to update available version for %s: %v", t, err)
+		}
+
+		if isNewUpdate {
+			s.gameUpdateListenerMu.RLock()
+			listener := s.gameUpdateListener
+			s.gameUpdateListenerMu.RUnlock()
+			if listener != nil {
+				go listener(t, si.InstalledBuildID, buildID)
+			}
 		}
 
 		s.selfHealBuildID(ctx, t, appID)

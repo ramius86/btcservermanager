@@ -13,6 +13,7 @@ import (
 	// Register the pure-Go SQLite driver
 	_ "modernc.org/sqlite"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -106,5 +107,16 @@ func TestScheduler_CleanupLogs(t *testing.T) {
 }
 
 func TestScheduler_PeriodicTasks(t *testing.T) {
-	// Placeholder for future tests
+	scheduler := NewScheduler(SchedulerDeps{})
+	scheduler.UpdateWorkshopInterval(120)
+
+	scheduler.workshopIntervalMu.RLock()
+	assert.Equal(t, 120*time.Minute, scheduler.workshopInterval)
+	scheduler.workshopIntervalMu.RUnlock()
+
+	// Minimum clamp to 5 minutes
+	scheduler.UpdateWorkshopInterval(2)
+	scheduler.workshopIntervalMu.RLock()
+	assert.Equal(t, 5*time.Minute, scheduler.workshopInterval)
+	scheduler.workshopIntervalMu.RUnlock()
 }

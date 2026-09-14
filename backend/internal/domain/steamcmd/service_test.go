@@ -275,3 +275,31 @@ func TestService_InstallSuccess_UpdatesBranchAndClearsProgress(t *testing.T) {
 	// Verify executor progress cache was cleared
 	assert.Equal(t, 0.0, env.executor.GetProgress("server:ARMA3"))
 }
+
+func TestService_GameUpdateListenerAndInterval(t *testing.T) {
+	env := setupSteamCmdService(t)
+
+	called := false
+	env.svc.SetGameUpdateListener(func(st server.Type, current, newBuild string) {
+		called = true
+		assert.Equal(t, server.TypeArma3, st)
+		assert.Equal(t, "1000", current)
+		assert.Equal(t, "2000", newBuild)
+	})
+
+	assert.NotNil(t, env.svc.gameUpdateListener)
+	env.svc.gameUpdateListener(server.TypeArma3, "1000", "2000")
+	assert.True(t, called)
+
+	// Test UpdateCheckInterval
+	env.svc.UpdateCheckInterval(30)
+	env.svc.updateIntervalMu.RLock()
+	assert.Equal(t, 30*time.Minute, env.svc.updateInterval)
+	env.svc.updateIntervalMu.RUnlock()
+
+	// Minimum clamp to 5 minutes
+	env.svc.UpdateCheckInterval(1)
+	env.svc.updateIntervalMu.RLock()
+	assert.Equal(t, 5*time.Minute, env.svc.updateInterval)
+	env.svc.updateIntervalMu.RUnlock()
+}

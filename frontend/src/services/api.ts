@@ -277,5 +277,6 @@ export const DiscordService = {
 	updateEventParticipation: (eventId: number, data: { userId: string, username: string, status: string }): Promise<void> => fetchApi(`/discord/events/${eventId}/participants`, { method: 'PUT', body: JSON.stringify(data) }),
 	getClanMembers: (): Promise<ClanMember[]> => fetchApi('/discord/clan-members'),
 	saveClanQualifications: (data: { userIds: string[], qualifications: { userId: string, qualificationName: string }[] }): Promise<void> => fetchApi('/discord/clan-members/qualifications', { method: 'PUT', body: JSON.stringify(data) }),
+	sendTestAlert: (channelId: string): Promise<{ success: boolean }> => fetchApi('/discord/alerts/test', { method: 'POST', body: JSON.stringify({ channelId }) }),
 }
 

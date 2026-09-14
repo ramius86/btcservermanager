@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -107,7 +108,7 @@ func TestProcessManager_Basic(t *testing.T) {
 	assert.Equal(t, 1, broadcaster.getCount())
 
 	// Test parseServerInstance with invalid type
-	_, _, _, _, _, err := pm.parseServerInstance("not_a_server")
+	_, _, _, _, _, _, err := pm.parseServerInstance("not_a_server")
 	assert.Error(t, err)
 }
 
@@ -222,4 +223,39 @@ func TestProcessManager_StartStopServer(t *testing.T) {
 
 	// Test stop all
 	pm.Stop()
+}
+
+func TestProcessManager_ExitListener(t *testing.T) {
+	tempDir := t.TempDir()
+	paths := &dummyPathProvider{tempDir: tempDir}
+	launcher := NewLauncher(paths, []string{})
+	pm := NewProcessManager(paths, launcher, false)
+
+	called := make(chan struct{})
+	pm.SetExitListener(func(serverID int64, serverName string, serverType Type, isCrash bool, exitErr error) {
+		assert.Equal(t, int64(10), serverID)
+		assert.Equal(t, "Unit Test Server", serverName)
+		assert.Equal(t, TypeArma3, serverType)
+		close(called)
+	})
+
+	proc := &Process{
+		serverID:   10,
+		serverName: "Unit Test Server",
+		serverType: TypeArma3,
+		cmd:        exec.Command("echo", "done"),
+		stopCh:     make(chan struct{}),
+	}
+	_ = proc.cmd.Start()
+	logsDone := make(chan struct{})
+	close(logsDone)
+
+	pm.handlePostWait(proc, logsDone, nil, nil)
+
+	select {
+	case <-called:
+		// success
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for exit listener to be called")
+	}
 }

@@ -198,6 +198,17 @@ func run() error {
 	})
 	defer scheduler.Stop()
 	scheduler.SetBroadcaster(hub)
+
+	// Load initial scan intervals from settings
+	if initSettings, err := appSettingsRepo.GetSettings(context.Background()); err == nil {
+		if initSettings.ModUpdateCheckIntervalMinutes > 0 {
+			scheduler.UpdateWorkshopInterval(initSettings.ModUpdateCheckIntervalMinutes)
+		}
+		if initSettings.GameUpdateCheckIntervalMinutes > 0 {
+			steamCmdService.UpdateCheckInterval(initSettings.GameUpdateCheckIntervalMinutes)
+		}
+	}
+
 	if os.Getenv("TEST_MODE") != "true" {
 		scheduler.Start()
 		steamCmdService.StartBackgroundUpdateCheck()
@@ -209,6 +220,49 @@ func run() error {
 		defer discordService.Close()
 	}
 	scheduler.SetDiscordService(discordService)
+
+	// Register Operational Alert Listeners
+	processManager.SetExitListener(func(serverID int64, serverName string, serverType server.Type, isCrash bool, exitErr error) {
+		if discordService == nil || !discordService.IsConfigured() {
+			return
+		}
+		bgCtx := context.Background()
+		settings, err := appSettingsRepo.GetSettings(bgCtx)
+		if err != nil || settings.DiscordAlertChannelID == "" || !settings.DiscordAlertServerOffline {
+			return
+		}
+		if err := discordService.SendServerOfflineAlert(settings.DiscordAlertChannelID, serverName, string(serverType), isCrash, exitErr); err != nil {
+			log.Printf("[DiscordAlert] Failed to send server offline alert for %s: %v", serverName, err)
+		}
+	})
+
+	workshopService.SetModUpdateListener(func(mod *workshop.WorkshopMod) {
+		if discordService == nil || !discordService.IsConfigured() {
+			return
+		}
+		bgCtx := context.Background()
+		settings, err := appSettingsRepo.GetSettings(bgCtx)
+		if err != nil || settings.DiscordAlertChannelID == "" || !settings.DiscordAlertModUpdates {
+			return
+		}
+		if err := discordService.SendModUpdateAlert(settings.DiscordAlertChannelID, mod.Name, mod.ID, string(mod.ServerType), mod.Thumbnail); err != nil {
+			log.Printf("[DiscordAlert] Failed to send mod update alert for %s: %v", mod.Name, err)
+		}
+	})
+
+	steamCmdService.SetGameUpdateListener(func(serverType server.Type, currentBuildID, newBuildID string) {
+		if discordService == nil || !discordService.IsConfigured() {
+			return
+		}
+		bgCtx := context.Background()
+		settings, err := appSettingsRepo.GetSettings(bgCtx)
+		if err != nil || settings.DiscordAlertChannelID == "" || !settings.DiscordAlertGameUpdates {
+			return
+		}
+		if err := discordService.SendGameUpdateAlert(settings.DiscordAlertChannelID, string(serverType), currentBuildID, newBuildID); err != nil {
+			log.Printf("[DiscordAlert] Failed to send game update alert for %s: %v", serverType, err)
+		}
+	})
 
 	// 7. Initialize Router
 	router := api.NewRouter(api.RouterDeps{
@@ -223,6 +277,7 @@ func run() error {
 		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
 		DiscordRepo:         discordRepo,
+		Scheduler:           scheduler,
 		Config:              cfg,
 		Paths:               paths,
 		Hub:                 hub,

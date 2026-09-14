@@ -35,6 +35,7 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Put("/events/{id}/participants", r.handleUpdateDiscordEventParticipation)
 	mux.Get("/clan-members", r.handleGetClanMembers)
 	mux.Put("/clan-members/qualifications", r.handleSaveClanQualifications)
+	mux.Post("/alerts/test", r.handleTestDiscordAlert)
 
 	return mux
 }
@@ -340,4 +341,31 @@ func (r *Router) handleUpdateDiscordEventParticipation(w http.ResponseWriter, re
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (r *Router) handleTestDiscordAlert(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil || !r.discordService.IsConfigured() {
+		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
+		return
+	}
+
+	var payload struct {
+		ChannelID string `json:"channelId"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1048576)).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ChannelID == "" {
+		http.Error(w, "channelId is required", http.StatusBadRequest)
+		return
+	}
+
+	if err := r.discordService.SendTestAlert(req.Context(), payload.ChannelID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	r.json(w, map[string]bool{"success": true})
 }
