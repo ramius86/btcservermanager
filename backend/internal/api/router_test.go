@@ -5,6 +5,7 @@ import (
 	"btcservermanager/internal/config"
 	"btcservermanager/internal/db"
 	"btcservermanager/internal/domain/appsettings"
+	"btcservermanager/internal/domain/filemanager"
 	"btcservermanager/internal/domain/installation"
 	"btcservermanager/internal/domain/modpreset"
 	"btcservermanager/internal/domain/scenario"
@@ -106,6 +107,7 @@ func TestRouterInit(t *testing.T) {
 		SteamCmdService:     steamCmdService,
 		SteamAuthService:    steamAuthService,
 		SteamQRService:      steamQRService,
+		FileManagerService:  filemanager.NewService(t.TempDir()),
 		Config:              cfg,
 		Paths:               paths,
 		Hub:                 hub,
@@ -332,9 +334,10 @@ func TestCSPReportRouteAuthorizationBypass(t *testing.T) {
 	hub := ws.NewHub()
 
 	router := NewRouter(RouterDeps{
-		Config: cfg,
-		Paths:  paths,
-		Hub:    hub,
+		FileManagerService: filemanager.NewService(t.TempDir()),
+		Config:             cfg,
+		Paths:              paths,
+		Hub:                hub,
 	})
 	handler := router.Init()
 

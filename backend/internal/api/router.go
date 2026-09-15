@@ -4,6 +4,7 @@ import (
 	"btcservermanager/internal/api/ws"
 	"btcservermanager/internal/config"
 	"btcservermanager/internal/domain/discordbot"
+	"btcservermanager/internal/domain/filemanager"
 	"btcservermanager/internal/domain/installation"
 	"btcservermanager/internal/domain/modpreset"
 	"btcservermanager/internal/domain/scenario"
@@ -37,6 +38,7 @@ type Router struct {
 	steamQRService      *steamauth.QRAuthService
 	discordService      *discordbot.Service
 	discordRepo         *discordbot.Repository
+	fileManagerService  *filemanager.Service
 	scheduler           *system.Scheduler
 	config              *config.Config
 	paths               *config.Paths
@@ -55,6 +57,7 @@ type RouterDeps struct {
 	SteamQRService      *steamauth.QRAuthService
 	DiscordService      *discordbot.Service
 	DiscordRepo         *discordbot.Repository
+	FileManagerService  *filemanager.Service
 	Scheduler           *system.Scheduler
 	Config              *config.Config
 	Paths               *config.Paths
@@ -74,6 +77,7 @@ func NewRouter(deps RouterDeps) *Router {
 		steamQRService:      deps.SteamQRService,
 		discordService:      deps.DiscordService,
 		discordRepo:         deps.DiscordRepo,
+		fileManagerService:  deps.FileManagerService,
 		scheduler:           deps.Scheduler,
 		config:              deps.Config,
 		paths:               deps.Paths,
@@ -114,6 +118,7 @@ func (r *Router) Init() http.Handler {
 		mux.Mount("/discord", r.discordRoutes())
 		mux.Mount("/reforger/workshop", r.reforgerWorkshopRoutes())
 		mux.Mount("/logs", r.logRoutes())
+		mux.Mount("/files", r.fileRoutes())
 	})
 
 	// Health check endpoint

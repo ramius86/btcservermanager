@@ -14,6 +14,7 @@ const ServerSettingsPage = lazy(() => import('./pages/ServerSettingsPage').then(
 const ModsPage = lazy(() => import('./pages/ModsPage').then(m => ({ default: m.ModsPage })))
 const ScenariosPage = lazy(() => import('./pages/ScenariosPage').then(m => ({ default: m.ScenariosPage })))
 const LogExplorerPage = lazy(() => import('./pages/LogExplorerPage').then(m => ({ default: m.LogExplorerPage })))
+const FileManagerPage = lazy(() => import('./pages/FileManagerPage').then(m => ({ default: m.FileManagerPage })))
 const AppConfigPage = lazy(() => import('./pages/AppConfigPage').then(m => ({ default: m.AppConfigPage })))
 const EventsPage = lazy(() => import('./pages/EventsPage').then(m => ({ default: m.EventsPage })))
 const EventsStatsPage = lazy(() => import('./pages/EventsStatsPage').then(m => ({ default: m.EventsStatsPage })))
@@ -47,6 +48,7 @@ export default function App() {
                       <Route path="/mods" element={<ModsPage />} />
                       <Route path="/scenarios" element={<ScenariosPage />} />
                       <Route path="/logs" element={<LogExplorerPage />} />
+                      <Route path="/files" element={<FileManagerPage />} />
                       <Route path="/events" element={<EventsPage />} />
                       <Route path="/events/stats" element={<EventsStatsPage />} />
                       <Route path="/members" element={<MembersPage />} />

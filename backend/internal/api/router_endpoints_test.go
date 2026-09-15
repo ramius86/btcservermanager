@@ -6,6 +6,7 @@ import (
 	"btcservermanager/internal/db"
 	"btcservermanager/internal/domain/appsettings"
 	"btcservermanager/internal/domain/discordbot"
+	"btcservermanager/internal/domain/filemanager"
 	"btcservermanager/internal/domain/installation"
 	"btcservermanager/internal/domain/modpreset"
 	"btcservermanager/internal/domain/scenario"
@@ -213,6 +214,7 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
 		DiscordRepo:         discordRepo,
+		FileManagerService:  filemanager.NewService(cfg.StoragePath),
 		Config:              cfg,
 		Paths:               paths,
 		Hub:                 hub,

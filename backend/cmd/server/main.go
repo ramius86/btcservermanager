@@ -6,6 +6,7 @@ import (
 	"btcservermanager/internal/db"
 	"btcservermanager/internal/domain/appsettings"
 	"btcservermanager/internal/domain/discordbot"
+	"btcservermanager/internal/domain/filemanager"
 	"btcservermanager/internal/domain/installation"
 	"btcservermanager/internal/domain/logs"
 	"btcservermanager/internal/domain/modpreset"
@@ -216,6 +217,8 @@ func run() error {
 	}
 	scheduler.SetDiscordService(discordService)
 
+	fileManagerService := filemanager.NewService(cfg.StoragePath)
+
 	if os.Getenv("TEST_MODE") != "true" {
 		scheduler.Start()
 		steamCmdService.StartBackgroundUpdateCheck()
@@ -277,6 +280,7 @@ func run() error {
 		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
 		DiscordRepo:         discordRepo,
+		FileManagerService:  fileManagerService,
 		Scheduler:           scheduler,
 		Config:              cfg,
 		Paths:               paths,

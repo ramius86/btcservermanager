@@ -1,5 +1,13 @@
 import { ServerInstanceInfoDto, CreatorDlcDto, AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
 import { ModDto, ModPresetDto, SteamCmdItemInfoDto, WorkshopResponseDto } from '../dtos/ModDto'
+import {
+  FileListResponseDto,
+  FileContentResponseDto,
+  CreateItemDto,
+  RenameItemDto,
+  ExtractZipDto,
+  CompressZipDto,
+} from '../dtos/FileDto'
 
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
@@ -297,4 +305,79 @@ export const DiscordService = {
 	saveClanQualifications: (data: { userIds: string[], qualifications: { userId: string, qualificationName: string }[] }): Promise<void> => fetchApi('/discord/clan-members/qualifications', { method: 'PUT', body: JSON.stringify(data) }),
 	sendTestAlert: (channelId: string): Promise<{ success: boolean }> => fetchApi('/discord/alerts/test', { method: 'POST', body: JSON.stringify({ channelId }) }),
 }
+
+export const FileManagerService = {
+  list: (path: string = ''): Promise<FileListResponseDto> =>
+    fetchApi(`/files/list?path=${encodeURIComponent(path)}`),
+  getContent: (path: string): Promise<FileContentResponseDto> =>
+    fetchApi(`/files/content?path=${encodeURIComponent(path)}`),
+  saveContent: (path: string, content: string): Promise<{ message: string }> =>
+    fetchApi('/files/content', {
+      method: 'PUT',
+      body: JSON.stringify({ path, content }),
+    }),
+  create: (data: CreateItemDto): Promise<{ message: string }> =>
+    fetchApi('/files/create', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  delete: (path: string): Promise<{ message: string }> =>
+    fetchApi(`/files?path=${encodeURIComponent(path)}`, {
+      method: 'DELETE',
+    }),
+  rename: (data: RenameItemDto): Promise<{ message: string }> =>
+    fetchApi('/files/rename', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  upload: async (destination: string, files: File[]): Promise<{ message: string }> => {
+    const formData = new FormData()
+    formData.append('destination', destination)
+    for (const file of files) {
+      formData.append('files', file)
+    }
+    const res = await fetch(`${API_BASE}/files/upload`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => '')
+      throw new Error(`Upload failed: ${res.status} ${res.statusText} ${errorBody}`)
+    }
+    return res.json()
+  },
+  downloadUrl: (path: string): string =>
+    `${API_BASE}/files/download?path=${encodeURIComponent(path)}&_t=${Date.now()}`,
+  downloadZip: async (paths: string[], filename: string = 'archive.zip'): Promise<void> => {
+    const res = await fetch(`${API_BASE}/files/download-zip`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths, filename }),
+    })
+    if (!res.ok) {
+      const errorBody = await res.text().catch(() => '')
+      throw new Error(`Zip download failed: ${res.status} ${res.statusText} ${errorBody}`)
+    }
+    const blob = await res.blob()
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    window.URL.revokeObjectURL(url)
+  },
+  extractZip: (data: ExtractZipDto): Promise<{ message: string }> =>
+    fetchApi('/files/extract', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  compressZip: (data: CompressZipDto): Promise<{ message: string }> =>
+    fetchApi('/files/compress', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+}
+
 
