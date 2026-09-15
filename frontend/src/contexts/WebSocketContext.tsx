@@ -39,6 +39,19 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
         socket.send(JSON.stringify(msg))
       })
       messageQueue.current = []
+
+      // Re-subscribe all active listeners so the new backend connection registers them
+      listeners.current.forEach((_, key) => {
+        const [domain, serverIdStr] = key.split(':')
+        const serverId = serverIdStr && serverIdStr !== '0' ? parseInt(serverIdStr, 10) : undefined
+        socket.send(JSON.stringify({
+          type: 'subscribe',
+          payload: {
+            domain,
+            server_id: serverId,
+          },
+        }))
+      })
     }
 
     socket.onmessage = (e) => {
