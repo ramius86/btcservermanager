@@ -3,6 +3,7 @@ package api
 import (
 	"log"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,7 +20,19 @@ type cfAccessValidator struct {
 	mu         sync.RWMutex
 }
 
+func normalizeTeamDomain(domain string) string {
+	domain = strings.TrimSpace(domain)
+	if domain == "" {
+		return ""
+	}
+	if !strings.HasPrefix(domain, "http://") && !strings.HasPrefix(domain, "https://") {
+		domain = "https://" + domain
+	}
+	return strings.TrimSuffix(domain, "/")
+}
+
 func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator {
+	teamDomain = normalizeTeamDomain(teamDomain)
 	v := &cfAccessValidator{
 		teamDomain: teamDomain,
 		debugMode:  debugMode,
