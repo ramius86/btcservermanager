@@ -18,6 +18,8 @@ func (l *LogFile) GetLastLines(n int) (string, error) {
 	return l.GetLinesFromEnd(0, n)
 }
 
+const maxReadSeekSize = 32 * 1024 * 1024 // 32 MB max seek buffer to prevent container OOM
+
 func (l *LogFile) GetLinesFromEnd(offset, limit int) (string, error) {
 	if limit <= 0 {
 		return "", nil
@@ -44,6 +46,9 @@ func (l *LogFile) GetLinesFromEnd(offset, limit int) (string, error) {
 
 	n := offset + limit
 	readSize := int64(n * 250)
+	if readSize > maxReadSeekSize {
+		readSize = maxReadSeekSize
+	}
 	if readSize > filesize {
 		readSize = filesize
 	}
@@ -57,7 +62,7 @@ func (l *LogFile) GetLinesFromEnd(offset, limit int) (string, error) {
 
 		lines := strings.Split(string(buf), "\n")
 
-		if len(lines) > n || readSize == filesize {
+		if len(lines) > n || readSize >= filesize || readSize >= maxReadSeekSize {
 			return formatLinesFromEnd(lines, offset, limit, startPos > 0), nil
 		}
 
@@ -138,6 +143,9 @@ func joinLines(lines []string) string {
 
 func doubleReadSize(current, maxSize int64) int64 {
 	next := current * 2
+	if next > maxReadSeekSize {
+		next = maxReadSeekSize
+	}
 	if next > maxSize {
 		return maxSize
 	}
