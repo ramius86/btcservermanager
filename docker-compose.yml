@@ -1,6 +1,7 @@
 services:
   btcservermanager:
     image: ghcr.io/ramius86/btcservermanager:${VERSION:-latest}
+    init: true
     restart: unless-stopped
     volumes:
       - ${HOST_STORAGE_PATH:-./storage}:/app/storage
