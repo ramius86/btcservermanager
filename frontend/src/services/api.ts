@@ -92,7 +92,13 @@ export const WorkshopService = {
     const formData = new FormData()
     formData.append('file', file)
     formData.append('serverType', filter)
-    return fetch(`${API_BASE}/mod/preset/import`, { method: 'POST', body: formData }).then(() => undefined)
+    return fetch(`${API_BASE}/mod/preset/import`, { method: 'POST', body: formData }).then(async res => {
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(`Import failed (${res.status}): ${errText}`)
+      }
+      return undefined
+    })
   },
   searchSteamMods: (query: string, appId: number, page: number = 1): Promise<{ mods: ModDto[], total: number }> => 
     fetchApi(`/mod/steam/search?q=${encodeURIComponent(query)}&appId=${appId}&page=${page}`),
@@ -104,15 +110,20 @@ export const ScenarioService = {
   getArma3: (): Promise<any[]> => fetchApi('/scenarios/arma3').then(res => res?.scenarios || []),
   deleteArma3: (name: string): Promise<void> => fetchApi(`/scenarios/arma3/${name}`, { method: 'DELETE' }),
   getReforger: (serverId?: number): Promise<any[]> => fetchApi(serverId ? `/scenarios/reforger?serverId=${serverId}` : `/scenarios/reforger`).then(res => res?.scenarios || []),
-  uploadArma3: (files: FileList | File[]): Promise<Response> => {
+  uploadArma3: async (files: FileList | File[]): Promise<Response> => {
     const formData = new FormData()
     for (const file of Array.from(files)) {
       formData.append('file', file)
     }
-    return fetch(`${API_BASE}/scenarios/arma3`, {
+    const res = await fetch(`${API_BASE}/scenarios/arma3`, {
       method: 'POST',
       body: formData,
     })
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      throw new Error(`Upload failed (${res.status}): ${errText}`)
+    }
+    return res
   },
   fetchReforgerModScenarios: (modId: string): Promise<any[]> => fetchApi(`/scenarios/reforger/workshop/mod/${modId}/fetch`, { method: 'POST' }),
   syncReforger: (): Promise<void> => fetchApi('/scenarios/reforger/sync', { method: 'POST' }),
@@ -131,7 +142,14 @@ export const ModPresetService = {
     body: JSON.stringify({ id, mods: modIds.map(mid => ({ id: mid })) }) 
   }),
   delete: (id: number): Promise<void> => fetchApi(`/mod/preset/${id}`, { method: 'DELETE' }),
-  import: (formData: FormData): Promise<ModPresetDto> => fetch(`${API_BASE}/mod/preset/import`, { method: 'POST', body: formData }).then(res => res.json()),
+  import: async (formData: FormData): Promise<ModPresetDto> => {
+    const res = await fetch(`${API_BASE}/mod/preset/import`, { method: 'POST', body: formData })
+    if (!res.ok) {
+      const errText = await res.text().catch(() => '')
+      throw new Error(`Import preset failed (${res.status}): ${errText}`)
+    }
+    return res.json()
+  },
   export: async (id: number): Promise<Blob> => {
     const res = await fetch(`${API_BASE}/mod/preset/${id}/export`)
     if (!res.ok) throw new Error('Failed to export')
