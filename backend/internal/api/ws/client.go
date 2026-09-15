@@ -59,7 +59,6 @@ func (c *Client) readPump(ctx context.Context, cancel context.CancelFunc) {
 		case "subscribe":
 			var sub Subscription
 			if err := json.Unmarshal(msg.Payload, &sub); err == nil {
-				log.Printf("[WS Client] Subscribing to domain: %s (ServerID: %d)", sub.Domain, sub.ServerID)
 				c.hub.subscribe <- clientSub{client: c, sub: sub}
 			}
 		case "unsubscribe":

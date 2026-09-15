@@ -34,10 +34,12 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
       console.log('WebSocket connected')
       setIsConnected(true)
       reconnectDelay.current = 1000
-      // Flush message queue
-      messageQueue.current.forEach(msg => {
-        socket.send(JSON.stringify(msg))
-      })
+      // Flush non-subscribe message queue (active listeners are registered below)
+      messageQueue.current
+        .filter(msg => msg.type !== 'subscribe')
+        .forEach(msg => {
+          socket.send(JSON.stringify(msg))
+        })
       messageQueue.current = []
 
       // Re-subscribe all active listeners so the new backend connection registers them

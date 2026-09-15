@@ -307,7 +307,6 @@ func (m *ProcessManager) logStartMessage(id int64, t Type, executable string, pa
 func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logFile, statsFile *os.File) {
 	go func() {
 		err := p.cmd.Wait()
-		log.Printf("Server ID %d stopped with error: %v", p.serverID, err)
 
 		<-logsDone
 
@@ -320,6 +319,14 @@ func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logF
 		wasStopping := p.stopping
 		p.exited = true
 		p.mu.Unlock()
+
+		if wasStopping {
+			log.Printf("[ProcessManager] Server ID %d stopped by user", p.serverID)
+		} else if err != nil {
+			log.Printf("[ProcessManager] Server ID %d exited with error: %v", p.serverID, err)
+		} else {
+			log.Printf("[ProcessManager] Server ID %d exited normally (exit code 0)", p.serverID)
+		}
 
 		close(p.stopCh)
 		m.emitStatus(p.serverID, false)

@@ -116,7 +116,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
         hideCloseButton
         className={`flex flex-col bg-surface border-border p-0 gap-0 overflow-hidden transition-all duration-200 ${
           isFullscreen
-            ? 'fixed inset-2 w-[calc(100vw-16px)] max-w-none h-[calc(100vh-16px)] rounded-xl'
+            ? 'w-[calc(100vw-24px)] max-w-none h-[calc(100vh-24px)] rounded-xl'
             : 'w-[92vw] max-w-5xl h-[85vh] rounded-xl'
         }`}
       >
