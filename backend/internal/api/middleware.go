@@ -59,15 +59,19 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-XSS-Protection", "1; mode=block")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 
-		// Prevent caching of API responses (Browser + CDN)
-		// no-transform tells Cloudflare (and any CDN) to not modify the response body,
-		// preventing automatic injection of beacon.min.js and other scripts.
-		w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, no-transform, max-age=0")
-		w.Header().Set("CDN-Cache-Control", cacheControlNoStore)
-		w.Header().Set("Cloudflare-CDN-Cache-Control", cacheControlNoStore)
-		w.Header().Set("Surrogate-Control", cacheControlNoStore)
-		w.Header().Set("Pragma", "no-cache")
-		w.Header().Set("Expires", "0")
+		// Cache static Vite assets with content hashes; prevent caching for API responses and SPA root
+		if strings.HasPrefix(req.URL.Path, "/assets/") {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			// no-transform tells Cloudflare (and any CDN) to not modify the response body,
+			// preventing automatic injection of beacon.min.js and other scripts.
+			w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, no-transform, max-age=0")
+			w.Header().Set("CDN-Cache-Control", cacheControlNoStore)
+			w.Header().Set("Cloudflare-CDN-Cache-Control", cacheControlNoStore)
+			w.Header().Set("Surrogate-Control", cacheControlNoStore)
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		}
 
 		if cspValue != "" {
 			w.Header().Set(cspHeader, cspValue)
