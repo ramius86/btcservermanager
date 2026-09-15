@@ -17,27 +17,27 @@ RUN go build -ldflags="-X 'btcservermanager/internal/domain/system.Version=${VER
     -o btcservermanager ./cmd/server/main.go
 
 # --- Final Image ---
-FROM cm2network/steamcmd:root AS runtime
+FROM ghcr.io/steamcmd/steamcmd:debian-13 AS runtime
 
 USER root
 
-# Install dependencies for Arma/DayZ, create app directories and ensure they're writable by steam user
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    tzdata \
-    wget \
+# Create unprivileged steam user (UID 1000) and install dependencies for Arma/DayZ
+RUN useradd -u 1000 -m -s /bin/bash steam \
     && dpkg --add-architecture i386 \
     && export DEBIAN_FRONTEND=noninteractive \
     && apt-get update \
     && apt-get install -y --no-install-recommends \
+          ca-certificates \
           expect \
           lib32gcc-s1 \
           lib32stdc++6 \
-          libcap2 \
           libavahi-client3 \
-          libavahi-common3 \
           libavahi-client3:i386 \
+          libavahi-common3 \
           libavahi-common3:i386 \
+          libcap2 \
+          tzdata \
+          wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /app /app/storage/logs /app/storage/data /home/steam/Steam \
@@ -50,7 +50,7 @@ COPY --chmod=555 --chown=steam:steam --from=backend-build /app/backend/btcserver
 COPY --chmod=555 --chown=steam:steam --from=frontend-build /app/frontend/dist ./public
 
 # Environment variables
-ENV STEAMCMD_PATH=/home/steam/steamcmd/steamcmd.sh
+ENV STEAMCMD_PATH=/usr/games/steamcmd
 ENV STORAGE_PATH=/app/storage
 ENV PORT=8080
 ENV HOME=/home/steam
