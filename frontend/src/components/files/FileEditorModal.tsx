@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
 import { FileManagerService } from '../../services/api'
-import { Save, Maximize2, Minimize2, AlertTriangle, Lock, FileCode, RefreshCw } from 'lucide-react'
+import { Save, Maximize2, Minimize2, AlertTriangle, Lock, FileCode, RefreshCw, X } from 'lucide-react'
 
 interface FileEditorModalProps {
   filePath: string | null
@@ -29,8 +29,15 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
   const [saving, setSaving] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const gutterRef = useRef<HTMLDivElement>(null)
 
   const isDirty = content !== originalContent
+
+  const handleScroll = () => {
+    if (textareaRef.current && gutterRef.current) {
+      gutterRef.current.scrollTop = textareaRef.current.scrollTop
+    }
+  }
 
   useEffect(() => {
     if (isOpen && filePath) {
@@ -106,6 +113,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && handleClose()}>
       <DialogContent
+        hideCloseButton
         className={`flex flex-col bg-surface border-border p-0 gap-0 overflow-hidden transition-all duration-200 ${
           isFullscreen
             ? 'fixed inset-2 w-[calc(100vw-16px)] max-w-none h-[calc(100vh-16px)] rounded-xl'
@@ -114,7 +122,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
       >
         {/* Modal Header */}
         <DialogHeader className="px-6 py-4 border-b border-border/60 bg-surface-elevated/40 flex flex-row items-center justify-between space-y-0 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-center gap-3 min-w-0 pr-4">
             <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
               <FileCode className="w-5 h-5" />
             </div>
@@ -136,15 +144,25 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
+          {/* Window action controls */}
+          <div className="flex items-center gap-1 shrink-0">
             <Button
-              variant="outline"
+              variant="ghost"
               size="sm"
               onClick={() => setIsFullscreen(!isFullscreen)}
-              className="h-8 px-2.5 text-xs border-border/60 bg-surface hover:bg-muted/40"
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition-colors"
               title={isFullscreen ? 'Exit Fullscreen' : 'Fullscreen'}
             >
-              {isFullscreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {isFullscreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClose}
+              className="h-8 w-8 p-0 text-muted-foreground hover:text-foreground hover:bg-muted/40 rounded-lg transition-colors"
+              title="Close"
+            >
+              <X className="w-4 h-4" />
             </Button>
           </div>
         </DialogHeader>
@@ -168,6 +186,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
             <div className="flex w-full h-full overflow-hidden">
               {/* Line Numbers Gutter */}
               <div
+                ref={gutterRef}
                 className="select-none py-4 px-3 bg-neutral-900/60 border-r border-border/30 text-neutral-500 text-right shrink-0 overflow-hidden font-mono text-xs leading-relaxed"
                 style={{ width: `${Math.max(3, String(lineCount).length) * 9 + 28}px` }}
               >
@@ -184,9 +203,10 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 onKeyDown={handleKeyDown}
+                onScroll={handleScroll}
                 readOnly={isReadOnly}
                 spellCheck={false}
-                className="flex-1 w-full h-full p-4 bg-transparent text-neutral-100 resize-none outline-none overflow-auto font-mono text-xs leading-[21px] whitespace-pre tab-4"
+                className="flex-1 w-full h-full p-4 pb-8 bg-transparent text-neutral-100 resize-none outline-none overflow-auto custom-scrollbar font-mono text-xs leading-[21px] whitespace-pre tab-4"
                 placeholder={isReadOnly ? 'File is empty' : 'Enter text here...'}
               />
             </div>

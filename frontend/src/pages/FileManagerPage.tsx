@@ -6,6 +6,8 @@ import {
   FileText,
   FolderArchive,
   ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
   Download,
   Upload,
   RefreshCw,
@@ -147,6 +149,9 @@ function renderItemName(
   )
 }
 
+type SortField = 'name' | 'size' | 'modified'
+type SortOrder = 'asc' | 'desc'
+
 export const FileManagerPage: React.FC = () => {
   const { showToast } = useToast()
 
@@ -155,6 +160,32 @@ export const FileManagerPage: React.FC = () => {
   const [items, setItems] = useState<FileItemDto[]>([])
   const [loading, setLoading] = useState<boolean>(true)
   const [searchQuery, setSearchQuery] = useState<string>('')
+
+  // Sorting state
+  const [sortField, setSortField] = useState<SortField>('name')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+
+  const toggleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setSortField(field)
+      setSortOrder(field === 'modified' ? 'desc' : 'asc')
+    }
+  }
+
+  const renderSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return (
+        <ArrowUpDown className="w-3 h-3 ml-1.5 inline text-muted-foreground/30 group-hover/th:text-muted-foreground transition-colors" />
+      )
+    }
+    return sortOrder === 'asc' ? (
+      <ArrowUp className="w-3 h-3 ml-1.5 inline text-primary" />
+    ) : (
+      <ArrowDown className="w-3 h-3 ml-1.5 inline text-primary" />
+    )
+  }
 
   // Multi-selection
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
@@ -256,11 +287,32 @@ export const FileManagerPage: React.FC = () => {
       result = result.filter((item) => item.name.toLowerCase().includes(q))
     }
     return [...result].sort((a, b) => {
+      // Always keep folders grouped on top
       if (a.isDir && !b.isDir) return -1
       if (!a.isDir && b.isDir) return 1
-      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+
+      let comp = 0
+      if (sortField === 'name') {
+        comp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+      } else if (sortField === 'size') {
+        const sizeA = a.isDir ? 0 : a.size
+        const sizeB = b.isDir ? 0 : b.size
+        comp = sizeA - sizeB
+        if (comp === 0) {
+          comp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+        }
+      } else if (sortField === 'modified') {
+        const timeA = new Date(a.modTime).getTime()
+        const timeB = new Date(b.modTime).getTime()
+        comp = timeA - timeB
+        if (comp === 0) {
+          comp = a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+        }
+      }
+
+      return sortOrder === 'asc' ? comp : -comp
     })
-  }, [items, searchQuery])
+  }, [items, searchQuery, sortField, sortOrder])
 
   // Selection handlers
   const handleToggleSelect = (path: string) => {
@@ -696,7 +748,7 @@ export const FileManagerPage: React.FC = () => {
 
   return (
     <div
-      className="relative space-y-6 pb-12"
+      className="space-y-10 max-w-7xl mx-auto py-8 px-6 relative min-h-[500px]"
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
@@ -712,8 +764,8 @@ export const FileManagerPage: React.FC = () => {
 
       {/* Drag & Drop Visual Overlay */}
       {isDragging && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary pointer-events-none animate-in fade-in duration-150">
-          <div className="flex flex-col items-center gap-3 p-8 rounded-2xl bg-surface border border-primary/30 shadow-2xl">
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-md border-2 border-dashed border-primary rounded-2xl pointer-events-none animate-in fade-in duration-150">
+          <div className="flex flex-col items-center gap-3 p-8 rounded-2xl bg-surface-elevated/90 border border-primary/30 shadow-2xl">
             <Upload className="w-12 h-12 text-primary animate-bounce" />
             <div className="text-center">
               <h3 className="text-lg font-bold">Drop files to upload</h3>
@@ -726,14 +778,14 @@ export const FileManagerPage: React.FC = () => {
       )}
 
       {/* Header & Quick Jumps */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2.5">
-            <HardDrive className="w-6 h-6 text-primary" />
-            <span>File Manager</span>
+          <h1 className="text-4xl font-bold tracking-tight text-foreground flex items-center gap-3">
+            <HardDrive className="w-8 h-8 text-primary shrink-0" />
+            <span>Files</span>
           </h1>
-          <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mt-1">
-            Browse, upload, download, and edit server files and mod scripts
+          <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold mt-2">
+            Storage Explorer & Config Editor
           </p>
         </div>
 
@@ -961,9 +1013,30 @@ export const FileManagerPage: React.FC = () => {
                     )}
                   </button>
                 </th>
-                <th className="py-3 px-4">Name</th>
-                <th className="py-3 px-4 w-28">Size</th>
-                <th className="py-3 px-4 w-44 hidden md:table-cell">Modified</th>
+                <th
+                  onClick={() => toggleSort('name')}
+                  className="py-3 px-4 cursor-pointer select-none hover:text-foreground transition-colors group/th"
+                >
+                  <span className="inline-flex items-center">
+                    Name {renderSortIcon('name')}
+                  </span>
+                </th>
+                <th
+                  onClick={() => toggleSort('size')}
+                  className="py-3 px-4 w-28 cursor-pointer select-none hover:text-foreground transition-colors group/th"
+                >
+                  <span className="inline-flex items-center">
+                    Size {renderSortIcon('size')}
+                  </span>
+                </th>
+                <th
+                  onClick={() => toggleSort('modified')}
+                  className="py-3 px-4 w-44 hidden md:table-cell cursor-pointer select-none hover:text-foreground transition-colors group/th"
+                >
+                  <span className="inline-flex items-center">
+                    Modified {renderSortIcon('modified')}
+                  </span>
+                </th>
                 <th className="py-3 px-4 w-20 text-right">Actions</th>
               </tr>
             </thead>
