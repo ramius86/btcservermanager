@@ -940,3 +940,16 @@ func (m *ProcessManager) handleGenericLogLine(p *Process, line []byte, b Broadca
 
 	bufferPool.Put(outBuf)
 }
+
+func (m *ProcessManager) GetActiveLogFiles() []string {
+	var files []string
+	m.processes.Range(func(key, value any) bool {
+		if proc, ok := value.(*Process); ok {
+			if proc.IsAlive() && proc.info != nil && proc.info.CurrentLogFile != "" {
+				files = append(files, proc.info.CurrentLogFile)
+			}
+		}
+		return true
+	})
+	return files
+}

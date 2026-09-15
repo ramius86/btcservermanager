@@ -49,6 +49,7 @@ type ServerManager interface {
 	RemoveHeadlessClient(ctx context.Context, id int64) error
 	GetServerLogFile(t Type, id int64) string
 	SetExitListener(l ServerExitListener)
+	GetActiveLogFiles() []string
 }
 
 type Service struct {
@@ -531,4 +532,11 @@ func (s *Service) GetAllActiveReforgerModIDs(ctx context.Context) ([]string, err
 
 func (s *Service) SetServerExitListener(l ServerExitListener) {
 	s.processManager.SetExitListener(l)
+}
+
+func (s *Service) GetActiveLogFiles() []string {
+	if s.processManager == nil {
+		return nil
+	}
+	return s.processManager.GetActiveLogFiles()
 }

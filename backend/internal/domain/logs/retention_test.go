@@ -105,4 +105,26 @@ func TestLogManager_CleanLogs(t *testing.T) {
 			t.Errorf("Expected important.txt to exist")
 		}
 	})
+
+	t.Run("Protect active server log files", func(t *testing.T) {
+		os.RemoveAll(tmpDir)
+		os.MkdirAll(tmpDir, 0o755)
+
+		createLog("active_server.log", 15, 1024*1024) // 15 days old, 1MB
+		createLog("old_idle.log", 20, 1024*1024)      // 20 days old, 1MB
+
+		// Age cleanup with maxDays=10, protecting active_server.log
+		err := m.CleanLogs(t.Context(), 10, 0, "active_server.log")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "active_server.log")); err != nil {
+			t.Errorf("Expected protected active_server.log to be preserved")
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "old_idle.log")); !os.IsNotExist(err) {
+			t.Errorf("Expected unprotected old_idle.log to be deleted")
+		}
+	})
 }

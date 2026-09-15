@@ -24,24 +24,30 @@ type fileInfo struct {
 	time time.Time
 }
 
-func (m *LogManager) CleanLogs(ctx context.Context, maxDays, maxSizeMB int) error {
-	log.Printf("Running log cleanup (MaxDays: %d, MaxSizeMB: %d)", maxDays, maxSizeMB)
+func (m *LogManager) CleanLogs(ctx context.Context, maxDays, maxSizeMB int, excludedFiles ...string) error {
+	log.Printf("Running log cleanup (MaxDays: %d, MaxSizeMB: %d, Protected: %d)", maxDays, maxSizeMB, len(excludedFiles))
+
+	protected := make(map[string]bool)
+	for _, f := range excludedFiles {
+		protected[filepath.Base(f)] = true
+		protected[f] = true
+	}
 
 	threshold := time.Now().AddDate(0, 0, -maxDays)
 
-	files, err := m.walkAndCleanAge(ctx, threshold, maxDays)
+	files, err := m.walkAndCleanAge(ctx, threshold, maxDays, protected)
 	if err != nil {
 		return err
 	}
 
 	if maxSizeMB > 0 {
-		return m.cleanSizeLimit(ctx, files, maxSizeMB)
+		return m.cleanSizeLimit(ctx, files, maxSizeMB, protected)
 	}
 
 	return nil
 }
 
-func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, maxDays int) ([]fileInfo, error) {
+func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, maxDays int, protected map[string]bool) ([]fileInfo, error) {
 	var files []fileInfo
 
 	err := filepath.WalkDir(m.logsDir, func(path string, d os.DirEntry, err error) error {
@@ -65,7 +71,9 @@ func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, m
 		}
 
 		if maxDays > 0 && info.ModTime().Before(threshold) {
-			if err := os.Remove(path); err == nil {
+			if protected[d.Name()] || protected[path] {
+				log.Printf("Skipping active protected log file (age): %s", path)
+			} else if err := os.Remove(path); err == nil {
 				log.Printf("Deleted old log file (age): %s", path)
 				return nil
 			}
@@ -83,7 +91,7 @@ func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, m
 	return files, err
 }
 
-func (m *LogManager) cleanSizeLimit(ctx context.Context, files []fileInfo, maxSizeMB int) error {
+func (m *LogManager) cleanSizeLimit(ctx context.Context, files []fileInfo, maxSizeMB int, protected map[string]bool) error {
 	var totalSize int64
 	for _, f := range files {
 		totalSize += f.size
@@ -110,6 +118,11 @@ func (m *LogManager) cleanSizeLimit(ctx context.Context, files []fileInfo, maxSi
 
 		if totalSize <= maxSizeBytes {
 			break
+		}
+
+		if protected[filepath.Base(f.path)] || protected[f.path] {
+			log.Printf("Skipping active protected log file (size): %s", f.path)
+			continue
 		}
 
 		if err := os.Remove(f.path); err == nil {

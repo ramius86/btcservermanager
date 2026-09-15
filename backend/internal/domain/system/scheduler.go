@@ -161,7 +161,12 @@ func (s *Scheduler) cleanupLogs() {
 		return
 	}
 
-	err = s.logManager.CleanLogs(ctx, settings.LogRetentionDays, settings.LogMaxTotalSizeMB)
+	var activeLogs []string
+	if s.serverService != nil {
+		activeLogs = s.serverService.GetActiveLogFiles()
+	}
+
+	err = s.logManager.CleanLogs(ctx, settings.LogRetentionDays, settings.LogMaxTotalSizeMB, activeLogs...)
 	if err != nil {
 		log.Printf("Error cleaning logs: %v", err)
 	}
