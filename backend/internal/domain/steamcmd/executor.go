@@ -314,7 +314,24 @@ func (e *Executor) runSteamCMDCommand(job *Job, auth *steamauth.SteamAuth, jobLo
 	}
 	defer os.Remove(scriptFile)
 
-	cmd := e.execCommand(e.ctx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
+	parentCtx := e.ctx
+	if parentCtx == nil {
+		parentCtx = context.Background()
+	}
+
+	var jobCtx context.Context
+	var cancel context.CancelFunc
+	switch job.Type {
+	case JobInstallServer, JobUpdateServer, JobInstallMods, JobUpdateMods:
+		jobCtx, cancel = context.WithTimeout(parentCtx, 45*time.Minute)
+	case JobCheckUpdates:
+		jobCtx, cancel = context.WithTimeout(parentCtx, 5*time.Minute)
+	default:
+		jobCtx, cancel = context.WithTimeout(parentCtx, 15*time.Minute)
+	}
+	defer cancel()
+
+	cmd := e.execCommand(jobCtx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -353,6 +370,16 @@ func (e *Executor) runSteamCMDCommand(job *Job, auth *steamauth.SteamAuth, jobLo
 
 func (e *Executor) handleAttemptResult(job *Job, output string, cmdErr error, _, _ int, jobLogPath string) bool {
 	e.handleResult(output, job)
+
+	// If the command failed or timed out at OS level but parser did not see an error string,
+	// ensure we record the failure status instead of falsely treating it as success.
+	if cmdErr != nil && job.ErrorStatus == nil {
+		errStatus := workshop.ErrorGeneric
+		if errors.Is(cmdErr, context.DeadlineExceeded) {
+			errStatus = workshop.ErrorTimeout
+		}
+		job.ErrorStatus = &errStatus
+	}
 
 	if job.ErrorStatus == nil {
 		if job.OnSuccess != nil {
