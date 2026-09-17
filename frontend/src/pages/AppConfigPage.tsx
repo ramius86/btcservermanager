@@ -36,6 +36,7 @@ export function AppConfigPage() {
     discordAlertGameUpdates: false,
     modUpdateCheckIntervalMinutes: 360,
     gameUpdateCheckIntervalMinutes: 15,
+    eventRosterEnabled: true,
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)

@@ -37,6 +37,15 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Put("/clan-members/qualifications", r.handleSaveClanQualifications)
 	mux.Post("/alerts/test", r.handleTestDiscordAlert)
 
+	// Event Roster & Templates
+	mux.Get("/events/{id}/roster", r.handleGetDiscordEventRoster)
+	mux.Put("/events/{id}/roster", r.handleSaveDiscordEventRoster)
+	mux.Post("/events/{id}/roster/publish", r.handlePublishDiscordEventRoster)
+	mux.Get("/roster/templates", r.handleGetDiscordRosterTemplates)
+	mux.Post("/roster/templates", r.handleSaveDiscordRosterTemplate)
+	mux.Delete("/roster/templates/{templateId}", r.handleDeleteDiscordRosterTemplate)
+	mux.Get("/roster/learning-stats", r.handleGetDiscordRosterLearningStats)
+
 	return mux
 }
 

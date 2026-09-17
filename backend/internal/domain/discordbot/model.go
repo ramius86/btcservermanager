@@ -89,3 +89,32 @@ type ClanMember struct {
 	DisplayName    string   `json:"displayName"`
 	Qualifications []string `json:"qualifications"`
 }
+
+type EventRoster struct {
+	EventID   int64  `json:"eventId"`
+	Data      string `json:"data"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type RosterTemplate struct {
+	ID        int64  `json:"id"`
+	Name      string `json:"name"`
+	GameType  string `json:"gameType"`
+	Structure string `json:"structure"`
+	CreatedAt string `json:"createdAt"`
+}
+
+type PlayerRoleStat struct {
+	UserID     string `json:"userId"`
+	PlayerName string `json:"playerName"`
+	Role       string `json:"role"`
+	GameType   string `json:"gameType"`
+	PlayCount  int    `json:"playCount"`
+	LastUsedAt string `json:"lastUsedAt"`
+}
+
+type PlayerRoleRecord struct {
+	UserID     string `json:"userId"`
+	PlayerName string `json:"playerName"`
+	Role       string `json:"role"`
+}

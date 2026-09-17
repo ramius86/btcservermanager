@@ -20,7 +20,7 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 	var memberRoleIDsJSON string
 	var qualificationNamesJSON string
 
-	query := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names, discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes FROM app_settings LIMIT 1`
+	query := `SELECT id, log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names, discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes, COALESCE(event_roster_enabled, 1) FROM app_settings LIMIT 1`
 
 	err := r.db.QueryRowContext(ctx, query).Scan(
 		&s.ID,
@@ -36,6 +36,7 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 		&s.DiscordAlertGameUpdates,
 		&s.ModUpdateCheckIntervalMinutes,
 		&s.GameUpdateCheckIntervalMinutes,
+		&s.EventRosterEnabled,
 	)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -53,6 +54,7 @@ func (r *Repository) GetSettings(ctx context.Context) (*AppSettings, error) {
 				DiscordAlertGameUpdates:        false,
 				ModUpdateCheckIntervalMinutes:  360,
 				GameUpdateCheckIntervalMinutes: 15,
+				EventRosterEnabled:             true,
 			}, nil
 		}
 		return nil, err
@@ -107,22 +109,22 @@ func (r *Repository) Save(ctx context.Context, s *AppSettings) error {
 	if errors.Is(err, sql.ErrNoRows) {
 		query := `INSERT INTO app_settings (
 			log_retention_days, log_max_total_size_mb, discord_reminder_hours, discord_reminder_message, member_role_ids, qualification_names,
-			discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			discord_alert_channel_id, discord_alert_server_offline, discord_alert_mod_updates, discord_alert_game_updates, mod_update_check_interval_minutes, game_update_check_interval_minutes, event_roster_enabled
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		_, err = r.db.ExecContext(ctx, query,
 			s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON,
-			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes,
+			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes, s.EventRosterEnabled,
 		)
 	} else if err != nil {
 		return err
 	} else {
 		query := `UPDATE app_settings SET
 			log_retention_days = ?, log_max_total_size_mb = ?, discord_reminder_hours = ?, discord_reminder_message = ?, member_role_ids = ?, qualification_names = ?,
-			discord_alert_channel_id = ?, discord_alert_server_offline = ?, discord_alert_mod_updates = ?, discord_alert_game_updates = ?, mod_update_check_interval_minutes = ?, game_update_check_interval_minutes = ?
+			discord_alert_channel_id = ?, discord_alert_server_offline = ?, discord_alert_mod_updates = ?, discord_alert_game_updates = ?, mod_update_check_interval_minutes = ?, game_update_check_interval_minutes = ?, event_roster_enabled = ?
 			WHERE id = ?`
 		_, err = r.db.ExecContext(ctx, query,
 			s.LogRetentionDays, s.LogMaxTotalSizeMB, s.DiscordReminderHours, s.DiscordReminderMessage, rolesJSON, qualJSON,
-			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes,
+			s.DiscordAlertChannelID, s.DiscordAlertServerOffline, s.DiscordAlertModUpdates, s.DiscordAlertGameUpdates, s.ModUpdateCheckIntervalMinutes, s.GameUpdateCheckIntervalMinutes, s.EventRosterEnabled,
 			id,
 		)
 	}

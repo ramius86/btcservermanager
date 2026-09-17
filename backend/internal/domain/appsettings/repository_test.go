@@ -35,6 +35,7 @@ func TestRepository(t *testing.T) {
 		assert.False(t, s.DiscordAlertGameUpdates)
 		assert.Equal(t, 360, s.ModUpdateCheckIntervalMinutes)
 		assert.Equal(t, 15, s.GameUpdateCheckIntervalMinutes)
+		assert.True(t, s.EventRosterEnabled)
 
 		// Save (Insert)
 		s.LogRetentionDays = 60
@@ -45,6 +46,7 @@ func TestRepository(t *testing.T) {
 		s.DiscordAlertGameUpdates = true
 		s.ModUpdateCheckIntervalMinutes = 180
 		s.GameUpdateCheckIntervalMinutes = 30
+		s.EventRosterEnabled = false
 
 		err = repo.Save(ctx, s)
 		assert.NoError(t, err)
@@ -59,11 +61,13 @@ func TestRepository(t *testing.T) {
 		assert.True(t, saved.DiscordAlertGameUpdates)
 		assert.Equal(t, 180, saved.ModUpdateCheckIntervalMinutes)
 		assert.Equal(t, 30, saved.GameUpdateCheckIntervalMinutes)
+		assert.False(t, saved.EventRosterEnabled)
 
 		// Update
 		saved.LogRetentionDays = 90
 		saved.DiscordAlertModUpdates = false
 		saved.ModUpdateCheckIntervalMinutes = 60
+		saved.EventRosterEnabled = true
 		err = repo.Save(ctx, saved)
 		assert.NoError(t, err)
 
@@ -73,5 +77,6 @@ func TestRepository(t *testing.T) {
 		assert.Equal(t, 2048, updated.LogMaxTotalSizeMB)
 		assert.False(t, updated.DiscordAlertModUpdates)
 		assert.Equal(t, 60, updated.ModUpdateCheckIntervalMinutes)
+		assert.True(t, updated.EventRosterEnabled)
 	})
 }

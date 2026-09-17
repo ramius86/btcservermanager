@@ -3,6 +3,7 @@ package discordbot
 import (
 	"context"
 	"database/sql"
+	"errors"
 )
 
 type Repository struct {
@@ -472,6 +473,159 @@ func (r *Repository) RenameQualification(ctx context.Context, oldName, newName s
 		WHERE qualification_name = ?`
 	if _, err := tx.ExecContext(ctx, updateQuery, newName, oldName); err != nil {
 		return err
+	}
+
+	return tx.Commit()
+}
+
+func (r *Repository) GetEventRoster(ctx context.Context, eventID int64) (*EventRoster, error) {
+	query := `SELECT event_id, data, updated_at FROM discord_event_rosters WHERE event_id = ?`
+	var roster EventRoster
+	err := r.db.QueryRowContext(ctx, query, eventID).Scan(&roster.EventID, &roster.Data, &roster.UpdatedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &roster, nil
+}
+
+func (r *Repository) SaveEventRoster(ctx context.Context, eventID int64, data string) error {
+	query := `
+		INSERT INTO discord_event_rosters (event_id, data, updated_at)
+		VALUES (?, ?, datetime('now'))
+		ON CONFLICT(event_id) DO UPDATE SET
+			data = excluded.data,
+			updated_at = excluded.updated_at
+	`
+	_, err := r.db.ExecContext(ctx, query, eventID, data)
+	return err
+}
+
+func (r *Repository) GetRosterTemplates(ctx context.Context) ([]RosterTemplate, error) {
+	query := `SELECT id, name, game_type, structure, created_at FROM discord_roster_templates ORDER BY created_at ASC`
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var templates []RosterTemplate
+	for rows.Next() {
+		var t RosterTemplate
+		if err := rows.Scan(&t.ID, &t.Name, &t.GameType, &t.Structure, &t.CreatedAt); err != nil {
+			return nil, err
+		}
+		templates = append(templates, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if templates == nil {
+		templates = []RosterTemplate{}
+	}
+	return templates, nil
+}
+
+func (r *Repository) SaveRosterTemplate(ctx context.Context, name, gameType, structure string) (*RosterTemplate, error) {
+	query := `
+		INSERT INTO discord_roster_templates (name, game_type, structure, created_at)
+		VALUES (?, ?, ?, datetime('now'))
+	`
+	res, err := r.db.ExecContext(ctx, query, name, gameType, structure)
+	if err != nil {
+		return nil, err
+	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		return nil, err
+	}
+	return &RosterTemplate{
+		ID:        id,
+		Name:      name,
+		GameType:  gameType,
+		Structure: structure,
+	}, nil
+}
+
+func (r *Repository) DeleteRosterTemplate(ctx context.Context, id int64) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM discord_roster_templates WHERE id = ?`, id)
+	return err
+}
+
+func (r *Repository) GetPlayerRoleStats(ctx context.Context, gameType string) ([]PlayerRoleStat, error) {
+	var rows *sql.Rows
+	var err error
+	if gameType == "" || gameType == "all" {
+		query := `SELECT user_id, player_name, role, game_type, play_count, last_used_at FROM discord_player_role_history ORDER BY play_count DESC`
+		rows, err = r.db.QueryContext(ctx, query)
+	} else {
+		query := `SELECT user_id, player_name, role, game_type, play_count, last_used_at FROM discord_player_role_history WHERE game_type = ? OR game_type = 'all' ORDER BY play_count DESC`
+		rows, err = r.db.QueryContext(ctx, query, gameType)
+	}
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []PlayerRoleStat
+	for rows.Next() {
+		var s PlayerRoleStat
+		if err := rows.Scan(&s.UserID, &s.PlayerName, &s.Role, &s.GameType, &s.PlayCount, &s.LastUsedAt); err != nil {
+			return nil, err
+		}
+		stats = append(stats, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if stats == nil {
+		stats = []PlayerRoleStat{}
+	}
+	return stats, nil
+}
+
+func (r *Repository) RecordPlayerRoleUsage(ctx context.Context, records []PlayerRoleRecord, gameType string) error {
+	if len(records) == 0 {
+		return nil
+	}
+	if gameType == "" {
+		gameType = "all"
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		INSERT INTO discord_player_role_history (user_id, player_name, role, game_type, play_count, last_used_at)
+		VALUES (?, ?, ?, ?, 1, datetime('now'))
+		ON CONFLICT(user_id, role, game_type) DO UPDATE SET
+			player_name = excluded.player_name,
+			play_count = play_count + 1,
+			last_used_at = excluded.last_used_at
+	`)
+	if err != nil {
+		return err
+	}
+	defer stmt.Close()
+
+	for _, rec := range records {
+		if rec.UserID == "" && rec.PlayerName == "" {
+			continue
+		}
+		uid := rec.UserID
+		if uid == "" {
+			uid = rec.PlayerName
+		}
+		if _, err := stmt.ExecContext(ctx, uid, rec.PlayerName, rec.Role, gameType); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()

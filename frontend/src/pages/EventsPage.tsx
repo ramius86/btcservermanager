@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef, useMemo } from 'react'
-import { CalendarDays, Plus, Trash2, X, Pencil, BarChart3, Users } from 'lucide-react'
+import { CalendarDays, Plus, Trash2, X, Pencil, BarChart3, Users, ListOrdered } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Card } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -14,6 +14,7 @@ import {
   DiscordEventDetail,
   DiscordChannel,
   DiscordRole,
+  SettingsService,
 } from '../services/api'
 
 type Tag = { value: string; label: string }
@@ -24,6 +25,7 @@ export function EventsPage() {
   const [configured, setConfigured] = useState<boolean>(true)
   const [loading, setLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [rosterEnabled, setRosterEnabled] = useState(true)
   const [events, setEvents] = useState<DiscordEventDetail[]>([])
   const [channels, setChannels] = useState<DiscordChannel[]>([])
   const [roles, setRoles] = useState<DiscordRole[]>([])
@@ -108,12 +110,17 @@ export function EventsPage() {
       setConfigured(status.configured)
       
       if (status.configured) {
-        const [chans, evts, fetchedRoles] = await Promise.all([
+        const [chans, evts, fetchedRoles, appSettings] = await Promise.all([
           DiscordService.getChannels(),
           DiscordService.getEvents(),
-          DiscordService.getRoles()
+          DiscordService.getRoles(),
+          SettingsService.getSettings().catch(() => null),
         ])
         
+        if (appSettings && typeof appSettings.eventRosterEnabled === 'boolean') {
+          setRosterEnabled(appSettings.eventRosterEnabled)
+        }
+
         setChannels(chans || [])
         setRoles(fetchedRoles || [])
         
@@ -514,10 +521,24 @@ export function EventsPage() {
                     </div>
                   </div>
                   
+                  {rosterEnabled && (
+                    <Link to={`/events/${event.id}/roster`} className="ml-auto">
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        className="h-8 px-2.5 gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60 text-[10px] font-bold uppercase tracking-wider"
+                        title="Interactive Squad Roster"
+                      >
+                        <ListOrdered className="w-3.5 h-3.5" />
+                        Roster
+                      </Button>
+                    </Link>
+                  )}
+
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="text-success hover:bg-success/10 ml-auto"
+                    className={`text-success hover:bg-success/10 ${rosterEnabled ? '' : 'ml-auto'}`}
                     onClick={() => setRsvpEvent({ id: event.id, title: event.title })}
                     title="Manage RSVPs"
                   >
