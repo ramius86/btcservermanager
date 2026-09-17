@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/binary"
 	"io"
+	"slices"
 	"time"
 )
 
@@ -106,8 +107,16 @@ func (pbo *PBOWriter) WriteTo(w io.Writer) (int64, error) {
 		}
 	}
 
+	// Sort filenames to ensure deterministic ordering between headers and file data
+	filenames := make([]string, 0, len(pbo.files))
+	for name := range pbo.files {
+		filenames = append(filenames, name)
+	}
+	slices.Sort(filenames)
+
 	// Write file headers
-	for name, content := range pbo.files {
+	for _, name := range filenames {
+		content := pbo.files[name]
 		size := uint32(len(content))
 		timestamp := uint32(time.Now().Unix())
 
@@ -130,8 +139,8 @@ func (pbo *PBOWriter) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// Write file data
-	for _, content := range pbo.files {
-		if _, err := pbo.Buffer.Write(content); err != nil {
+	for _, name := range filenames {
+		if _, err := pbo.Buffer.Write(pbo.files[name]); err != nil {
 			return 0, err
 		}
 	}
