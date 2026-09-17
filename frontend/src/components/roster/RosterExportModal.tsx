@@ -18,6 +18,8 @@ interface RosterExportModalProps {
   readonly squads: RosterSquad[]
 }
 
+const ROSTER_CHANNEL_STORAGE_KEY = 'discord_roster_channel'
+
 export function RosterExportModal({
   isOpen,
   onClose,
@@ -30,14 +32,23 @@ export function RosterExportModal({
 
   const [headerText, setHeaderText] = useState('@here slotlist per stasera')
   const [copied, setCopied] = useState(false)
-  const [selectedChannel, setSelectedChannel] = useState(defaultChannelId)
+  const [selectedChannel, setSelectedChannel] = useState<string>(() => {
+    const saved = localStorage.getItem(ROSTER_CHANNEL_STORAGE_KEY)
+    if (saved && channels.some(c => c.id === saved)) {
+      return saved
+    }
+    return defaultChannelId
+  })
   const [sending, setSending] = useState(false)
 
   React.useEffect(() => {
-    if (defaultChannelId && !selectedChannel) {
+    const saved = localStorage.getItem(ROSTER_CHANNEL_STORAGE_KEY)
+    if (saved && channels.some(c => c.id === saved)) {
+      setSelectedChannel(saved)
+    } else if (defaultChannelId && channels.some(c => c.id === defaultChannelId)) {
       setSelectedChannel(defaultChannelId)
     }
-  }, [defaultChannelId])
+  }, [defaultChannelId, channels])
 
   const formattedText = useMemo(() => {
     return formatRosterForDiscord(headerText, squads)
@@ -55,6 +66,14 @@ export function RosterExportModal({
     }
   }
 
+  const handleChannelChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const ch = e.target.value
+    setSelectedChannel(ch)
+    if (ch) {
+      localStorage.setItem(ROSTER_CHANNEL_STORAGE_KEY, ch)
+    }
+  }
+
   const handleSendToDiscord = async () => {
     if (!selectedChannel) {
       showToast('Please select a Discord channel', 'error')
@@ -63,6 +82,7 @@ export function RosterExportModal({
 
     try {
       setSending(true)
+      localStorage.setItem(ROSTER_CHANNEL_STORAGE_KEY, selectedChannel)
       await DiscordService.publishEventRoster(eventId, selectedChannel, formattedText)
       showToast('Slotlist published to Discord channel!', 'success')
       onClose()
@@ -118,36 +138,48 @@ export function RosterExportModal({
           </div>
 
           {channels.length > 0 && (
-            <div className="pt-3 border-t border-border flex flex-col sm:flex-row items-center gap-2.5">
-              <div className="flex-1 w-full sm:w-auto">
-                <select
-                  value={selectedChannel}
-                  onChange={e => setSelectedChannel(e.target.value)}
-                  className="w-full flex h-8 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-                >
-                  <option value="">Select Discord Channel...</option>
-                  {channels.map(c => (
-                    <option key={c.id} value={c.id}>
-                      #{c.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="pt-3 border-t border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="roster-channel-select" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5">
+                  <Send className="w-3 h-3 text-primary" />
+                  Target Discord Channel
+                </label>
+                <span className="text-[10px] text-muted-foreground italic">
+                  (remembered for future events)
+                </span>
               </div>
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={handleSendToDiscord}
-                disabled={sending || !selectedChannel}
-                className="w-full sm:w-auto h-8 text-xs font-semibold shrink-0"
-              >
-                {sending ? (
-                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                ) : (
-                  <Send className="w-3.5 h-3.5 mr-1.5" />
-                )}
-                Post to Discord
-              </Button>
+              <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                <div className="flex-1 w-full sm:w-auto">
+                  <select
+                    id="roster-channel-select"
+                    value={selectedChannel}
+                    onChange={handleChannelChange}
+                    className="w-full flex h-8 rounded-md border border-border bg-surface px-2.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  >
+                    <option value="">Select Discord Channel...</option>
+                    {channels.map(c => (
+                      <option key={c.id} value={c.id}>
+                        #{c.name} {c.id === defaultChannelId ? '(Event Default)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleSendToDiscord}
+                  disabled={sending || !selectedChannel}
+                  className="w-full sm:w-auto h-8 text-xs font-semibold shrink-0"
+                >
+                  {sending ? (
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Send className="w-3.5 h-3.5 mr-1.5" />
+                  )}
+                  Post to Discord
+                </Button>
+              </div>
             </div>
           )}
         </div>

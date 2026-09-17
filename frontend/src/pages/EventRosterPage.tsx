@@ -5,7 +5,7 @@ import {
   Users,
   Sparkles,
   Bookmark,
-  Copy,
+  Send,
   Save,
   Plus,
   Trash2,
@@ -528,9 +528,10 @@ export function EventRosterPage() {
               onClick={() => setIsExportModalOpen(true)}
               disabled={squads.length === 0}
               className="text-xs font-semibold h-9"
+              title="Preview, copy formatted slotlist, or publish directly to Discord"
             >
-              <Copy className="w-3.5 h-3.5 mr-1.5" />
-              Copy for Discord
+              <Send className="w-3.5 h-3.5 mr-1.5 text-primary" />
+              Publish to Discord
             </Button>
 
             <Button
