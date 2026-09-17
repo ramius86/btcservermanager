@@ -71,26 +71,61 @@ export const LogExplorerPage: React.FC = () => {
       return live
     }
 
-    const seenPrefixes = new Set<string>()
-    for (const f of files) {
-      const match = serverIdRegex.exec(f)
-      if (!match) continue
+    const activeServersWithoutLogFile: number[] = []
+    Object.values(statuses).forEach(status => {
+      if (status.alive) {
+        if (status.info?.currentLogFile) {
+          live.add(status.info.currentLogFile)
+        } else {
+          activeServersWithoutLogFile.push(status.server_id)
+        }
+      }
+    })
 
-      const serverId = Number(match[2])
-      const prefixMatch = prefixRegex.exec(f)
-      if (!prefixMatch) continue
+    if (activeServersWithoutLogFile.length > 0) {
+      const activeIds = new Set(activeServersWithoutLogFile)
+      const seenPrefixes = new Set<string>()
+      for (const f of files) {
+        const match = serverIdRegex.exec(f)
+        if (!match) continue
 
-      const prefix = prefixMatch[1]
-      if (seenPrefixes.has(prefix)) continue
+        const serverId = Number(match[2])
+        if (!activeIds.has(serverId)) continue
 
-      seenPrefixes.add(prefix)
-      if (statuses[serverId]?.alive) {
+        const prefixMatch = prefixRegex.exec(f)
+        if (!prefixMatch) continue
+
+        const prefix = prefixMatch[1]
+        if (seenPrefixes.has(prefix)) continue
+
+        seenPrefixes.add(prefix)
         live.add(f)
       }
     }
 
     return live
   }, [files, statuses, installations, logType])
+
+  const isCurrentLog = React.useMemo(() => {
+    if (!selectedFile) return false
+
+    if (logType === 'steamcmd') {
+      return Object.keys(installations).length > 0 && liveFiles.has(selectedFile)
+    }
+
+    const match = serverIdRegex.exec(selectedFile)
+    if (!match) return false
+
+    const serverId = Number(match[2])
+    const status = statuses[serverId]
+    if (!status?.alive) return false
+
+    if (status.info?.currentLogFile) {
+      return status.info.currentLogFile === selectedFile
+    }
+
+    return liveFiles.has(selectedFile)
+  }, [selectedFile, logType, statuses, installations, liveFiles])
 
 
   // Handle auto-scroll toggle from Virtuoso
@@ -125,7 +160,8 @@ export const LogExplorerPage: React.FC = () => {
 
   // WebSocket Live Updates
   useEffect(() => {
-    if (!selectedFile) return
+    if (!selectedFile || !isCurrentLog) return
+
     if (logType === 'steamcmd') {
       if (selectedFile.startsWith('steamcmd_') && selectedFile.endsWith('.log')) {
         return subscribe('steamcmd_log', (e) => {
@@ -133,9 +169,9 @@ export const LogExplorerPage: React.FC = () => {
         })
       }
     } else {
-      const parts = selectedFile.split('_')
-      if (parts.length >= 2) {
-        const serverId = Number.parseInt(parts[1], 10)
+      const match = serverIdRegex.exec(selectedFile)
+      if (match) {
+        const serverId = Number.parseInt(match[2], 10)
         if (!Number.isNaN(serverId)) {
           return subscribe('server_log', (e) => {
             setLines(prev => [...prev, ...e.payload.message.split('\n')])
@@ -143,7 +179,7 @@ export const LogExplorerPage: React.FC = () => {
         }
       }
     }
-  }, [subscribe, logType, selectedFile])
+  }, [subscribe, logType, selectedFile, isCurrentLog])
 
   const fetchFiles = async () => {
     const qType = searchParams.get('type') as 'steamcmd' | 'server' || 'steamcmd'

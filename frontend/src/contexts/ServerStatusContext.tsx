@@ -13,6 +13,7 @@ export interface ServerStatus {
     mission: string
     headlessClientsCount: number
     lastReforgerStat?: any
+    currentLogFile?: string
   }
 }
 
