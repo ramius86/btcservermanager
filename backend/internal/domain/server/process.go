@@ -321,11 +321,11 @@ func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logF
 		p.mu.Unlock()
 
 		if wasStopping {
-			log.Printf("[ProcessManager] Server ID %d stopped by user", p.serverID)
+			log.Printf("[ProcessManager] Server ID %d (Type: %v) stopped by user", p.serverID, p.serverType)
 		} else if err != nil {
-			log.Printf("[ProcessManager] Server ID %d exited with error: %v", p.serverID, err)
+			log.Printf("[ProcessManager] Server ID %d (Type: %v) exited with error: %v", p.serverID, p.serverType, err)
 		} else {
-			log.Printf("[ProcessManager] Server ID %d exited normally (exit code 0)", p.serverID)
+			log.Printf("[ProcessManager] Server ID %d (Type: %v) exited normally (exit code 0)", p.serverID, p.serverType)
 		}
 
 		close(p.stopCh)
