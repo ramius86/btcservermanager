@@ -286,6 +286,45 @@ export interface ClanMember {
 	qualifications: string[]
 }
 
+export interface RosterSlot {
+	id: string
+	role: string
+	assignedPlayerName?: string
+	assignedUserId?: string
+	isMaybe?: boolean
+	isGuest?: boolean
+}
+
+export interface RosterSquad {
+	id: string
+	name: string
+	slots: RosterSlot[]
+}
+
+export interface EventRosterData {
+	eventId: number
+	headerText?: string
+	squads: RosterSquad[]
+	updatedAt?: string
+}
+
+export interface RosterTemplate {
+	id: number
+	name: string
+	gameType: string
+	structure: string
+	createdAt: string
+}
+
+export interface PlayerRoleStat {
+	userId: string
+	playerName: string
+	role: string
+	gameType: string
+	playCount: number
+	lastUsedAt: string
+}
+
 export const DiscordService = {
 	getStatus: (): Promise<{ connected: boolean, configured: boolean }> => fetchApi('/discord/status'),
 	getChannels: (): Promise<DiscordChannel[]> => fetchApi('/discord/channels'),
@@ -304,6 +343,16 @@ export const DiscordService = {
 	getClanMembers: (): Promise<ClanMember[]> => fetchApi('/discord/clan-members'),
 	saveClanQualifications: (data: { userIds: string[], qualifications: { userId: string, qualificationName: string }[] }): Promise<void> => fetchApi('/discord/clan-members/qualifications', { method: 'PUT', body: JSON.stringify(data) }),
 	sendTestAlert: (channelId: string): Promise<{ success: boolean }> => fetchApi('/discord/alerts/test', { method: 'POST', body: JSON.stringify({ channelId }) }),
+	getEventRoster: (eventId: number): Promise<{ eventId: number; data: string; updatedAt: string }> => fetchApi(`/discord/events/${eventId}/roster`),
+	saveEventRoster: (eventId: number, data: { data: string; gameType: string; assignments: { userId: string; playerName: string; role: string }[] }): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster`, { method: 'PUT', body: JSON.stringify(data) }),
+	publishEventRoster: (eventId: number, channelId: string, message: string): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster/publish`, { method: 'POST', body: JSON.stringify({ channelId, message }) }),
+	getRosterTemplates: (): Promise<RosterTemplate[]> => fetchApi('/discord/roster/templates'),
+	saveRosterTemplate: (data: { name: string; gameType: string; structure: string }): Promise<RosterTemplate> => fetchApi('/discord/roster/templates', { method: 'POST', body: JSON.stringify(data) }),
+	deleteRosterTemplate: (id: number): Promise<void> => fetchApi(`/discord/roster/templates/${id}`, { method: 'DELETE' }),
+	getLearningStats: (gameType?: string): Promise<PlayerRoleStat[]> => {
+		const param = gameType ? `?gameType=${encodeURIComponent(gameType)}` : ''
+		return fetchApi(`/discord/roster/learning-stats${param}`)
+	},
 }
 
 export const FileManagerService = {
@@ -359,14 +408,14 @@ export const FileManagerService = {
       throw new Error(`Zip download failed: ${res.status} ${res.statusText} ${errorBody}`)
     }
     const blob = await res.blob()
-    const url = window.URL.createObjectURL(blob)
+    const url = globalThis.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
     a.download = filename
     document.body.appendChild(a)
     a.click()
-    document.body.removeChild(a)
-    window.URL.revokeObjectURL(url)
+    a.remove()
+    globalThis.URL.revokeObjectURL(url)
   },
   extractZip: (data: ExtractZipDto): Promise<{ message: string }> =>
     fetchApi('/files/extract', {

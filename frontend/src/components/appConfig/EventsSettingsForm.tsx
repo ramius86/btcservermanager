@@ -1,13 +1,15 @@
 import React from 'react'
-import { Clock, MessageSquare, Save, Info } from 'lucide-react'
+import { Clock, MessageSquare, Save, Info, Users } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
+import { Switch } from '../ui/Switch'
 
 interface EventsSettings {
   discordReminderHours: number
   discordReminderMessage: string
+  eventRosterEnabled?: boolean
 }
 
 interface EventsSettingsFormProps {
@@ -81,6 +83,22 @@ export function EventsSettingsForm({ settings, onSave }: Readonly<EventsSettings
               onChange={e => setLocalSettings({ ...localSettings, discordReminderMessage: e.target.value })}
             />
             <p className="text-[9px] text-muted-foreground italic px-1">This text will be prepended to the event details in the DM.</p>
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-surface/50 rounded-lg border border-border">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" />
+                <span className="text-sm font-bold text-foreground">Interactive Event Roster</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Enable squad and slot roster management for game events with role suggestions and slotlist export.
+              </p>
+            </div>
+            <Switch
+              checked={localSettings.eventRosterEnabled ?? true}
+              onCheckedChange={(checked) => setLocalSettings({ ...localSettings, eventRosterEnabled: checked })}
+            />
           </div>
 
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-border">

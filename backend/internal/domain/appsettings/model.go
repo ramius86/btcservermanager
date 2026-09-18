@@ -14,4 +14,5 @@ type AppSettings struct {
 	DiscordAlertGameUpdates        bool     `json:"discordAlertGameUpdates"`
 	ModUpdateCheckIntervalMinutes  int      `json:"modUpdateCheckIntervalMinutes"`
 	GameUpdateCheckIntervalMinutes int      `json:"gameUpdateCheckIntervalMinutes"`
+	EventRosterEnabled             bool     `json:"eventRosterEnabled"`
 }

@@ -646,6 +646,50 @@ func (s *Service) fetchAllGuildMembers() ([]*discordgo.Member, error) {
 	return allMembers, nil
 }
 
+func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
+	s.membersCacheMu.RLock()
+	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+		members := s.membersCache
+		s.membersCacheMu.RUnlock()
+		return members, nil
+	}
+	s.membersCacheMu.RUnlock()
+
+	s.membersCacheMu.Lock()
+	defer s.membersCacheMu.Unlock()
+
+	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+		return s.membersCache, nil
+	}
+
+	allMembers, err := s.fetchAllGuildMembers()
+	if err != nil {
+		return nil, err
+	}
+	s.membersCache = allMembers
+	s.membersCacheExpiry = time.Now().Add(5 * time.Minute)
+	return allMembers, nil
+}
+
+func hasConfiguredRole(memberRoles []string, roleMap map[string]bool) bool {
+	for _, rID := range memberRoles {
+		if roleMap[rID] {
+			return true
+		}
+	}
+	return false
+}
+
+func getMemberDisplayName(m *discordgo.Member) string {
+	if m.Nick != "" {
+		return m.Nick
+	}
+	if m.User.GlobalName != "" {
+		return m.User.GlobalName
+	}
+	return m.User.Username
+}
+
 func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanMember, error) {
 	if s.session == nil {
 		return nil, errors.New(errBotNotConfigured)
@@ -656,88 +700,37 @@ func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanM
 		return nil, fmt.Errorf("failed to fetch inactive users: %w", err)
 	}
 
-	var allMembers []*discordgo.Member
-	var errFetch error
-
-	s.membersCacheMu.RLock()
-	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
-		allMembers = s.membersCache
-		s.membersCacheMu.RUnlock()
-	} else {
-		s.membersCacheMu.RUnlock()
-		s.membersCacheMu.Lock()
-		// Double check within write lock
-		if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
-			allMembers = s.membersCache
-			s.membersCacheMu.Unlock()
-		} else {
-			allMembers, errFetch = s.fetchAllGuildMembers()
-			if errFetch != nil {
-				s.membersCacheMu.Unlock()
-				return nil, errFetch
-			}
-			s.membersCache = allMembers
-			s.membersCacheExpiry = time.Now().Add(5 * time.Minute)
-			s.membersCacheMu.Unlock()
-		}
+	allMembers, err := s.getCachedGuildMembers()
+	if err != nil {
+		return nil, err
 	}
 
-	// Build a fast lookup for requested roleIDs
-	roleMap := make(map[string]bool)
+	roleMap := make(map[string]bool, len(roleIDs))
 	for _, id := range roleIDs {
 		roleMap[id] = true
 	}
 
-	// Filter and build result list
 	var clanMembers []ClanMember
 	var userIDs []string
+
 	for _, m := range allMembers {
-		if m.User.Bot {
+		if m.User.Bot || inactiveMap[m.User.ID] || len(roleIDs) == 0 || !hasConfiguredRole(m.Roles, roleMap) {
 			continue
 		}
 
-		hasRole := false
-		if len(roleIDs) == 0 {
-			// If no roles configured, maybe return empty or all? The requirement says "filter by configured roles".
-			// If no roles are configured, it means no one is considered a clan member yet.
-		} else {
-			for _, rID := range m.Roles {
-				if roleMap[rID] {
-					hasRole = true
-					break
-				}
-			}
-		}
-
-		if hasRole {
-			if inactiveMap[m.User.ID] {
-				continue
-			}
-
-			displayName := m.User.Username
-			if m.User.GlobalName != "" {
-				displayName = m.User.GlobalName
-			}
-			if m.Nick != "" {
-				displayName = m.Nick
-			}
-
-			clanMembers = append(clanMembers, ClanMember{
-				ID:             m.User.ID,
-				DisplayName:    displayName,
-				Qualifications: []string{}, // Will be populated next
-			})
-			userIDs = append(userIDs, m.User.ID)
-		}
+		clanMembers = append(clanMembers, ClanMember{
+			ID:             m.User.ID,
+			DisplayName:    getMemberDisplayName(m),
+			Qualifications: []string{},
+		})
+		userIDs = append(userIDs, m.User.ID)
 	}
 
-	// Fetch qualifications from DB
 	qualsMap, err := s.repo.GetMemberQualifications(ctx, userIDs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch member qualifications: %w", err)
 	}
 
-	// Populate qualifications
 	for i, cm := range clanMembers {
 		if qs, ok := qualsMap[cm.ID]; ok {
 			clanMembers[i].Qualifications = qs
@@ -824,4 +817,12 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
 		log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
 	}
+}
+
+func (s *Service) PublishRosterMessage(ctx context.Context, channelID, message string) error {
+	if s.session == nil {
+		return errors.New(errBotNotConfigured)
+	}
+	_, err := s.session.ChannelMessageSend(channelID, message)
+	return err
 }

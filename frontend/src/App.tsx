@@ -18,6 +18,7 @@ const FileManagerPage = lazy(() => import('./pages/FileManagerPage').then(m => (
 const AppConfigPage = lazy(() => import('./pages/AppConfigPage').then(m => ({ default: m.AppConfigPage })))
 const EventsPage = lazy(() => import('./pages/EventsPage').then(m => ({ default: m.EventsPage })))
 const EventsStatsPage = lazy(() => import('./pages/EventsStatsPage').then(m => ({ default: m.EventsStatsPage })))
+const EventRosterPage = lazy(() => import('./pages/EventRosterPage').then(m => ({ default: m.EventRosterPage })))
 const MembersPage = lazy(() => import('./pages/MembersPage').then(m => ({ default: m.MembersPage })))
 
 const PageLoader = () => (
@@ -51,6 +52,7 @@ export default function App() {
                       <Route path="/files" element={<FileManagerPage />} />
                       <Route path="/events" element={<EventsPage />} />
                       <Route path="/events/stats" element={<EventsStatsPage />} />
+                      <Route path="/events/:id/roster" element={<EventRosterPage />} />
                       <Route path="/members" element={<MembersPage />} />
                       <Route path="/config" element={<AppConfigPage />} />
                       <Route path="/settings" element={<Navigate to="/config" replace />} />
