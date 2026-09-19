@@ -62,21 +62,21 @@ Here's a quick look at the main features of the BTC Server Manager interface:
 * **Automated Signature Key Sync**: Scans mod folders, extracts Arma 3 `.bikey` signature verification keys, and copies them to the server's secure `keys/` directory automatically upon installation.
 * **CBA Settings Generation**: Automatically generates and packages a PBO mod (`@cba_server_N`) for CBA settings to seamlessly integrate custom server configurations.
 
-### Visual Configuration Editors
+### Visual Configuration Editors & File Manager
 * **Dynamic File Editors**: View and edit critical server settings (such as `server.cfg`, `serverDZ.cfg`, or JSON settings) with side-by-side physical file previews.
-* **Mod Preset Management**: Import and export Arma 3 Launcher compatible `.html` mod presets seamlessly.
+* **Web File Manager**: Browse server storage directories, upload/download files, create and extract ZIP archives, and edit configuration/script files directly in the browser.
+* **Mod Preset Management**: Create, import, and export mod presets for Arma 3 (HTML launcher format) and Arma Reforger.
 
 ### Arma 3 Scenario & Process Orchestration
 * **Mission Uploads**: Upload scenario `.pbo` files directly through the dashboard.
 * **Headless Client Orchestration**: Automatically spin up and link local Headless Clients (HC) to offload AI processing and maintain high server FPS.
 
-### Discord Events Integration
-* **Event Creation & Management**: Administrators can easily create, schedule, and post Arma 3 and Reforger game events directly to Discord channels from the web dashboard.
-* **Interactive RSVP System**: Discord messages include interactive buttons ("Going", "Not Going", "Maybe") allowing community members to RSVP directly.
-* **Automated Sync**: Real-time processing of Discord interactions keeps the RSVP lists updated and automatically deduplicates users.
-* **Attendance Tracking**: Track and view detailed attendance statistics and history for events via the `/events/stats` endpoint.
-* **Members & Qualifications**: Automatically fetches Discord roles to manage a dedicated clan members table. Administrators can assign and track specific player qualifications and licenses directly from the dashboard.
-* **Graceful Degradation**: The manager works perfectly even if the Discord bot is not configured, automatically hiding the events UI.
+### Discord Integration & Community Operations
+* **Event Creation & Interactive RSVP**: Schedule events with interactive Discord buttons ("Going", "Not Going", "Maybe"), automated member reminders, and real-time attendance tracking.
+* **Interactive Tactical Roster**: Build event rosters with custom squads, radio frequencies, smart slot auto-assignment based on clan qualifications/history, reusable templates, and direct Discord publishing.
+* **Clan Members & Qualifications**: Manage clan members synced with Discord roles, assign custom qualification badges with drag-and-drop ordering, and track activity status.
+* **Operational Alerts**: Automated Discord notifications for unexpected server crashes, Steam Workshop mod updates, and dedicated server game updates with configurable scan intervals.
+* **Graceful Degradation**: The manager works perfectly even if the Discord bot is not configured, automatically hiding Discord-dependent UI.
 
 ### Passwordless Steam Authentication
 * **Steam QR Code Login**: Authenticate SteamCMD sessions using the official Steam Mobile App QR code scanning feature (`BeginAuthSessionViaQR`). This allows secure workshop downloads without storing plain-text user passwords or manual Steam Guard email verification on headless hosts.
@@ -92,9 +92,11 @@ Here's a quick look at the main features of the BTC Server Manager interface:
 | SteamCMD Mod Sync | Yes | Yes | Yes (Reforger Workshop) |
 | Reforger Scenario Auto-Sync | No | No | Yes |
 | Reforger Hex ID Auto-Resolution | No | No | Yes |
+| Reforger Custom Names (`BTC_custom_names`) | No | No | Yes |
 | Live Log Telemetry | Yes | Yes | Yes (Console scraping) |
+| Web File Manager Access | Yes | Yes | Yes |
 | Mission Management (.pbo) | Yes | No | No |
-| Mod Preset Export/Import | Yes (HTML format) | Yes | No |
+| Mod Preset Export/Import | Yes (HTML format) | Yes | Yes |
 | Headless Client Support | Yes | No | No |
 
 ---
