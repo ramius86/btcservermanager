@@ -41,6 +41,7 @@ import {
   smartFillSquads,
   qualificationMatchesRole,
   generateId,
+  buildDefaultRosterHeader,
 } from '../components/roster/rosterUtils'
 import { SlotPickerModal } from '../components/roster/SlotPickerModal'
 import { RosterTemplateModal } from '../components/roster/RosterTemplateModal'
@@ -216,7 +217,7 @@ export function EventRosterPage() {
   // Main roster state
   const [squads, setSquads] = useState<RosterSquad[]>([])
   const [guests, setGuests] = useState<string[]>([])
-  const [headerText, setHeaderText] = useState('@here slotlist per stasera')
+  const [headerText, setHeaderText] = useState('')
 
   // Search & Filters in Sidebar
   const [searchQuery, setSearchQuery] = useState('')
@@ -252,21 +253,28 @@ export function EventRosterPage() {
       setClanMembers(members || [])
       setLearningStats(stats || [])
 
+      const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType)
+
       if (savedRoster?.data) {
         try {
           const parsed = JSON.parse(savedRoster.data)
           if (Array.isArray(parsed?.squads)) {
             setSquads(parsed.squads)
           }
-          if (parsed.headerText) {
+          if (parsed.headerText && parsed.headerText !== '@here slotlist per stasera') {
             setHeaderText(parsed.headerText)
+          } else {
+            setHeaderText(defaultHeader)
           }
           if (Array.isArray(parsed?.guests)) {
             setGuests(parsed.guests)
           }
         } catch (e) {
           console.error('Failed to parse saved roster', e)
+          setHeaderText(defaultHeader)
         }
+      } else {
+        setHeaderText(defaultHeader)
       }
     } catch (err: any) {
       console.error(err)
@@ -1025,6 +1033,10 @@ export function EventRosterPage() {
         defaultChannelId={eventDetail?.channelId}
         channels={channels}
         squads={squads}
+        headerText={headerText}
+        onHeaderChange={setHeaderText}
+        dateTime={eventDetail?.dateTime}
+        gameType={eventDetail?.gameType}
       />
 
       {/* Reset Confirmation Dialog */}

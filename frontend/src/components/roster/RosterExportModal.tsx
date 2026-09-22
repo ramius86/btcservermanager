@@ -18,7 +18,7 @@ import { Textarea } from '../ui/Textarea'
 import { useToast } from '../ui/Toast'
 import type { RosterSquad, DiscordChannel } from '../../services/api'
 import { DiscordService } from '../../services/api'
-import { formatRosterForDiscord } from './rosterUtils'
+import { formatRosterForDiscord, buildDefaultRosterHeader } from './rosterUtils'
 
 interface RosterExportModalProps {
   readonly isOpen: boolean
@@ -27,6 +27,10 @@ interface RosterExportModalProps {
   readonly defaultChannelId?: string
   readonly channels: DiscordChannel[]
   readonly squads: RosterSquad[]
+  readonly headerText?: string
+  readonly onHeaderChange?: (header: string) => void
+  readonly dateTime?: string
+  readonly gameType?: string
 }
 
 const ROSTER_CHANNEL_STORAGE_KEY = 'discord_roster_channel'
@@ -207,10 +211,27 @@ export function RosterExportModal({
   defaultChannelId = '',
   channels,
   squads,
+  headerText: initialHeaderText,
+  onHeaderChange,
+  dateTime,
+  gameType,
 }: RosterExportModalProps) {
   const { showToast } = useToast()
 
-  const [headerText, setHeaderText] = useState('@here slotlist per stasera')
+  const [headerText, setHeaderText] = useState(() => {
+    return initialHeaderText || buildDefaultRosterHeader(dateTime, gameType)
+  })
+
+  React.useEffect(() => {
+    if (isOpen) {
+      if (initialHeaderText) {
+        setHeaderText(initialHeaderText)
+      } else {
+        setHeaderText(buildDefaultRosterHeader(dateTime, gameType))
+      }
+    }
+  }, [isOpen, initialHeaderText, dateTime, gameType])
+
   const [copied, setCopied] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<string>(() => {
     const saved = localStorage.getItem(ROSTER_CHANNEL_STORAGE_KEY)
@@ -293,8 +314,11 @@ export function RosterExportModal({
             <Input
               id="roster-header-input"
               value={headerText}
-              onChange={e => setHeaderText(e.target.value)}
-              placeholder="e.g. @here slotlist per stasera"
+              onChange={e => {
+                setHeaderText(e.target.value)
+                onHeaderChange?.(e.target.value)
+              }}
+              placeholder="e.g. @here Slotlist per l'evento di questa sera..."
               className="h-8 text-xs bg-surface border-border"
             />
           </div>

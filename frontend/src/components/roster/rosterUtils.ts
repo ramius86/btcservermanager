@@ -390,3 +390,92 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
 
   return lines.join('\n').trim()
 }
+
+const IT_DAYS = [
+  'domenica',
+  'lunedì',
+  'martedì',
+  'mercoledì',
+  'giovedì',
+  'venerdì',
+  'sabato',
+] as const
+
+const IT_MONTHS = [
+  'Gennaio',
+  'Febbraio',
+  'Marzo',
+  'Aprile',
+  'Maggio',
+  'Giugno',
+  'Luglio',
+  'Agosto',
+  'Settembre',
+  'Ottobre',
+  'Novembre',
+  'Dicembre',
+] as const
+
+/**
+ * Formats an event date string (e.g. "2026-09-23T20:30") into Italian localized text:
+ * e.g. "mercoledì 23 Settembre"
+ */
+export function formatItalianEventDate(dateTimeStr?: string): string {
+  if (!dateTimeStr) return ''
+
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateTimeStr.trim())
+  let dateObj: Date | null = null
+
+  if (match) {
+    const year = Number.parseInt(match[1], 10)
+    const month = Number.parseInt(match[2], 10) - 1
+    const day = Number.parseInt(match[3], 10)
+    dateObj = new Date(year, month, day)
+  } else {
+    const parsed = new Date(dateTimeStr)
+    if (!Number.isNaN(parsed.getTime())) {
+      dateObj = parsed
+    }
+  }
+
+  if (!dateObj || Number.isNaN(dateObj.getTime())) {
+    return ''
+  }
+
+  const dayOfWeek = IT_DAYS[dateObj.getDay()]
+  const dayOfMonth = dateObj.getDate()
+  const monthName = IT_MONTHS[dateObj.getMonth()]
+
+  return `${dayOfWeek} ${dayOfMonth} ${monthName}`
+}
+
+/**
+ * Normalizes game type name for Discord export:
+ * "ArmA III" or "ArmA Reforger"
+ */
+export function formatRosterGameName(gameType?: string): string {
+  if (!gameType) return 'ArmA III'
+  const lower = gameType.toLowerCase().trim()
+  if (lower.includes('reforger')) {
+    return 'ArmA Reforger'
+  }
+  if (lower.includes('arma') || lower.includes('arma3') || lower.includes('arma iii')) {
+    return 'ArmA III'
+  }
+  return gameType
+}
+
+/**
+ * Constructs the default Discord roster header message based on date and game:
+ * e.g. "@here Slotlist per l'evento di questa sera, mercoledì 23 Settembre su ArmA III"
+ */
+export function buildDefaultRosterHeader(dateTimeStr?: string, gameType?: string): string {
+  const formattedDate = formatItalianEventDate(dateTimeStr)
+  const formattedGame = formatRosterGameName(gameType)
+
+  if (formattedDate) {
+    return `@here Slotlist per l'evento di questa sera, ${formattedDate} su ${formattedGame}`
+  }
+  return `@here Slotlist per l'evento di questa sera su ${formattedGame}`
+}
+
