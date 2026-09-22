@@ -97,3 +97,44 @@ func TestService_CreateEventMessage(t *testing.T) {
 	assert.Equal(t, "msg123", evt.MessageID)
 	assert.NotZero(t, evt.ID)
 }
+
+func TestService_SyncRosterPreview(t *testing.T) {
+	repo := setupTestDB(t)
+	svc, err := New("dummy_token", "guild123", repo)
+	require.NoError(t, err)
+
+	svc.session.Client.Transport = &mockRoundTripper{
+		roundTripFunc: func(req *http.Request) (*http.Response, error) {
+			if strings.Contains(req.URL.Path, "/messages") {
+				if req.Method == http.MethodPatch {
+					body := `{"id":"existing_msg", "channel_id":"chan123", "content":"updated"}`
+					return &http.Response{
+						StatusCode: 200,
+						Body:       io.NopCloser(strings.NewReader(body)),
+					}, nil
+				}
+				body := `{"id":"new_msg", "channel_id":"chan123", "content":"created"}`
+				return &http.Response{
+					StatusCode: 200,
+					Body:       io.NopCloser(strings.NewReader(body)),
+				}, nil
+			}
+			return &http.Response{StatusCode: 404, Body: io.NopCloser(strings.NewReader(""))}, nil
+		},
+	}
+
+	// 1. New message creation when messageID is empty
+	msgID, err := svc.SyncRosterPreview(context.Background(), "chan123", "", "Hello roster")
+	require.NoError(t, err)
+	assert.Equal(t, "new_msg", msgID)
+
+	// 2. Edit existing message when messageID is provided
+	editedID, err := svc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "Updated roster")
+	require.NoError(t, err)
+	assert.Equal(t, "existing_msg", editedID)
+
+	// 3. Error when bot session is nil
+	nilSvc := &Service{}
+	_, err = nilSvc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "test")
+	assert.Error(t, err)
+}

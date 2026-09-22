@@ -20,6 +20,12 @@ type PublishRosterRequest struct {
 	Message   string `json:"message"`
 }
 
+type SyncRosterPreviewRequest struct {
+	ChannelID string `json:"channelId"`
+	MessageID string `json:"messageId"`
+	Message   string `json:"message"`
+}
+
 type SaveTemplateRequest struct {
 	Name      string `json:"name"`
 	GameType  string `json:"gameType"`
@@ -111,6 +117,36 @@ func (r *Router) handlePublishDiscordEventRoster(w http.ResponseWriter, req *htt
 	}
 
 	r.json(w, map[string]bool{"success": true})
+}
+
+func (r *Router) handleSyncDiscordEventRosterPreview(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil || !r.discordService.IsConfigured() {
+		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
+		return
+	}
+
+	var payload SyncRosterPreviewRequest
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if payload.ChannelID == "" || payload.Message == "" {
+		http.Error(w, "channelId and message are required", http.StatusBadRequest)
+		return
+	}
+
+	msgID, err := r.discordService.SyncRosterPreview(req.Context(), payload.ChannelID, payload.MessageID, payload.Message)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	r.json(w, map[string]interface{}{
+		"success":   true,
+		"channelId": payload.ChannelID,
+		"messageId": msgID,
+	})
 }
 
 func (r *Router) handleGetDiscordRosterTemplates(w http.ResponseWriter, req *http.Request) {

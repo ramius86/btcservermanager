@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  Radio,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -32,6 +33,7 @@ import {
   RosterSquad,
   PlayerRoleStat,
   ClanMember,
+  RosterPreviewConfig,
 } from '../services/api'
 import {
   COMMON_ROLES,
@@ -42,10 +44,70 @@ import {
   qualificationMatchesRole,
   generateId,
   buildDefaultRosterHeader,
+  formatRosterForDiscord,
 } from '../components/roster/rosterUtils'
 import { SlotPickerModal } from '../components/roster/SlotPickerModal'
 import { RosterTemplateModal } from '../components/roster/RosterTemplateModal'
 import { RosterExportModal } from '../components/roster/RosterExportModal'
+import { RosterLivePreviewModal } from '../components/roster/RosterLivePreviewModal'
+
+function parseSavedRosterData(
+  rawData: string,
+  defaultHeader: string
+): {
+  squads: RosterSquad[] | null
+  headerText: string
+  guests: string[] | null
+  preview: RosterPreviewConfig | null
+} {
+  try {
+    const parsed = JSON.parse(rawData)
+    const squads = Array.isArray(parsed?.squads) ? parsed.squads : null
+    const headerText =
+      parsed?.headerText && parsed.headerText !== '@here slotlist per stasera'
+        ? parsed.headerText
+        : defaultHeader
+    const guests = Array.isArray(parsed?.guests) ? parsed.guests : null
+    const preview =
+      parsed?.preview && typeof parsed.preview === 'object'
+        ? {
+            enabled: Boolean(parsed.preview.enabled),
+            channelId: String(parsed.preview.channelId || ''),
+            messageId: String(parsed.preview.messageId || ''),
+            lastSyncedAt: parsed.preview.lastSyncedAt,
+          }
+        : null
+
+    return { squads, headerText, guests, preview }
+  } catch (e) {
+    console.error('Failed to parse saved roster', e)
+    return { squads: null, headerText: defaultHeader, guests: null, preview: null }
+  }
+}
+
+function persistPreviewState(
+  targetEventId: number,
+  hText: string,
+  sq: RosterSquad[],
+  gst: string[],
+  gType: string | undefined,
+  cfg: RosterPreviewConfig
+): void {
+  const payloadData = JSON.stringify({
+    eventId: targetEventId,
+    headerText: hText,
+    squads: sq,
+    guests: gst,
+    preview: cfg,
+  })
+  DiscordService.saveEventRoster(targetEventId, {
+    data: payloadData,
+    gameType: gType || 'all',
+    assignments: [],
+  }).catch(err => {
+    console.warn('Failed to background persist preview config', err)
+  })
+}
 
 function extractCandidates(
   eventDetail: DiscordEventDetail | null,
@@ -229,7 +291,18 @@ export function EventRosterPage() {
   const [pickerSlot, setPickerSlot] = useState<{ squadId: string; slotId: string; role: string; squadName: string } | null>(null)
   const [isTemplateModalOpen, setIsTemplateModalOpen] = useState(false)
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
+
+  // Live Discord Preview State
+  const [previewConfig, setPreviewConfig] = useState<RosterPreviewConfig>({
+    enabled: false,
+    channelId: '',
+    messageId: '',
+  })
+  const [isLiveSyncing, setIsLiveSyncing] = useState(false)
+  const [lastSyncedText, setLastSyncedText] = useState('')
+  const isInitialMount = React.useRef(true)
 
   useEffect(() => {
     if (eventId) {
@@ -256,23 +329,11 @@ export function EventRosterPage() {
       const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType)
 
       if (savedRoster?.data) {
-        try {
-          const parsed = JSON.parse(savedRoster.data)
-          if (Array.isArray(parsed?.squads)) {
-            setSquads(parsed.squads)
-          }
-          if (parsed.headerText && parsed.headerText !== '@here slotlist per stasera') {
-            setHeaderText(parsed.headerText)
-          } else {
-            setHeaderText(defaultHeader)
-          }
-          if (Array.isArray(parsed?.guests)) {
-            setGuests(parsed.guests)
-          }
-        } catch (e) {
-          console.error('Failed to parse saved roster', e)
-          setHeaderText(defaultHeader)
-        }
+        const parsed = parseSavedRosterData(savedRoster.data, defaultHeader)
+        if (parsed.squads) setSquads(parsed.squads)
+        setHeaderText(parsed.headerText)
+        if (parsed.guests) setGuests(parsed.guests)
+        if (parsed.preview) setPreviewConfig(parsed.preview)
       } else {
         setHeaderText(defaultHeader)
       }
@@ -408,6 +469,7 @@ export function EventRosterPage() {
         headerText,
         squads,
         guests,
+        preview: previewConfig,
       })
 
       // Extract player role assignments to train the frequency model
@@ -439,6 +501,113 @@ export function EventRosterPage() {
       setSaving(false)
     }
   }
+
+  // Save or Update Live Preview Configuration
+  const handleSavePreviewConfig = async (newConfig: RosterPreviewConfig, shouldSyncNow = false) => {
+    setPreviewConfig(newConfig)
+    let currentMessageId = newConfig.messageId
+    let updatedLastSyncedAt = newConfig.lastSyncedAt
+
+    if (shouldSyncNow && newConfig.enabled && newConfig.channelId) {
+      setIsLiveSyncing(true)
+      try {
+        const textToSync = formatRosterForDiscord(headerText, squads)
+        const res = await DiscordService.syncEventRosterPreview(eventId, {
+          channelId: newConfig.channelId,
+          messageId: newConfig.messageId,
+          message: textToSync,
+        })
+        currentMessageId = res.messageId
+        updatedLastSyncedAt = new Date().toISOString()
+        setLastSyncedText(textToSync)
+        setPreviewConfig(prev => ({
+          ...prev,
+          messageId: res.messageId,
+          lastSyncedAt: updatedLastSyncedAt,
+        }))
+      } catch (err: unknown) {
+        console.error('Failed to sync preview message', err)
+        throw err
+      } finally {
+        setIsLiveSyncing(false)
+      }
+    }
+
+    // Persist preview config to DB in background
+    try {
+      const payloadData = JSON.stringify({
+        eventId,
+        headerText,
+        squads,
+        guests,
+        preview: {
+          ...newConfig,
+          messageId: currentMessageId,
+          lastSyncedAt: updatedLastSyncedAt,
+        },
+      })
+      await DiscordService.saveEventRoster(eventId, {
+        data: payloadData,
+        gameType: eventDetail?.gameType || 'all',
+        assignments: [],
+      })
+    } catch (saveErr) {
+      console.warn('Failed to background persist preview config', saveErr)
+    }
+  }
+
+  // Real-Time In-Place Live Preview Sync to Discord
+  useEffect(() => {
+    if (isInitialMount.current) {
+      if (!loading) {
+        isInitialMount.current = false
+      }
+      return
+    }
+
+    if (!previewConfig.enabled || !previewConfig.channelId || !eventId) {
+      return
+    }
+
+    const currentFormatted = formatRosterForDiscord(headerText, squads)
+    if (currentFormatted === lastSyncedText) {
+      return
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIsLiveSyncing(true)
+        const res = await DiscordService.syncEventRosterPreview(eventId, {
+          channelId: previewConfig.channelId,
+          messageId: previewConfig.messageId,
+          message: currentFormatted,
+        })
+        setLastSyncedText(currentFormatted)
+        const now = new Date().toISOString()
+        if (res.messageId === previewConfig.messageId) {
+          setPreviewConfig(prev => ({
+            ...prev,
+            lastSyncedAt: now,
+          }))
+        } else {
+          const updated: RosterPreviewConfig = {
+            ...previewConfig,
+            messageId: res.messageId,
+            lastSyncedAt: now,
+          }
+          setPreviewConfig(updated)
+          persistPreviewState(eventId, headerText, squads, guests, eventDetail?.gameType, updated)
+        }
+      } catch (err) {
+        console.error('Failed to auto-sync roster preview to Discord', err)
+      } finally {
+        setIsLiveSyncing(false)
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [squads, headerText, guests, previewConfig.enabled, previewConfig.channelId, previewConfig.messageId, eventId, lastSyncedText, loading])
+
 
   // Add Guest Player
   const handleAddGuestPlayer = (e: React.SyntheticEvent<HTMLFormElement>) => {
@@ -527,6 +696,31 @@ export function EventRosterPage() {
             >
               <Sparkles className="w-3.5 h-3.5 mr-1.5 text-primary" />
               Smart Fill
+            </Button>
+
+            <Button
+              type="button"
+              variant={previewConfig.enabled ? 'secondary' : 'outline'}
+              size="sm"
+              onClick={() => setIsPreviewModalOpen(true)}
+              className={`text-xs font-semibold h-9 relative gap-1.5 transition-colors ${
+                previewConfig.enabled
+                  ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
+                  : ''
+              }`}
+              title="Open Discord Live Preview settings"
+            >
+              <Radio className={`w-3.5 h-3.5 ${previewConfig.enabled ? 'animate-pulse text-emerald-400' : 'text-primary'}`} />
+              <span>Preview</span>
+              {previewConfig.enabled && (
+                <span className="flex h-2 w-2 relative ml-0.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              )}
+              {isLiveSyncing && (
+                <Loader2 className="w-3 h-3 animate-spin text-emerald-400 ml-0.5" />
+              )}
             </Button>
 
             <Button
@@ -1037,6 +1231,16 @@ export function EventRosterPage() {
         onHeaderChange={setHeaderText}
         dateTime={eventDetail?.dateTime}
         gameType={eventDetail?.gameType}
+      />
+
+      {/* Discord Live Preview Modal */}
+      <RosterLivePreviewModal
+        isOpen={isPreviewModalOpen}
+        onClose={() => setIsPreviewModalOpen(false)}
+        channels={channels}
+        previewConfig={previewConfig}
+        onSaveConfig={handleSavePreviewConfig}
+        isSyncing={isLiveSyncing}
       />
 
       {/* Reset Confirmation Dialog */}

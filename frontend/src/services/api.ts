@@ -326,6 +326,13 @@ export interface PlayerRoleStat {
 	lastUsedAt: string
 }
 
+export interface RosterPreviewConfig {
+	enabled: boolean
+	channelId: string
+	messageId: string
+	lastSyncedAt?: string
+}
+
 export const DiscordService = {
 	getStatus: (): Promise<{ connected: boolean, configured: boolean }> => fetchApi('/discord/status'),
 	getChannels: (): Promise<DiscordChannel[]> => fetchApi('/discord/channels'),
@@ -347,6 +354,7 @@ export const DiscordService = {
 	getEventRoster: (eventId: number): Promise<{ eventId: number; data: string; updatedAt: string }> => fetchApi(`/discord/events/${eventId}/roster`),
 	saveEventRoster: (eventId: number, data: { data: string; gameType: string; assignments: { userId: string; playerName: string; role: string }[] }): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster`, { method: 'PUT', body: JSON.stringify(data) }),
 	publishEventRoster: (eventId: number, channelId: string, message: string): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster/publish`, { method: 'POST', body: JSON.stringify({ channelId, message }) }),
+	syncEventRosterPreview: (eventId: number, data: { channelId: string; messageId?: string; message: string }): Promise<{ success: boolean; channelId: string; messageId: string }> => fetchApi(`/discord/events/${eventId}/roster/preview`, { method: 'POST', body: JSON.stringify(data) }),
 	getRosterTemplates: (): Promise<RosterTemplate[]> => fetchApi('/discord/roster/templates'),
 	saveRosterTemplate: (data: { name: string; gameType: string; structure: string }): Promise<RosterTemplate> => fetchApi('/discord/roster/templates', { method: 'POST', body: JSON.stringify(data) }),
 	deleteRosterTemplate: (id: number): Promise<void> => fetchApi(`/discord/roster/templates/${id}`, { method: 'DELETE' }),

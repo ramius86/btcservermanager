@@ -832,3 +832,22 @@ func (s *Service) PublishRosterMessage(ctx context.Context, channelID, message s
 	_, err := s.session.ChannelMessageSend(channelID, message)
 	return err
 }
+
+func (s *Service) SyncRosterPreview(ctx context.Context, channelID, messageID, message string) (string, error) {
+	if s.session == nil {
+		return "", errors.New(errBotNotConfigured)
+	}
+
+	if messageID != "" {
+		msg, err := s.session.ChannelMessageEdit(channelID, messageID, message)
+		if err == nil && msg != nil {
+			return msg.ID, nil
+		}
+	}
+
+	msg, err := s.session.ChannelMessageSend(channelID, message)
+	if err != nil {
+		return "", err
+	}
+	return msg.ID, nil
+}

@@ -41,6 +41,7 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Get("/events/{id}/roster", r.handleGetDiscordEventRoster)
 	mux.Put("/events/{id}/roster", r.handleSaveDiscordEventRoster)
 	mux.Post("/events/{id}/roster/publish", r.handlePublishDiscordEventRoster)
+	mux.Post("/events/{id}/roster/preview", r.handleSyncDiscordEventRosterPreview)
 	mux.Get("/roster/templates", r.handleGetDiscordRosterTemplates)
 	mux.Post("/roster/templates", r.handleSaveDiscordRosterTemplate)
 	mux.Delete("/roster/templates/{templateId}", r.handleDeleteDiscordRosterTemplate)
