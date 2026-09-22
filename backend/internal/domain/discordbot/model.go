@@ -3,6 +3,7 @@ package discordbot
 type Channel struct {
 	ID   string `json:"id"`
 	Name string `json:"name"`
+	Type int    `json:"type"`
 }
 
 type Event struct {

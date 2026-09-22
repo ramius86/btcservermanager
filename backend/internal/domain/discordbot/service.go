@@ -94,13 +94,19 @@ func (s *Service) GetChannels() ([]Channel, error) {
 
 	var channels []Channel
 	for _, c := range discordChannels {
-		if c.Type == discordgo.ChannelTypeGuildText {
+		if c.Type == discordgo.ChannelTypeGuildText || c.Type == discordgo.ChannelTypeGuildNews {
 			channels = append(channels, Channel{
 				ID:   c.ID,
 				Name: c.Name,
+				Type: int(c.Type),
 			})
 		}
 	}
+
+	sort.Slice(channels, func(i, j int) bool {
+		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
+	})
+
 	return channels, nil
 }
 

@@ -29,7 +29,7 @@ func TestService_GetChannels(t *testing.T) {
 	svc.session.Client.Transport = &mockRoundTripper{
 		roundTripFunc: func(req *http.Request) (*http.Response, error) {
 			if strings.Contains(req.URL.Path, "/channels") {
-				body := `[{"id":"chan1", "name":"general", "type":0}, {"id":"chan2", "name":"voice", "type":2}]`
+				body := `[{"id":"chan1", "name":"general", "type":0}, {"id":"chan2", "name":"voice", "type":2}, {"id":"chan3", "name":"announcements", "type":5}]`
 				return &http.Response{
 					StatusCode: 200,
 					Body:       io.NopCloser(strings.NewReader(body)),
@@ -41,8 +41,11 @@ func TestService_GetChannels(t *testing.T) {
 
 	channels, err := svc.GetChannels()
 	require.NoError(t, err)
-	assert.Len(t, channels, 1) // type 0 is GUILD_TEXT
-	assert.Equal(t, "general", channels[0].Name)
+	assert.Len(t, channels, 2) // type 0 is GUILD_TEXT, type 5 is GUILD_NEWS
+	assert.Equal(t, "announcements", channels[0].Name)
+	assert.Equal(t, 5, channels[0].Type)
+	assert.Equal(t, "general", channels[1].Name)
+	assert.Equal(t, 0, channels[1].Type)
 }
 
 func TestService_GetRoles(t *testing.T) {

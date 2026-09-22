@@ -220,6 +220,7 @@ export const CBAPresetService = {
 export interface DiscordChannel {
 	id: string
 	name: string
+	type?: number
 }
 
 export interface DiscordRole {
