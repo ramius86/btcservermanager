@@ -70,45 +70,48 @@ export function Sidebar() {
   return (
     <>
       {/* ─── MOBILE: Fixed bottom navigation bar ─── */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-row items-center justify-start overflow-x-auto no-scrollbar border-t border-border bg-surface/95 backdrop-blur-md h-16 px-2 gap-2">
-        {navItems.map((item) => (
-          <NavLink
-            key={item.label}
-            to={item.href}
-            end={item.href === '/'}
-            className={({ isActive }) => {
-              let stateClasses = "text-muted-foreground"
-              if (isActive) {
-                stateClasses = "text-primary"
-              } else if (item.label === 'Mods' && hasModUpdates) {
-                stateClasses = "text-red-500"
-              }
-              return cn(
-                "relative flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 min-w-[56px]",
-                stateClasses
-              )
-            }}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
+        <nav className="flex flex-row items-center justify-start overflow-x-auto no-scrollbar border-t border-border bg-surface/95 backdrop-blur-md h-[calc(4rem+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] px-2 gap-1.5">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.label}
+              to={item.href}
+              end={item.href === '/'}
+              className={({ isActive }) => {
+                let stateClasses = "text-muted-foreground"
+                if (isActive) {
+                  stateClasses = "text-primary"
+                } else if (item.label === 'Mods' && hasModUpdates) {
+                  stateClasses = "text-red-500"
+                }
+                return cn(
+                  "relative flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-lg transition-all duration-200 min-w-[56px]",
+                  stateClasses
+                )
+              }}
+            >
+              {({ isActive }) => (
+                <>
+                  <item.icon className="w-5 h-5" />
+                  <span className="text-[9px] font-bold uppercase tracking-wider leading-none">{item.label}</span>
+                  {item.label === 'Mods' && hasModUpdates && !isActive && (
+                    <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
+                  )}
+                </>
+              )}
+            </NavLink>
+          ))}
+          <button
+            onClick={toggleTheme}
+            className="flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-lg text-muted-foreground transition-all min-w-[56px] ml-auto pr-3"
+            title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
           >
-            {({ isActive }) => (
-              <>
-                <item.icon className="w-5 h-5" />
-                <span className="text-[9px] font-bold uppercase tracking-wider leading-none">{item.label}</span>
-                {item.label === 'Mods' && hasModUpdates && !isActive && (
-                  <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-red-500 rounded-full" />
-                )}
-              </>
-            )}
-          </NavLink>
-        ))}
-        <button
-          onClick={toggleTheme}
-          className="flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-lg text-muted-foreground transition-all min-w-[56px] ml-auto pr-4"
-          title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
-        >
-          {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Theme</span>
-        </button>
-      </nav>
+            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Theme</span>
+          </button>
+        </nav>
+        <div className="pointer-events-none absolute right-0 top-0 bottom-[env(safe-area-inset-bottom,0px)] w-5 bg-gradient-to-l from-surface to-transparent" />
+      </div>
 
       {/* ─── DESKTOP: Vertical sidebar ─── */}
       <aside className="hidden md:flex w-[180px] flex-col border-r border-border bg-surface transition-all duration-300">

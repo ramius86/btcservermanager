@@ -36,7 +36,8 @@ function SelectedModItem({ mod, index, toggleMod }: Readonly<SelectedModItemProp
           <button 
             type="button" 
             onClick={(e) => { e.stopPropagation(); toggleMod(mod.id); }} 
-            className="p-0.5 text-muted-foreground/80 hover:text-red-400 transition-colors"
+            className="p-1.5 sm:p-0.5 text-muted-foreground/80 hover:text-red-400 transition-colors touch-manipulation"
+            aria-label="Remove mod"
           >
             <X className="w-3.5 h-3.5" />
           </button>
@@ -64,6 +65,7 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
   const [savePresetOpen, setSavePresetOpen] = useState(false)
   const [newPresetName, setNewPresetName] = useState('')
   const [isSavingPreset, setIsSavingPreset] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'available' | 'active'>('available')
 
   useEffect(() => {
     loadData()
@@ -170,7 +172,7 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
             <span className="text-xs font-medium text-foreground/80 group-hover:text-primary truncate pr-2">
               {mod.name}
             </span>
-            <div className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="shrink-0 opacity-70 md:opacity-0 group-hover:opacity-100 transition-opacity">
               <CheckCircle2 className="w-3 h-3 text-primary" />
             </div>
           </button>
@@ -182,12 +184,12 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
   return (
     <div className="space-y-6">
       {/* PRESETS TOOLBAR */}
-      <div className="bg-surface-elevated/40 border border-border/50 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4">
-        <div className="flex-1 flex items-center gap-3 w-full">
-          <div className="p-2 bg-primary/10 rounded-lg">
+      <div className="bg-surface-elevated/40 border border-border/50 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-center gap-3 sm:gap-4">
+        <div className="flex-1 flex items-center gap-2 sm:gap-3 w-full">
+          <div className="p-2 bg-primary/10 rounded-lg shrink-0">
             <FolderOpen className="w-4 h-4 text-primary" />
           </div>
-          <div className="flex-1 min-w-[200px]">
+          <div className="flex-1 min-w-0">
             <Select 
               value={selectedPresetId} 
               onChange={(e) => setSelectedPresetId(e.target.value)}
@@ -204,7 +206,7 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
             size="sm" 
             onClick={handleApplyPreset}
             disabled={!selectedPresetId}
-            className="h-10 px-4 font-bold uppercase tracking-widest text-[10px]"
+            className="h-10 px-3 sm:px-4 font-bold uppercase tracking-widest text-[10px] shrink-0"
           >
             Apply
           </Button>
@@ -218,16 +220,42 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
           size="sm" 
           onClick={() => setSavePresetOpen(true)}
           disabled={selectedModIds.length === 0}
-          className="h-10 px-4 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px] w-full sm:w-auto"
+          className="h-10 px-4 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px] w-full sm:w-auto shrink-0"
         >
           <Save className="w-3.5 h-3.5 mr-2" />
           Save as Preset
         </Button>
       </div>
 
+      {/* Mobile Tab Toggle */}
+      <div className="md:hidden flex bg-surface p-1 rounded-xl border border-border">
+        <button
+          type="button"
+          onClick={() => setMobileTab('available')}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+            mobileTab === 'available'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Available ({filteredAvailable.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('active')}
+          className={`flex-1 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+            mobileTab === 'active'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Active ({selectedModIds.length})
+        </button>
+      </div>
+
       <div className="grid md:grid-cols-2 gap-4">
         {/* AVAILABLE MODS */}
-        <div className="flex flex-col h-[500px]">
+        <div className={`flex flex-col h-[450px] md:h-[500px] ${mobileTab === 'available' ? 'flex' : 'hidden md:flex'}`}>
           <div className="flex items-center justify-between mb-3">
             <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Available Content</p>
             <span className="text-[10px] font-bold text-muted-foreground/80 bg-muted px-2 py-0.5 rounded border border-border">
@@ -250,7 +278,7 @@ export function ModSelector({ serverType, selectedModIds, onChange }: Readonly<M
         </div>
 
         {/* LOAD ORDER / SELECTED MODS */}
-        <div className="flex flex-col h-[500px]">
+        <div className={`flex flex-col h-[450px] md:h-[500px] ${mobileTab === 'active' ? 'flex' : 'hidden md:flex'}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
               <p className="text-[10px] uppercase font-black tracking-widest text-muted-foreground">Active Load Order</p>

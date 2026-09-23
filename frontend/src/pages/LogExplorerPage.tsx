@@ -11,7 +11,7 @@ import React, { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { LogService } from '../services/api'
 import { Card } from '../components/ui/Card'
-import { cn } from '../components/ui/Button'
+import { Button, cn } from '../components/ui/Button'
 import { Activity, ChevronLeft } from 'lucide-react'
 import { useWebSocket } from '../contexts/WebSocketContext'
 import { ReforgerStatsDashboard } from '../components/ReforgerStatsDashboard'
@@ -328,31 +328,28 @@ export const LogExplorerPage: React.FC = () => {
       )
     }
     return (
-      <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-6">
+      <div className="h-full flex flex-col items-center justify-center text-muted-foreground space-y-6 p-4">
         <div className="p-10 bg-surface-elevated/50 border border-border rounded-full text-foreground/5"><Activity className="h-16 w-16" /></div>
         <div className="text-center space-y-2">
           <p className="font-bold text-foreground/50 text-lg uppercase tracking-widest">Stream Standby</p>
-          <p className="text-sm max-w-xs mx-auto">Select a Steam log to begin real-time surgical analysis.</p>
+          <p className="text-sm max-w-xs mx-auto">Select a log to begin real-time surgical analysis.</p>
         </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowFileList(true)}
+          className="md:hidden mt-2"
+        >
+          <ChevronLeft className="w-4 h-4 mr-1.5" />
+          Select Log File
+        </Button>
       </div>
     )
   }
 
   return (
-    <div ref={containerRef} className="flex h-screen w-full bg-background overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as any}>
+    <div ref={containerRef} className="flex h-full w-full bg-background overflow-hidden" style={{ '--sidebar-width': `${sidebarWidth}px` } as any}>
       <div className="flex-1 flex overflow-hidden p-2 gap-2">
-
-        {/* Mobile toggle button — only visible on mobile */}
-        {!showFileList && (
-          <button
-            type="button"
-            onClick={() => setShowFileList(true)}
-            className="md:hidden fixed top-4 left-4 z-40 flex items-center gap-1.5 px-3 py-2 bg-surface-elevated border border-border rounded-lg text-[10px] font-bold uppercase tracking-widest text-muted-foreground shadow-lg"
-          >
-            <ChevronLeft className="w-3.5 h-3.5" />
-            Files
-          </button>
-        )}
 
         {/* File sidebar — full width on mobile when showFileList, hidden otherwise */}
         <div className={cn(
@@ -384,6 +381,7 @@ export const LogExplorerPage: React.FC = () => {
               onDownload={() => selectedFile && window.open(LogService.download(selectedFile), '_blank')}
               onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
               onViewChange={(v) => setSearchParams({ ...Object.fromEntries(searchParams), view: v })}
+              onOpenFileList={() => setShowFileList(true)}
             />
 
             {/* eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions */}

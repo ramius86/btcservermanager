@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { Activity, Cpu, Users, Bot, Car, Rocket, Network, AlertTriangle, Loader2, ZoomOut } from 'lucide-react'
 import { Card, CardContent } from './ui/Card'
 import { LogService } from '../services/api'
@@ -83,6 +83,40 @@ export function ReforgerStatsDashboard(props: Readonly<ReforgerStatsDashboardPro
   )
 }
 
+function downsampleStats(historyStats: any[], maxChartPoints = 1500): any[] {
+  if (historyStats.length <= maxChartPoints) return historyStats
+  const step = Math.ceil(historyStats.length / maxChartPoints)
+  const downsampled: any[] = []
+  for (let i = 0; i < historyStats.length; i += step) {
+    const chunk = historyStats.slice(i, i + step)
+    if (chunk.length === 0) continue
+    const minFpsPoint = chunk.reduce((prev, curr) => (curr.fps < prev.fps ? curr : prev), chunk[0])
+    downsampled.push(minFpsPoint)
+  }
+  const lastPoint = historyStats.at(-1)
+  if (lastPoint && downsampled.at(-1)?.timestamp !== lastPoint.timestamp) {
+    downsampled.push(lastPoint)
+  }
+  return downsampled
+}
+
+function computeCombinedStats(initialStats: any[], wsStats: any[], isLive?: boolean): { historyStats: any[]; combinedStats: any[] } {
+  const seenTimestamps = new Set(initialStats.map((s: any) => s.timestamp))
+  const wsNew = wsStats.filter((s: any) => !seenTimestamps.has(s.timestamp))
+  const combinedAll = isLive ? [...initialStats, ...wsNew] : initialStats
+  const maxHistory = 15000
+  const historyStats = combinedAll.length > maxHistory ? combinedAll.slice(-maxHistory) : combinedAll
+  return {
+    historyStats,
+    combinedStats: downsampleStats(historyStats)
+  }
+}
+
+function parseTime(ts: string) {
+  if (!ts) return new Date()
+  return new Date(ts.replace(' ', 'T'))
+}
+
 function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerStatsDashboardProps>) {
   const { stats } = useReforgerStats()
   const [initialLoading, setInitialLoading] = useState(true)
@@ -103,29 +137,9 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
       .finally(() => setInitialLoading(false))
   }, [serverId, filename])
 
-  const seenTimestamps = new Set(initialStats.map(s => s.timestamp))
-  const wsNew = stats.filter(s => !seenTimestamps.has(s.timestamp))
-  const combinedAll = isLive ? [...initialStats, ...wsNew] : initialStats
-  const maxHistory = 15000
-  const historyStats = combinedAll.length > maxHistory ? combinedAll.slice(-maxHistory) : combinedAll
-
-  const maxChartPoints = 1500
-  let combinedStats = historyStats
-  if (historyStats.length > maxChartPoints) {
-    const step = Math.ceil(historyStats.length / maxChartPoints)
-    const downsampled = []
-    for (let i = 0; i < historyStats.length; i += step) {
-      const chunk = historyStats.slice(i, i + step)
-      if (chunk.length === 0) continue
-      const minFpsPoint = chunk.reduce((prev, curr) => (curr.fps < prev.fps ? curr : prev), chunk[0])
-      downsampled.push(minFpsPoint)
-    }
-    if (downsampled.length > 0 && historyStats.length > 0 && downsampled.at(-1)?.timestamp !== historyStats.at(-1)?.timestamp) {
-      const lastPoint = historyStats.at(-1)
-      if (lastPoint) downsampled.push(lastPoint)
-    }
-    combinedStats = downsampled
-  }
+  const { historyStats, combinedStats } = useMemo(() => {
+    return computeCombinedStats(initialStats, stats, isLive)
+  }, [initialStats, stats, isLive])
 
   if (initialLoading && combinedStats.length === 0) {
     return <div className="flex items-center justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
@@ -153,16 +167,11 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
 
   const latest = historyStats.at(-1)
 
-  const parseTime = (ts: string) => {
-    if (!ts) return new Date()
-    return new Date(ts.replace(' ', 'T'))
-  }
-
   const chartData = {
     datasets: [
       {
         label: 'FPS',
-        data: combinedStats.map(s => ({ x: parseTime(s.timestamp), y: s.fps })),
+        data: combinedStats.map((s: any) => ({ x: parseTime(s.timestamp), y: s.fps })),
         borderColor: '#10b981',
         backgroundColor: 'rgba(16, 185, 129, 0.1)',
         yAxisID: 'y',
@@ -173,7 +182,7 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
       },
       {
         label: 'Players',
-        data: combinedStats.map(s => ({ x: parseTime(s.timestamp), y: s.players })),
+        data: combinedStats.map((s: any) => ({ x: parseTime(s.timestamp), y: s.players })),
         borderColor: '#f59e0b',
         yAxisID: 'y1',
         tension: 0,
@@ -182,7 +191,7 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
       },
       {
         label: 'AI',
-        data: combinedStats.map(s => ({ x: parseTime(s.timestamp), y: s.ai })),
+        data: combinedStats.map((s: any) => ({ x: parseTime(s.timestamp), y: s.ai })),
         borderColor: '#8b5cf6',
         yAxisID: 'y1',
         tension: 0.4,
@@ -243,10 +252,11 @@ function ReforgerStatsContent({ serverId, filename, isLive }: Readonly<ReforgerS
         pan: {
           enabled: true,
           mode: 'x',
+          threshold: 15,
         },
         zoom: {
-          wheel: { enabled: true },
-          pinch: { enabled: true },
+          wheel: { enabled: true, modifierKey: 'ctrl' },
+          pinch: { enabled: false },
           mode: 'x',
         }
       },

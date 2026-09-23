@@ -28,6 +28,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [wordWrap, setWordWrap] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
 
@@ -116,36 +117,45 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
         hideCloseButton
         className={`flex flex-col bg-surface border-border p-0 gap-0 overflow-hidden transition-all duration-200 ${
           isFullscreen
-            ? 'w-[calc(100vw-24px)] max-w-none h-[calc(100vh-24px)] rounded-xl'
-            : 'w-[92vw] max-w-5xl h-[85vh] rounded-xl'
+            ? 'w-full max-w-none h-full sm:w-[calc(100vw-24px)] sm:h-[calc(100vh-24px)] rounded-none sm:rounded-xl'
+            : 'w-full sm:w-[92vw] max-w-5xl h-[100dvh] sm:h-[85vh] rounded-none sm:rounded-xl'
         }`}
       >
         {/* Modal Header */}
-        <DialogHeader className="px-6 py-4 border-b border-border/60 bg-surface-elevated/40 flex flex-row items-center justify-between space-y-0 shrink-0">
-          <div className="flex items-center gap-3 min-w-0 pr-4">
-            <div className="p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
-              <FileCode className="w-5 h-5" />
+        <DialogHeader className="px-3 sm:px-6 py-3 sm:py-4 border-b border-border/60 bg-surface-elevated/40 flex flex-row items-center justify-between space-y-0 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0 pr-2 sm:pr-4">
+            <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10 border border-primary/20 text-primary shrink-0">
+              <FileCode className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="truncate">
-              <DialogTitle className="text-base font-bold tracking-tight truncate flex items-center gap-2">
+              <DialogTitle className="text-sm sm:text-base font-bold tracking-tight truncate flex items-center gap-1.5 sm:gap-2">
                 <span className="truncate">{fileName || 'File Editor'}</span>
                 {isReadOnly && (
-                  <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                    <Lock className="w-3 h-3" /> Read-Only
+                  <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                    <Lock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read-Only
                   </span>
                 )}
                 {isDirty && !isReadOnly && (
-                  <span className="inline-flex items-center text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-primary">
-                    Unsaved Changes
+                  <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 rounded bg-primary/10 border border-primary/30 text-primary">
+                    Unsaved
                   </span>
                 )}
               </DialogTitle>
-              <p className="text-xs text-muted-foreground truncate font-mono mt-0.5">{filePath}</p>
+              <p className="text-[10px] sm:text-xs text-muted-foreground truncate font-mono mt-0.5">{filePath}</p>
             </div>
           </div>
 
           {/* Window action controls */}
           <div className="flex items-center gap-1 shrink-0">
+            <Button
+              variant={wordWrap ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => setWordWrap(!wordWrap)}
+              className="h-8 px-2 text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground rounded-lg transition-colors"
+              title="Toggle Word Wrap"
+            >
+              Wrap: {wordWrap ? 'On' : 'Off'}
+            </Button>
             <Button
               variant="ghost"
               size="sm"
@@ -187,8 +197,10 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
               {/* Line Numbers Gutter */}
               <div
                 ref={gutterRef}
-                className="select-none py-4 px-3 bg-neutral-900/60 border-r border-border/30 text-neutral-500 text-right shrink-0 overflow-hidden font-mono text-xs leading-relaxed"
-                style={{ width: `${Math.max(3, String(lineCount).length) * 9 + 28}px` }}
+                className={`select-none py-3 sm:py-4 px-2 sm:px-3 bg-neutral-900/60 border-r border-border/30 text-neutral-500 text-right shrink-0 overflow-hidden font-mono text-xs leading-relaxed ${
+                  wordWrap ? 'hidden sm:block' : ''
+                }`}
+                style={{ width: `${Math.max(3, String(lineCount).length) * 9 + 20}px` }}
               >
                 {Array.from({ length: lineCount }, (_, i) => (
                   <div key={i + 1} className="h-[21px] leading-[21px]">
@@ -206,7 +218,9 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
                 onScroll={handleScroll}
                 readOnly={isReadOnly}
                 spellCheck={false}
-                className="flex-1 w-full h-full p-4 pb-8 bg-transparent text-neutral-100 resize-none outline-none overflow-auto custom-scrollbar font-mono text-xs leading-[21px] whitespace-pre tab-4"
+                className={`flex-1 w-full h-full p-3 sm:p-4 pb-8 bg-transparent text-neutral-100 resize-none outline-none overflow-auto custom-scrollbar font-mono text-xs leading-[21px] tab-4 ${
+                  wordWrap ? 'whitespace-pre-wrap break-words' : 'whitespace-pre'
+                }`}
                 placeholder={isReadOnly ? 'File is empty' : 'Enter text here...'}
               />
             </div>
@@ -214,7 +228,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
         </div>
 
         {/* Footer */}
-        <DialogFooter className="px-6 py-3 border-t border-border/60 bg-surface-elevated/40 flex flex-row items-center justify-between space-y-0 shrink-0">
+        <DialogFooter className="px-3 sm:px-6 py-2.5 sm:py-3 border-t border-border/60 bg-surface-elevated/40 flex flex-row items-center justify-between space-y-0 shrink-0">
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground font-medium">
             <span>{lineCount} lines</span>
             <span>•</span>

@@ -33,7 +33,7 @@ export function ToastProvider({ children }: Readonly<{ children: React.ReactNode
   return (
     <ToastContext.Provider value={contextValue}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+      <div className="fixed top-4 left-4 right-4 md:top-auto md:bottom-4 md:left-auto md:right-4 z-50 flex flex-col gap-2 pointer-events-none md:max-w-md">
         {toasts.map((toast) => (
           <ToastItem key={toast.id} toast={toast} onClose={() => removeToast(toast.id)} />
         ))}
@@ -54,14 +54,14 @@ function ToastItem({ toast, onClose }: Readonly<{ toast: Toast; onClose: () => v
   else if (toast.type === 'error') toastClass = 'bg-red-500/10 border-red-500/50 text-red-600 dark:text-red-400'
 
   return (
-    <div className={`flex items-center gap-3 p-4 rounded-xl border shadow-2xl animate-in slide-in-from-right fade-in duration-300 ${toastClass}`}>
-      {toast.type === 'success' && <CheckCircle className="w-5 h-5" />}
-      {toast.type === 'error' && <AlertCircle className="w-5 h-5" />}
-      {toast.type === 'info' && <Info className="w-5 h-5" />}
-      
-      <p className="text-sm font-medium">{toast.message}</p>
-      
-      <button type="button" aria-label="Close" onClick={onClose} className="ml-2 p-1 hover:bg-white/10 rounded-lg">
+    <div className={`pointer-events-auto flex items-center justify-between gap-3 p-3.5 sm:p-4 rounded-xl border shadow-2xl backdrop-blur-md animate-in slide-in-from-top-2 md:slide-in-from-right-2 fade-in duration-300 ${toastClass}`}>
+      <div className="flex items-center gap-3 min-w-0">
+        {toast.type === 'success' && <CheckCircle className="w-5 h-5 shrink-0" />}
+        {toast.type === 'error' && <AlertCircle className="w-5 h-5 shrink-0" />}
+        {toast.type === 'info' && <Info className="w-5 h-5 shrink-0" />}
+        <p className="text-xs sm:text-sm font-medium break-words">{toast.message}</p>
+      </div>
+      <button type="button" aria-label="Close" onClick={onClose} className="ml-2 p-1.5 hover:bg-white/10 rounded-lg shrink-0">
         <X className="w-4 h-4" aria-hidden="true" />
       </button>
     </div>

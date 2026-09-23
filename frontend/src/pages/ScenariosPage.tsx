@@ -172,7 +172,7 @@ export function ScenariosPage() {
 
   return (
     <div 
-      className="space-y-10 max-w-7xl mx-auto py-8 px-6 relative min-h-[500px]"
+      className="space-y-6 sm:space-y-10 max-w-7xl mx-auto py-4 px-3 sm:py-8 sm:px-6 relative min-h-[500px]"
       {...dragProps}
     >
       {isDragging && (
@@ -191,14 +191,14 @@ export function ScenariosPage() {
         </div>
       )}
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">Missions</h1>
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-foreground">Missions</h1>
         </div>
-        <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto mt-4 md:mt-0">
+        <div className="flex flex-wrap items-center gap-2 md:gap-3 w-full md:w-auto mt-2 md:mt-0">
           <Button 
             variant="secondary"
-            className="border-border bg-surface-elevated/50 hover:bg-surface"
+            className="border-border bg-surface-elevated/50 hover:bg-surface w-full sm:w-auto"
             onClick={() => document.getElementById('pbo-upload')?.click()}
           >
             <Upload className="w-4 h-4 mr-2" />
@@ -221,28 +221,28 @@ export function ScenariosPage() {
           <TabsTrigger value="reforger" className="rounded-md data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-widest">Reforger Scenarios</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="arma3" className="pt-6">
+        <TabsContent value="arma3" className="pt-4 sm:pt-6">
           <Card className="border-border bg-surface shadow-sm overflow-hidden">
-            <CardHeader className="border-b border-border bg-surface-elevated/30 py-5">
+            <CardHeader className="border-b border-border bg-surface-elevated/30 py-3 sm:py-5">
               <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Stored PBO missions</CardTitle>
             </CardHeader>
             <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[600px]">
+              <Table className="w-full">
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-border">
                     <TableHead 
-                      className="py-4 px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="py-3 sm:py-4 px-3 sm:px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleA3Sort('name')}
                     >
                       Asset Name {renderSortIcon(a3SortField, 'name', a3SortOrder)}
                     </TableHead>
                     <TableHead 
-                      className="py-4 px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="hidden sm:table-cell py-4 px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors"
                       onClick={() => toggleA3Sort('createdAt')}
                     >
                       Upload Date {renderSortIcon(a3SortField, 'createdAt', a3SortOrder)}
                     </TableHead>
-                    <TableHead className="py-4 px-6 text-right text-muted-foreground uppercase text-[10px] font-bold tracking-widest">Management</TableHead>
+                    <TableHead className="py-3 sm:py-4 px-3 sm:px-6 text-right text-muted-foreground uppercase text-[10px] font-bold tracking-widest">Management</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -259,15 +259,20 @@ export function ScenariosPage() {
                   )}
                   {!loading && sortedArma3Scenarios.length > 0 && sortedArma3Scenarios.map((s) => (
                     <TableRow key={s.name} className="border-border/50 hover:bg-muted/20 transition-colors">
-                      <TableCell className="py-4 px-6 font-semibold text-foreground">{s.name}</TableCell>
-                      <TableCell className="py-4 px-6 text-muted-foreground text-sm">{s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}</TableCell>
-                      <TableCell className="py-4 px-6 text-right">
+                      <TableCell className="py-3 sm:py-4 px-3 sm:px-6 font-semibold text-foreground">
+                        <div className="truncate max-w-[180px] sm:max-w-none text-xs sm:text-sm">{s.name}</div>
+                        <div className="sm:hidden text-[10px] text-muted-foreground font-normal mt-0.5">
+                          {s.createdAt ? new Date(s.createdAt).toLocaleDateString() : '-'}
+                        </div>
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell py-4 px-6 text-muted-foreground text-sm">{s.createdAt ? new Date(s.createdAt).toLocaleString() : '-'}</TableCell>
+                      <TableCell className="py-3 sm:py-4 px-3 sm:px-6 text-right">
                         <div className="flex justify-end gap-1">
                           <Button 
                             variant="ghost" 
                             size="icon" 
                             onClick={() => handleDownload(s.name)} 
-                            className="text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-500/10"
+                            className="h-8 w-8 text-muted-foreground hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-500/10"
                             title="Download Asset"
                           >
                             <Download className="w-4 h-4" />
@@ -276,7 +281,7 @@ export function ScenariosPage() {
                             variant="ghost" 
                             size="icon" 
                             onClick={() => setDeleteConfirm(s.name)}
-                            className="text-muted-foreground hover:text-red-600 dark:hover:text-red-500 hover:bg-red-500/10"
+                            className="h-8 w-8 text-muted-foreground hover:text-red-600 dark:hover:text-red-500 hover:bg-red-500/10"
                             title="Delete Asset"
                           >
                             <Trash className="w-4 h-4" />
@@ -291,17 +296,17 @@ export function ScenariosPage() {
           </Card>
         </TabsContent>
 
-         <TabsContent value="reforger" className="pt-6">
+         <TabsContent value="reforger" className="pt-4 sm:pt-6">
           <Card className="border-border bg-surface shadow-sm overflow-hidden">
-            <CardHeader className="border-b border-border bg-surface-elevated/30 py-5">
+            <CardHeader className="border-b border-border bg-surface-elevated/30 py-3 sm:py-5">
               <CardTitle className="text-sm font-bold uppercase tracking-widest text-muted-foreground">Available Reforger Scenarios</CardTitle>
             </CardHeader>
-            <CardContent className="p-0 overflow-x-auto">
-              <Table className="min-w-[800px]">
+            <CardContent className="p-0 overflow-x-auto relative">
+              <Table className="min-w-[700px]">
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-border">
                     <TableHead 
-                      className="py-4 px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors"
+                      className="py-4 px-4 sm:px-6 text-muted-foreground uppercase text-[10px] font-bold tracking-widest cursor-pointer select-none hover:text-foreground transition-colors sticky left-0 z-20 bg-surface shadow-[2px_0_5px_rgba(0,0,0,0.25)] min-w-[180px]"
                       onClick={() => toggleRfSort('name')}
                     >
                       Scenario Display Name {renderSortIcon(rfSortField, 'name', rfSortOrder)}
@@ -343,7 +348,9 @@ export function ScenariosPage() {
                   )}
                   {!loading && sortedReforgerScenarios.length > 0 && sortedReforgerScenarios.map((s: any, i: number) => (
                     <TableRow key={s.value || i} className="border-border/50 hover:bg-muted/20 transition-colors">
-                      <TableCell className="py-4 px-6 font-semibold text-foreground">{s.name || s.value || 'Unknown'}</TableCell>
+                      <TableCell className="py-4 px-4 sm:px-6 font-semibold text-foreground sticky left-0 z-10 bg-surface shadow-[2px_0_5px_rgba(0,0,0,0.25)] min-w-[180px]">
+                        <span className="truncate block max-w-[200px] sm:max-w-none">{s.name || s.value || 'Unknown'}</span>
+                      </TableCell>
                       <TableCell className="py-4 px-6 text-sm text-foreground">
                         {s.isOfficial ? (
                           <Badge variant="success" className="font-semibold px-2 py-0.5 text-[10px]">Official</Badge>

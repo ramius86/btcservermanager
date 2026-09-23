@@ -19,6 +19,7 @@ import {
   ChevronUp,
   RotateCcw,
   Radio,
+  ListOrdered,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -264,6 +265,69 @@ function assignCandidateInSquads(
   })
 }
 
+function computeAssignedAndUnassigned(squads: RosterSquad[], allCandidates: RosterCandidate[]) {
+  const assignedSet = new Set<string>()
+  for (const sq of squads) {
+    for (const sl of sq.slots) {
+      if (sl.assignedPlayerName) {
+        assignedSet.add(sl.assignedPlayerName.toLowerCase().trim())
+      }
+    }
+  }
+  const unassigned = allCandidates.filter(c => !assignedSet.has(c.name.toLowerCase().trim()))
+  return { assignedNames: assignedSet, unassignedCandidates: unassigned }
+}
+
+function filterCandidateList(
+  candidates: RosterCandidate[],
+  filterType: 'all' | 'going' | 'maybe',
+  searchQuery: string
+) {
+  const q = searchQuery.trim().toLowerCase()
+  return candidates.filter(c => {
+    if (filterType === 'going' && c.isMaybe) return false
+    if (filterType === 'maybe' && !c.isMaybe) return false
+    if (q) {
+      return c.name.toLowerCase().includes(q) || c.qualifications.some(qual => qual.toLowerCase().includes(q))
+    }
+    return true
+  })
+}
+
+function extractRosterAssignments(squads: RosterSquad[]) {
+  const assignments: { userId: string; playerName: string; role: string }[] = []
+  for (const sq of squads) {
+    for (const sl of sq.slots) {
+      if (sl.assignedPlayerName && sl.role) {
+        assignments.push({
+          userId: sl.assignedUserId || sl.assignedPlayerName,
+          playerName: sl.assignedPlayerName,
+          role: sl.role,
+        })
+      }
+    }
+  }
+  return assignments
+}
+
+function parseInitialRosterState(savedRoster: any, defaultHeader: string) {
+  if (savedRoster?.data) {
+    const parsed = parseSavedRosterData(savedRoster.data, defaultHeader)
+    return {
+      squads: parsed.squads || [],
+      headerText: parsed.headerText,
+      guests: parsed.guests || [],
+      preview: parsed.preview || null,
+    }
+  }
+  return {
+    squads: [] as RosterSquad[],
+    headerText: defaultHeader,
+    guests: [] as string[],
+    preview: null,
+  }
+}
+
 export function EventRosterPage() {
   const { id } = useParams<{ id: string }>()
   const eventId = Number.parseInt(id || '0', 10)
@@ -293,6 +357,7 @@ export function EventRosterPage() {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false)
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
+  const [activeMobileTab, setActiveMobileTab] = useState<'squads' | 'players'>('squads')
 
   // Live Discord Preview State
   const [previewConfig, setPreviewConfig] = useState<RosterPreviewConfig>({
@@ -327,16 +392,11 @@ export function EventRosterPage() {
       setLearningStats(stats || [])
 
       const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType)
-
-      if (savedRoster?.data) {
-        const parsed = parseSavedRosterData(savedRoster.data, defaultHeader)
-        if (parsed.squads) setSquads(parsed.squads)
-        setHeaderText(parsed.headerText)
-        if (parsed.guests) setGuests(parsed.guests)
-        if (parsed.preview) setPreviewConfig(parsed.preview)
-      } else {
-        setHeaderText(defaultHeader)
-      }
+      const initial = parseInitialRosterState(savedRoster, defaultHeader)
+      if (initial.squads.length > 0) setSquads(initial.squads)
+      setHeaderText(initial.headerText)
+      if (initial.guests.length > 0) setGuests(initial.guests)
+      if (initial.preview) setPreviewConfig(initial.preview)
     } catch (err: any) {
       console.error(err)
       showToast('Failed to load event or roster data: ' + (err.message || 'Unknown error'), 'error')
@@ -352,30 +412,12 @@ export function EventRosterPage() {
 
   // Track who is assigned and who is unassigned
   const { assignedNames, unassignedCandidates } = useMemo(() => {
-    const assignedSet = new Set<string>()
-    for (const sq of squads) {
-      for (const sl of sq.slots) {
-        if (sl.assignedPlayerName) {
-          assignedSet.add(sl.assignedPlayerName.toLowerCase().trim())
-        }
-      }
-    }
-
-    const unassigned = allCandidates.filter(c => !assignedSet.has(c.name.toLowerCase().trim()))
-    return { assignedNames: assignedSet, unassignedCandidates: unassigned }
+    return computeAssignedAndUnassigned(squads, allCandidates)
   }, [squads, allCandidates])
 
   // Filter unassigned candidates for sidebar
   const filteredUnassigned = useMemo(() => {
-    return unassignedCandidates.filter(c => {
-      if (filterType === 'going' && c.isMaybe) return false
-      if (filterType === 'maybe' && !c.isMaybe) return false
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase()
-        return c.name.toLowerCase().includes(q) || c.qualifications.some(qual => qual.toLowerCase().includes(q))
-      }
-      return true
-    })
+    return filterCandidateList(unassignedCandidates, filterType, searchQuery)
   }, [unassignedCandidates, filterType, searchQuery])
 
   // Squad Actions
@@ -472,19 +514,7 @@ export function EventRosterPage() {
         preview: previewConfig,
       })
 
-      // Extract player role assignments to train the frequency model
-      const assignments: { userId: string; playerName: string; role: string }[] = []
-      for (const sq of squads) {
-        for (const sl of sq.slots) {
-          if (sl.assignedPlayerName && sl.role) {
-            assignments.push({
-              userId: sl.assignedUserId || sl.assignedPlayerName,
-              playerName: sl.assignedPlayerName,
-              role: sl.role,
-            })
-          }
-        }
-      }
+      const assignments = extractRosterAssignments(squads)
 
       await DiscordService.saveEventRoster(eventId, {
         data: payloadData,
@@ -799,10 +829,38 @@ export function EventRosterPage() {
         </div>
       </div>
 
+      {/* Mobile Tab Switcher */}
+      <div className="lg:hidden flex bg-surface p-1 rounded-xl border border-border">
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('squads')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+            activeMobileTab === 'squads'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <ListOrdered className="w-3.5 h-3.5" />
+          Squads ({squads.length})
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('players')}
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
+            activeMobileTab === 'players'
+              ? 'bg-primary text-primary-foreground shadow-md'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <Users className="w-3.5 h-3.5" />
+          Player Pool ({unassignedCandidates.length})
+        </button>
+      </div>
+
       {/* Main Workspace Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
         {/* Left Sidebar: Available Players Pool */}
-        <div className="lg:col-span-4 xl:col-span-3 space-y-4 sticky top-4">
+        <div className={`lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-4 ${activeMobileTab === 'players' ? 'block' : 'hidden lg:block'}`}>
           <Card className="border-border bg-surface-elevated/50 backdrop-blur-sm overflow-hidden">
             <CardHeader className="p-4 border-b border-border bg-surface/30 space-y-3">
               <div className="flex items-center justify-between">
@@ -988,7 +1046,7 @@ export function EventRosterPage() {
         </div>
 
         {/* Right Main Board: Squads and Slots */}
-        <div className="lg:col-span-8 xl:col-span-9 space-y-4">
+        <div className={`lg:col-span-8 xl:col-span-9 space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
               <span>Squads & Slotlist</span>
@@ -1164,10 +1222,10 @@ export function EventRosterPage() {
                           <button
                             type="button"
                             onClick={() => handleDeleteSlot(squad.id, slot.id)}
-                            className="text-muted-foreground/50 hover:text-destructive p-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                            className="text-muted-foreground/50 hover:text-destructive p-1.5 sm:p-1 shrink-0 opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity touch-manipulation"
                             title="Remove Slot"
                           >
-                            <Trash2 className="w-3 h-3" />
+                            <Trash2 className="w-3.5 h-3.5 sm:w-3 sm:h-3" />
                           </button>
                         </div>
                       )
