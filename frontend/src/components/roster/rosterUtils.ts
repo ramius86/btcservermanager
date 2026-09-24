@@ -49,14 +49,14 @@ export const COMMON_ROLES = [
  * - "Team 2" -> "Team 3"
  */
 export function getNextCallsign(lastCallsign: string, existingSquads: RosterSquad[] = []): string {
-  if (!lastCallsign || !lastCallsign.trim()) {
+  if (!lastCallsign?.trim()) {
     return `TEAM ${existingSquads.length + 1}`
   }
 
   const trimmed = lastCallsign.trim()
 
   // Match parenthetical suffix like "TEAM 1 (SL 2)"
-  const parenMatch = trimmed.match(/^(.*?)(\d+)(\s*\([^)]*\))$/)
+  const parenMatch = /^(.*?)(\d+)(\s*\([^)]*\))$/.exec(trimmed)
   if (parenMatch) {
     const prefix = parenMatch[1]
     const num = Number.parseInt(parenMatch[2], 10) + 1
@@ -65,7 +65,7 @@ export function getNextCallsign(lastCallsign: string, existingSquads: RosterSqua
   }
 
   // Match ending number like "ALPHA 1", "TEAM 1", "OMBRA 2"
-  const endNumMatch = trimmed.match(/^(.*?)(\d+)$/)
+  const endNumMatch = /^(.*?)(\d+)$/.exec(trimmed)
   if (endNumMatch) {
     const prefix = endNumMatch[1]
     const num = Number.parseInt(endNumMatch[2], 10) + 1
@@ -120,6 +120,44 @@ export function cloneSquad(source: RosterSquad, existingSquads: RosterSquad[]): 
   }
 }
 
+const ROLE_MATCHERS: Array<{
+  roles: string[]
+  qualPatterns: string[]
+}> = [
+  {
+    roles: ['me', 'tl/me', 'doc'],
+    qualPatterns: ['med', 'sanit', 'cls', 'doc'],
+  },
+  {
+    roles: ['sl', 'tl', 'sl/tl', 'pl', 'gm'],
+    qualPatterns: ['capo', 'lead', 'comand', 'sl', 'tl', 'ufficiale'],
+  },
+  {
+    roles: ['mg', 'ar', 'amg', 'aar', 'asst.ar'],
+    qualPatterns: ['mitragli', 'mg', 'ar', 'gunner', 'support'],
+  },
+  {
+    roles: ['at'],
+    qualPatterns: ['anti', 'at', 'tank', 'rpg', 'missil'],
+  },
+  {
+    roles: ['sap', 'sapper', 'gen'],
+    qualPatterns: ['sap', 'geni', 'guastat', 'eod', 'demol', 'miner'],
+  },
+  {
+    roles: ['mk', 'sniper'],
+    qualPatterns: ['scelto', 'mark', 'snip', 'tirator', 'dmr'],
+  },
+  {
+    roles: ['gre'],
+    qualPatterns: ['grenad', 'lanciagranate', 'gre'],
+  },
+  {
+    roles: ['rif'],
+    qualPatterns: ['fucil', 'rif'],
+  },
+]
+
 /**
  * Checks if a member qualification matches a given squad role code.
  */
@@ -128,47 +166,12 @@ export function qualificationMatchesRole(qualName: string, role: string): boolea
   const q = qualName.toLowerCase().trim()
   const r = role.toLowerCase().trim()
 
-  // Exact match
   if (q === r) return true
 
-  // Medical
-  if ((r === 'me' || r === 'tl/me' || r === 'doc') && (q.includes('med') || q.includes('sanit') || q.includes('cls') || q.includes('doc'))) {
-    return true
-  }
-
-  // Leadership
-  if ((r === 'sl' || r === 'tl' || r === 'sl/tl' || r === 'pl' || r === 'gm') && (q.includes('capo') || q.includes('lead') || q.includes('comand') || q.includes('sl') || q.includes('tl') || q.includes('ufficiale'))) {
-    return true
-  }
-
-  // Machine Gun / Auto Rifleman
-  if ((r === 'mg' || r === 'ar' || r === 'amg' || r === 'aar' || r === 'asst.ar') && (q.includes('mitragli') || q.includes('mg') || q.includes('ar') || q.includes('gunner') || q.includes('support'))) {
-    return true
-  }
-
-  // Anti-Tank
-  if (r === 'at' && (q.includes('anti') || q.includes('at') || q.includes('tank') || q.includes('rpg') || q.includes('missil'))) {
-    return true
-  }
-
-  // Sapper / Engineer
-  if ((r === 'sap' || r === 'sapper' || r === 'gen') && (q.includes('sap') || q.includes('geni') || q.includes('guastat') || q.includes('eod') || q.includes('demol') || q.includes('miner'))) {
-    return true
-  }
-
-  // Marksman
-  if ((r === 'mk' || r === 'sniper') && (q.includes('scelto') || q.includes('mark') || q.includes('snip') || q.includes('tirator') || q.includes('dmr'))) {
-    return true
-  }
-
-  // Grenadier
-  if (r === 'gre' && (q.includes('grenad') || q.includes('lanciagranate') || q.includes('gre'))) {
-    return true
-  }
-
-  // Rifleman
-  if (r === 'rif' && (q.includes('fucil') || q.includes('rif'))) {
-    return true
+  for (const matcher of ROLE_MATCHERS) {
+    if (matcher.roles.includes(r) && matcher.qualPatterns.some(pat => q.includes(pat))) {
+      return true
+    }
   }
 
   return false
@@ -212,8 +215,9 @@ export function calculateCandidateAffinity(
   // 2. Check historical role frequency
   let playCount = 0
   for (const stat of learningStats) {
-    const userMatch = (stat.userId && stat.userId === candidate.id) ||
-      (stat.playerName && stat.playerName.toLowerCase() === candidate.name.toLowerCase())
+    const userMatch =
+      (stat.userId && stat.userId === candidate.id) ||
+      stat.playerName?.toLowerCase() === candidate.name.toLowerCase()
 
     if (userMatch && stat.role.toLowerCase() === role.toLowerCase()) {
       // Bonus if specific to this game type
@@ -424,7 +428,7 @@ export function reconcileSquadsWithCandidates(
   return squads.map(squad => ({
     ...squad,
     slots: squad.slots.map(slot => {
-      if (!slot.assignedPlayerName || !slot.assignedPlayerName.trim()) {
+      if (!slot.assignedPlayerName?.trim()) {
         return {
           ...slot,
           assignedPlayerName: '',
@@ -443,9 +447,14 @@ export function reconcileSquadsWithCandidates(
       )
 
       if (matched) {
+        const resolvedName =
+          !slot.isGuest && matched.id && slot.assignedUserId && matched.id === slot.assignedUserId
+            ? cleanPlayerName(matched.name)
+            : cleanedName
+
         return {
           ...slot,
-          assignedPlayerName: cleanedName,
+          assignedPlayerName: resolvedName,
           assignedUserId: matched.id || slot.assignedUserId,
           isMaybe: matched.isMaybe,
           isGuest: matched.isGuest ?? slot.isGuest ?? false,
@@ -461,6 +470,22 @@ export function reconcileSquadsWithCandidates(
   }))
 }
 
+function formatPlayerSuffix(name: string, isMaybe?: boolean): string {
+  if (!name) return ''
+  return isMaybe ? `${name} (?)` : name
+}
+
+function isSoloFigureSquad(squadName: string, slotCount: number): boolean {
+  if (slotCount !== 1) return false
+  const upper = squadName.toUpperCase()
+  return (
+    upper.includes('NOMAD') ||
+    upper.includes('COMANDO') ||
+    upper === 'GM' ||
+    upper === 'PL'
+  )
+}
+
 /**
  * Formats the entire roster structure into a Discord-ready text message:
  * - Header (e.g. "@here slotlist per stasera")
@@ -472,23 +497,19 @@ export function reconcileSquadsWithCandidates(
 export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]): string {
   const lines: string[] = []
 
-  if (headerText && headerText.trim()) {
-    lines.push(headerText.trim())
-    lines.push('')
+  if (headerText?.trim()) {
+    lines.push(headerText.trim(), '')
   }
 
   for (const squad of squads) {
     const squadName = squad.name.trim()
 
     // Solo figure squad (e.g., Squad with 1 slot whose name is NOMAD or GM or COMANDO)
-    if (squad.slots.length === 1 && (squadName.toUpperCase().includes('NOMAD') || squadName.toUpperCase().includes('COMANDO') || squadName.toUpperCase() === 'GM' || squadName.toUpperCase() === 'PL')) {
+    if (isSoloFigureSquad(squadName, squad.slots.length)) {
       const slot = squad.slots[0]
       const cleanName = cleanPlayerName(slot.assignedPlayerName)
-      const playerName = cleanName
-        ? `${cleanName}${slot.isMaybe ? ' (?)' : ''}`
-        : ''
-      lines.push(`${squadName} - ${playerName}`)
-      lines.push('')
+      const playerName = formatPlayerSuffix(cleanName, slot.isMaybe)
+      lines.push(`${squadName} - ${playerName}`, '')
       continue
     }
 
@@ -500,9 +521,7 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
     for (const slot of squad.slots) {
       const role = slot.role.trim() || 'SL'
       const cleanName = cleanPlayerName(slot.assignedPlayerName)
-      const playerName = cleanName
-        ? `${cleanName}${slot.isMaybe ? ' (?)' : ''}`
-        : ''
+      const playerName = formatPlayerSuffix(cleanName, slot.isMaybe)
       lines.push(`${role} - ${playerName}`)
     }
 

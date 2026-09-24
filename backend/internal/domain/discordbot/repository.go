@@ -93,6 +93,91 @@ func (r *Repository) UpsertUser(ctx context.Context, id, username string) error 
 	return err
 }
 
+func (r *Repository) UpdateUserNickname(ctx context.Context, id, username string) (bool, error) {
+	if id == "" || username == "" {
+		return false, nil
+	}
+	query := `
+		UPDATE discord_users
+		SET username = ?, updated_at = datetime('now')
+		WHERE id = ? AND username != ?
+	`
+	res, err := r.db.ExecContext(ctx, query, username, id, username)
+	if err != nil {
+		return false, err
+	}
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+	return rows > 0, nil
+}
+
+func (r *Repository) SyncUserNicknames(ctx context.Context, memberNames map[string]string) (int, error) {
+	if len(memberNames) == 0 {
+		return 0, nil
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	stmt, err := tx.PrepareContext(ctx, `
+		UPDATE discord_users
+		SET username = ?, updated_at = datetime('now')
+		WHERE id = ? AND username != ?
+	`)
+	if err != nil {
+		return 0, err
+	}
+	defer stmt.Close()
+
+	updatedCount := 0
+	for id, name := range memberNames {
+		if id == "" || name == "" {
+			continue
+		}
+		res, err := stmt.ExecContext(ctx, name, id, name)
+		if err != nil {
+			return 0, err
+		}
+		if rows, _ := res.RowsAffected(); rows > 0 {
+			updatedCount++
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return updatedCount, nil
+}
+
+func (r *Repository) GetActiveEventsForUser(ctx context.Context, userID string) ([]Event, error) {
+	query := `
+		SELECT e.id, e.channel_id, e.message_id, e.title, e.date_time, e.game_type, e.created_at, e.reminder_sent
+		FROM discord_events e
+		JOIN discord_event_participations p ON e.id = p.event_id
+		WHERE p.user_id = ? AND e.date_time >= datetime('now', '-2 hours')
+	`
+	rows, err := r.db.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var events []Event
+	for rows.Next() {
+		var e Event
+		if err := rows.Scan(&e.ID, &e.ChannelID, &e.MessageID, &e.Title, &e.DateTime, &e.GameType, &e.CreatedAt, &e.ReminderSent); err != nil {
+			return nil, err
+		}
+		events = append(events, e)
+	}
+	return events, rows.Err()
+}
+
 func (r *Repository) UpsertParticipation(ctx context.Context, eventID int64, userID, status string) error {
 	query := `
 		INSERT INTO discord_event_participations (event_id, user_id, status, updated_at)

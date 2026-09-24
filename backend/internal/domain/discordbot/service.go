@@ -64,12 +64,33 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 	}
 
 	session.AddHandler(svc.handleInteraction)
+	session.AddHandler(svc.handleGuildMemberUpdate)
+	session.AddHandler(svc.handleUserUpdate)
 
 	return svc, nil
 }
 
 func (s *Service) Open() error {
-	return s.session.Open()
+	s.session.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers
+	err := s.session.Open()
+	if err != nil && (strings.Contains(err.Error(), "4014") || strings.Contains(err.Error(), "disallowed")) {
+		log.Printf("⚠️  Privileged IntentGuildMembers not enabled in Discord Developer Portal. Falling back to IntentsAllWithoutPrivileged.")
+		s.session.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
+		err = s.session.Open()
+	}
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		if err := s.SyncMemberNicknames(ctx); err != nil {
+			log.Printf("⚠️  Failed initial member nickname sync: %v", err)
+		}
+	}()
+
+	return nil
 }
 
 func (s *Service) Close() {
@@ -253,6 +274,10 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 		return nil, err
 	}
 
+	if members, mErr := s.getCachedGuildMembers(); mErr == nil && len(members) > 0 {
+		s.syncMemberNicknamesToDatabase(ctx, members)
+	}
+
 	detail := &DiscordEventDetail{
 		Event:      *event,
 		Going:      []string{},
@@ -365,11 +390,21 @@ func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datet
 }
 
 func getInteractionUsername(i *discordgo.InteractionCreate) string {
-	if i.Member != nil && i.Member.Nick != "" {
-		return i.Member.Nick
-	} else if i.Member != nil && i.Member.User != nil {
-		return i.Member.User.Username
-	} else if i.User != nil {
+	if i.Member != nil {
+		if i.Member.Nick != "" {
+			return i.Member.Nick
+		}
+		if i.Member.User != nil {
+			if i.Member.User.GlobalName != "" {
+				return i.Member.User.GlobalName
+			}
+			return i.Member.User.Username
+		}
+	}
+	if i.User != nil {
+		if i.User.GlobalName != "" {
+			return i.User.GlobalName
+		}
 		return i.User.Username
 	}
 	return "Unknown User"
@@ -566,19 +601,14 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 		if m.User.Bot {
 			continue
 		}
-		displayName := m.User.Username
-		if m.User.GlobalName != "" {
-			displayName = m.User.GlobalName
-		}
-		if m.Nick != "" {
-			displayName = m.Nick
-		}
 		result = append(result, GuildMember{
 			ID:          m.User.ID,
 			Username:    m.User.Username,
-			DisplayName: displayName,
+			DisplayName: getMemberDisplayName(m),
 		})
 	}
+
+	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
 
 	return result, nil
 }
@@ -673,7 +703,9 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 		return nil, err
 	}
 	s.membersCache = allMembers
-	s.membersCacheExpiry = time.Now().Add(5 * time.Minute)
+	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
+
+	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
 	return allMembers, nil
 }
 
@@ -694,6 +726,110 @@ func getMemberDisplayName(m *discordgo.Member) string {
 		return m.User.GlobalName
 	}
 	return m.User.Username
+}
+
+func (s *Service) handleGuildMemberUpdate(_ *discordgo.Session, m *discordgo.GuildMemberUpdate) {
+	if m == nil || m.Member == nil || m.GuildID != s.guildID {
+		return
+	}
+	s.onMemberUpdated(m.Member)
+}
+
+func (s *Service) handleUserUpdate(_ *discordgo.Session, u *discordgo.UserUpdate) {
+	if u == nil || u.User == nil {
+		return
+	}
+	s.membersCacheMu.Lock()
+	s.membersCache = nil
+	s.membersCacheExpiry = time.Time{}
+	s.membersCacheMu.Unlock()
+}
+
+func (s *Service) onMemberUpdated(m *discordgo.Member) {
+	if m == nil || m.User == nil || m.User.Bot {
+		return
+	}
+
+	displayName := getMemberDisplayName(m)
+	ctx := context.Background()
+
+	updated, err := s.repo.UpdateUserNickname(ctx, m.User.ID, displayName)
+	if err != nil {
+		log.Printf("⚠️  Failed to update nickname for user %s: %v", m.User.ID, err)
+		return
+	}
+
+	s.membersCacheMu.Lock()
+	if s.membersCache != nil {
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == m.User.ID {
+				s.membersCache[i] = m
+				break
+			}
+		}
+	}
+	s.membersCacheMu.Unlock()
+
+	if updated {
+		log.Printf("ℹ️  Discord nickname updated for user %s -> %s", m.User.ID, displayName)
+		s.updateActiveEventEmbedsForUser(ctx, m.User.ID)
+	}
+}
+
+func (s *Service) updateActiveEventEmbedsForUser(ctx context.Context, userID string) {
+	events, err := s.repo.GetActiveEventsForUser(ctx, userID)
+	if err != nil {
+		log.Printf("⚠️  Failed to query active events for user %s: %v", userID, err)
+		return
+	}
+
+	for _, event := range events {
+		if event.ChannelID == "" || event.MessageID == "" {
+			continue
+		}
+		if err := s.updateEventMessageEmbed(ctx, &event); err != nil {
+			log.Printf("⚠️  Failed to update event embed for message %s after nick change: %v", event.MessageID, err)
+		} else {
+			log.Printf("ℹ️  Updated Discord event embed for message %s following nickname change", event.MessageID)
+		}
+	}
+}
+
+func (s *Service) SyncMemberNicknames(ctx context.Context) error {
+	if s.session == nil {
+		return errors.New(errBotNotConfigured)
+	}
+
+	allMembers, err := s.fetchAllGuildMembers()
+	if err != nil {
+		return fmt.Errorf("failed to fetch all guild members for sync: %w", err)
+	}
+
+	s.membersCacheMu.Lock()
+	s.membersCache = allMembers
+	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
+	s.membersCacheMu.Unlock()
+
+	s.syncMemberNicknamesToDatabase(ctx, allMembers)
+	return nil
+}
+
+func (s *Service) syncMemberNicknamesToDatabase(ctx context.Context, members []*discordgo.Member) {
+	if len(members) == 0 {
+		return
+	}
+	nameMap := make(map[string]string, len(members))
+	for _, m := range members {
+		if m.User != nil && !m.User.Bot {
+			nameMap[m.User.ID] = getMemberDisplayName(m)
+		}
+	}
+	updatedCount, err := s.repo.SyncUserNicknames(ctx, nameMap)
+	if err != nil {
+		log.Printf("⚠️  Failed to sync member nicknames to database: %v", err)
+	} else if updatedCount > 0 {
+		log.Printf("ℹ️  Synchronized %d updated Discord nickname(s) to database", updatedCount)
+	}
 }
 
 func (s *Service) GetClanMembers(ctx context.Context, roleIDs []string) ([]ClanMember, error) {
