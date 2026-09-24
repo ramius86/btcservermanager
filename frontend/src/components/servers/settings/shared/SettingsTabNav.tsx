@@ -11,7 +11,7 @@ export interface SettingsTabItem {
 interface SettingsTabNavProps {
   tabs: SettingsTabItem[]
   activeTab: string
-  onTabChange: (value: string) => void
+  onTabChange?: (value: string) => void
 }
 
 export function SettingsTabNav({ tabs, activeTab }: Readonly<SettingsTabNavProps>) {

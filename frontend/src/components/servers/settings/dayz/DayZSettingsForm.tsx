@@ -41,7 +41,6 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
             { value: 'configs', label: 'Preview', icon: FileText },
           ]}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
         />
       </div>
 

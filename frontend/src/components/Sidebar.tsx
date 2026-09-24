@@ -110,7 +110,7 @@ export function Sidebar() {
             <span className="text-[9px] font-bold uppercase tracking-wider leading-none">Theme</span>
           </button>
         </nav>
-        <div className="pointer-events-none absolute right-0 top-0 bottom-[env(safe-area-inset-bottom,0px)] w-5 bg-gradient-to-l from-surface to-transparent" />
+        <div className="pointer-events-none absolute right-0 top-0 bottom-[env(safe-area-inset-bottom,0px)] w-5 bg-gradient-to-l from-surface to-transparent z-10" />
       </div>
 
       {/* ─── DESKTOP: Vertical sidebar ─── */}

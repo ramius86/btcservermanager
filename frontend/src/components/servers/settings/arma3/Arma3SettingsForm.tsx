@@ -73,7 +73,6 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
             ...(server.id && isInstalled ? [{ value: 'configs', label: 'Configs', icon: FileText }] : []),
           ]}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
         />
       </div>
 

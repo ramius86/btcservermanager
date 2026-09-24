@@ -66,12 +66,14 @@ export function CollapsibleCard({
         </div>
       </CardHeader>
       <div className={cn(
-        "transition-all duration-300",
-        isOpen ? "block" : "hidden md:block"
+        "grid transition-[grid-template-rows,opacity] duration-300 ease-in-out",
+        isOpen ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0 md:grid-rows-[1fr] md:opacity-100"
       )}>
-        <CardContent className={cn("space-y-6 sm:space-y-8 p-4 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0", contentClassName)}>
-          {children}
-        </CardContent>
+        <div className="overflow-hidden min-h-0">
+          <CardContent className={cn("space-y-6 sm:space-y-8 p-4 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0", contentClassName)}>
+            {children}
+          </CardContent>
+        </div>
       </div>
     </Card>
   )

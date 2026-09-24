@@ -60,7 +60,6 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
             ] : []),
           ]}
           activeTab={activeTab}
-          onTabChange={setActiveTab}
         />
       </div>
 
