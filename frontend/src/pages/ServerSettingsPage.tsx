@@ -156,7 +156,7 @@ export function ServerSettingsPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto py-6 px-4 md:py-10 md:px-6">
+    <div className="space-y-8 max-w-6xl mx-auto py-6 px-4 md:py-10 md:px-6 pb-28 md:pb-10">
       <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
         <Button 
           variant="outline" 
@@ -179,16 +179,16 @@ export function ServerSettingsPage() {
             {isNew ? 'Deploying a new tactical environment' : server.name || 'instance'}
           </p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="hidden md:flex items-center gap-3 w-auto">
            <Button 
             type="button" 
             variant="outline" 
             onClick={() => navigate('/servers')}
-            className="flex-1 md:flex-none h-10 px-6 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px]"
+            className="h-10 px-6 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px]"
            >
              Cancel
            </Button>
-           <Button type="submit" onClick={handleSave} className="flex-1 md:flex-none h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
+           <Button type="submit" onClick={handleSave} className="h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
              <Save className="w-4 h-4 mr-2" />
              {isNew ? 'Deploy Instance' : 'Save Data'}
            </Button>
@@ -198,6 +198,26 @@ export function ServerSettingsPage() {
       <form onSubmit={handleSave} className="grid gap-8">
         {renderForm()}
       </form>
+
+      {/* Mobile Sticky Bottom Action Bar */}
+      <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface/95 backdrop-blur-md border-t border-border p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom,0px))] md:hidden flex items-center gap-3 shadow-2xl">
+        <Button 
+          type="button" 
+          variant="outline" 
+          onClick={() => navigate('/servers')}
+          className="flex-1 h-11 border-border bg-surface-elevated/80 text-muted-foreground font-bold uppercase tracking-wider text-xs"
+        >
+          Cancel
+        </Button>
+        <Button 
+          type="button" 
+          onClick={handleSave} 
+          className="flex-[2] h-11 shadow-lg shadow-primary/20 font-bold uppercase tracking-wider text-xs"
+        >
+          <Save className="w-4 h-4 mr-2" />
+          {isNew ? 'Deploy Instance' : 'Save Data'}
+        </Button>
+      </div>
     </div>
   )
 }

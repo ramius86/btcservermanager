@@ -10,7 +10,7 @@
  */
 import { useState } from 'react'
 import { ServerCog, Gamepad2, ShieldCheck, Activity, Cpu, Package, ChevronDown, ChevronUp, FileText, Zap, ShieldAlert, Clock, Lock, AlertTriangle, List } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs'
+import { Tabs, TabsContent } from '../../../ui/Tabs'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
 import { Input } from '../../../ui/Input'
 import { Switch } from '../../../ui/Switch'
@@ -25,6 +25,8 @@ import { Arma3ScenarioSelector } from '../../Arma3ScenarioSelector'
 import { CreatorDlcSelector } from '../../CreatorDlcSelector'
 import { ModSelector } from '../../ModSelector'
 import { CBATab } from './CBATab'
+import { SettingsTabNav } from '../shared/SettingsTabNav'
+import { CollapsibleCard } from '../shared/CollapsibleCard'
 
 interface Arma3SettingsFormProps {
   server: any
@@ -56,79 +58,62 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="bg-surface-elevated/50 p-1 border border-border rounded-lg w-fit justify-start overflow-x-auto gap-1 h-auto no-scrollbar">
-        {[
-          { value: 'general', label: 'General', icon: ServerCog },
-          { value: 'mods', label: 'Mods', icon: Package },
-          { value: 'gameplay', label: 'Gameplay', icon: Gamepad2 },
-          { value: 'security', label: 'Security', icon: ShieldCheck },
-          { value: 'network', label: 'Network', icon: Activity },
-          { value: 'difficulty', label: 'Difficulty', icon: Cpu },
-          { value: 'performance', label: 'Performance', icon: Zap },
-          { value: 'cba', label: 'CBA', icon: List },
-          ...(server.id && isInstalled ? [{ value: 'configs', label: 'Configs', icon: FileText }] : []),
-        ].map(tab => (
-          <TabsTrigger 
-            key={tab.value}
-            value={tab.value} 
-            className="rounded-md px-4 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all"
-          >
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+      <div className="flex flex-col gap-4 pb-4 border-b border-border/50">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">Server Configuration</h2>
+          <p className="text-sm text-muted-foreground">Audit, optimize and deploy configurations for the Arma 3 Dedicated Engine.</p>
+        </div>
+        <SettingsTabNav
+          tabs={[
+            { value: 'general', label: 'General', icon: ServerCog },
+            { value: 'mods', label: 'Mods', icon: Package },
+            { value: 'gameplay', label: 'Gameplay', icon: Gamepad2 },
+            { value: 'security', label: 'Security', icon: ShieldCheck },
+            { value: 'network', label: 'Network', icon: Activity },
+            { value: 'difficulty', label: 'Difficulty', icon: Cpu },
+            { value: 'performance', label: 'Performance', icon: Zap },
+            { value: 'cba', label: 'CBA', icon: List },
+            ...(server.id && isInstalled ? [{ value: 'configs', label: 'Configs', icon: FileText }] : []),
+          ]}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
+      </div>
 
       {/* GENERAL TAB */}
-      <TabsContent value="general" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <ServerCog className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">General Settings</CardTitle>
-                <CardDescription className="text-muted-foreground">Essential identification and connectivity settings.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
-            <BaseGeneralFields 
-              server={server} 
-              onChange={updateServer} 
-              isArma3={true} 
-              isDayZ={false} 
-              isReforger={false} 
+      <TabsContent value="general" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="General Settings"
+          description="Essential identification and connectivity settings."
+          icon={ServerCog}
+          defaultOpen={true}
+        >
+          <BaseGeneralFields 
+            server={server} 
+            onChange={updateServer} 
+            isArma3={true} 
+            isDayZ={false} 
+            isReforger={false} 
+          />
+          <div className="pt-8 border-t border-border/50">
+            <CustomLaunchParametersInput 
+              parameters={server.customLaunchParameters || []}
+              onChange={(params: LaunchParameter[]) => updateServer({ customLaunchParameters: params })}
             />
-            <div className="pt-8 border-t border-border/50">
-              <CustomLaunchParametersInput 
-                parameters={server.customLaunchParameters || []}
-                onChange={(params: LaunchParameter[]) => updateServer({ customLaunchParameters: params })}
-              />
-            </div>
-          </CardContent>
-        </Card>
+          </div>
+        </CollapsibleCard>
         <MaintenanceCard server={server} onChange={updateServer} />
       </TabsContent>
 
       {/* GAMEPLAY TAB */}
-      <TabsContent value="gameplay" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Gamepad2 className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Mission Rotation</CardTitle>
-                <CardDescription className="text-muted-foreground">Mission cycle, difficulty, and persistence settings.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+      <TabsContent value="gameplay" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Mission Rotation"
+          description="Mission cycle, difficulty, and persistence settings."
+          icon={Gamepad2}
+          defaultOpen={true}
+        >
             <Arma3ScenarioSelector 
               missions={server.missions || []}
               onChange={(m) => updateServer({ missions: m })}
@@ -212,23 +197,14 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                 <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest mt-1">FORCES VOLUMETRIC HAZE QUALITY FOR CLIENTS. (DEFAULT: NOT FORCED)</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Activity className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Voice & Communication</CardTitle>
-                <CardDescription className="text-muted-foreground">Voice-over-Net and MOTD settings.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+        <CollapsibleCard
+          title="Voice & Communication"
+          description="Voice-over-Net and MOTD settings."
+          icon={Activity}
+          defaultOpen={false}
+        >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
               <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
                 <div className="space-y-1">
@@ -290,23 +266,14 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                 hint="MESSAGES DISPLAYED TO ALL CONNECTED USERS PERIODICALLY."
               />
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Clock className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Voting & Timeouts</CardTitle>
-                <CardDescription className="text-muted-foreground">Player voting thresholds and step timeouts.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+        <CollapsibleCard
+          title="Voting & Timeouts"
+          description="Player voting thresholds and step timeouts."
+          icon={Clock}
+          defaultOpen={false}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-2">
                 <label htmlFor="field-8" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Vote Threshold</label>
@@ -413,26 +380,17 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                 <p className="text-[10px] text-muted-foreground/80 font-medium ml-1">SECONDS TO WAIT FOR CONNECTION DATA RESPONSE FROM THE ARMA UNITS SYSTEM. (DEFAULT: 30S)</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* SECURITY TAB */}
-      <TabsContent value="security" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <ShieldCheck className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Security & Administration</CardTitle>
-                <CardDescription className="text-muted-foreground">Integrity verification and administrative authority.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+      <TabsContent value="security" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Security & Administration"
+          description="Integrity verification and administrative authority."
+          icon={ShieldCheck}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Left Column: Core Engine Security */}
               <div className="space-y-6">
@@ -649,23 +607,14 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                   />
                </div>
             )}
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Lock className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Command Authority</CardTitle>
-                <CardDescription className="text-muted-foreground">RCON and administrative identification.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+        <CollapsibleCard
+          title="Command Authority"
+          description="RCON and administrative identification."
+          icon={Lock}
+          defaultOpen={false}
+        >
             <div className="space-y-8">
               <div className="space-y-2 w-full md:w-1/2">
                 <label htmlFor="field-26" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">SQF serverCommand Password</label>
@@ -734,27 +683,17 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                 hint="EXTERNAL DOMAINS ALLOWED TO BE ACCESSED VIA SQF htmlLoad (E.G., DYNAMIC IN-GAME WEB SHEETS OR PLAYER STATISTICS)."
               />
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* NETWORK TAB */}
-      <TabsContent value="network" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <div className="grid grid-cols-1 gap-8">
-          <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-            <div className="h-1 bg-primary" />
-            <CardHeader className="pb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                  <Zap className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">Bandwidth Tuning</CardTitle>
-                  <CardDescription className="text-muted-foreground">Fine-grained network synchronization parameters.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="p-6 lg:p-8">
+      <TabsContent value="network" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Bandwidth Tuning"
+          description="Fine-grained network synchronization parameters."
+          icon={Zap}
+          defaultOpen={true}
+        >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {[
                   { id: 'maxMessagesSend', label: 'Max Messages Send', def: '128 (Legacy) / 384 (Modern)', hint: 'MAXIMUM SYNC MESSAGES SENT TO EACH CLIENT PER SIMULATION FRAME. HIGHER VALUES IMPROVE POSITION SYNC BUT INCREASE CPU LOAD.' },
@@ -818,23 +757,14 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                   <Switch checked={server.enablePlayerDiag} onCheckedChange={(c: boolean) => updateServer({ enablePlayerDiag: c })} />
                 </div>
               </div>
-            </CardContent>
-          </Card>
+        </CollapsibleCard>
 
-          <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-            <div className="h-1 bg-primary" />
-            <CardHeader className="pb-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                  <ShieldAlert className="w-5 h-5 text-primary" />
-                </div>
-                <div>
-                  <CardTitle className="text-lg">QoS & Kick Enforcement</CardTitle>
-                  <CardDescription className="text-muted-foreground">Official server.cfg timeout and kick parameters.</CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-8 p-6 lg:p-8">
+        <CollapsibleCard
+          title="QoS & Kick Enforcement"
+          description="Official server.cfg timeout and kick parameters."
+          icon={ShieldAlert}
+          defaultOpen={false}
+        >
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
                 {[
                   { id: 'disconnectTimeout', label: 'Disconnect Timeout', placeholder: 'e.g. 15s (Engine default)', hint: 'MAX SEC BEFORE DROP.' },
@@ -879,29 +809,19 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                   ))}
                 </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+        </CollapsibleCard>
       </TabsContent>
 
       <Arma3DifficultyTab server={server} updateDifficulty={updateDifficulty} />
 
       {/* PERFORMANCE TAB */}
-      <TabsContent value="performance" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Zap className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Hardware & Simulation</CardTitle>
-                <CardDescription className="text-muted-foreground">CPU, Memory and FPS optimization parameters.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+      <TabsContent value="performance" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Hardware & Simulation"
+          description="CPU, Memory and FPS optimization parameters."
+          icon={Zap}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
               <div className="space-y-2">
                 <label htmlFor="field-35" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Limit FPS (-limitFPS)</label>
@@ -999,22 +919,18 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
                 <Switch checked={server.debugMode} onCheckedChange={(c: boolean) => updateServer({ debugMode: c })} />
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* MODS TAB */}
-      <TabsContent value="mods" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardContent className="p-6 lg:p-8">
-            <ModSelector 
-              serverType="ARMA3"
-              selectedModIds={server.activeMods || []}
-              onChange={(mods: number[]) => updateServer({ activeMods: mods })}
-            />
-          </CardContent>
-        </Card>
+      <TabsContent value="mods" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="border border-border/50 bg-surface-elevated/20 rounded-xl overflow-hidden backdrop-blur-sm p-4 sm:p-6 lg:p-8">
+          <ModSelector 
+            serverType="ARMA3"
+            selectedModIds={server.activeMods || []}
+            onChange={(mods: number[]) => updateServer({ activeMods: mods })}
+          />
+        </div>
 
         <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
           <div className="h-1 bg-primary" />
@@ -1046,7 +962,7 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
             </div>
           </CardHeader>
           {cdlcExpanded && (
-            <CardContent className="p-6 lg:p-8 animate-in fade-in slide-in-from-top-2 duration-200">
+            <CardContent className="p-4 sm:p-6 lg:p-8 animate-in fade-in slide-in-from-top-2 duration-200">
               <CreatorDlcSelector 
                 selectedDlcs={server.activeDLCs || []} 
                 onChange={(ids) => updateServer({ activeDLCs: ids })}
@@ -1060,7 +976,7 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
       </TabsContent>
 
       {/* CBA TAB */}
-      <TabsContent value="cba" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <TabsContent value="cba" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <CBATab 
           serverId={server.id}
           selectedPresetId={server.cbaPresetId}
@@ -1069,7 +985,7 @@ export function Arma3SettingsForm({ server, setServer, isInstalled = true }: Rea
       </TabsContent>
 
       {/* CONFIGS PREVIEW TAB */}
-      <TabsContent value="configs" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <TabsContent value="configs" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <ConfigViewerTab 
           serverId={server.id} 
           serverType="ARMA3" 
@@ -1084,21 +1000,13 @@ function Arma3DifficultyTab({ server, updateDifficulty }: Readonly<{ server: any
   return (
     <>
       {/* DIFFICULTY TAB */}
-      <TabsContent value="difficulty" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Cpu className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Custom Difficulty Settings</CardTitle>
-                <CardDescription className="text-muted-foreground">Rules of engagement and AI parameters.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-10 p-6 lg:p-8">
+      <TabsContent value="difficulty" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Custom Difficulty Settings"
+          description="Rules of engagement and AI parameters."
+          icon={Cpu}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-8 border-b border-border/50">
               <div className="space-y-2">
                 <label htmlFor="field-31" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Skill AI</label>
@@ -1231,8 +1139,7 @@ function Arma3DifficultyTab({ server, updateDifficulty }: Readonly<{ server: any
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
     </>
   );

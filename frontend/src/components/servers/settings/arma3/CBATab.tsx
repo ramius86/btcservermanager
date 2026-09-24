@@ -149,25 +149,27 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
             </div>
 
             <div className="space-y-2 flex flex-col">
-              <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1 opacity-0" aria-hidden="true">Spacer</span>
+              <span className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1 opacity-0 hidden sm:block" aria-hidden="true">Spacer</span>
               <div className="flex items-center gap-2">
                 {isCreating ? (
-                  <>
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full">
                     <Input 
                       value={newPresetName} 
                       onChange={(e) => setNewPresetName(e.target.value)} 
                       placeholder="Preset Name"
-                      className="h-11"
+                      className="h-11 flex-1"
                     />
-                    <Button onClick={handleCreatePreset} className="h-11 px-4">
-                      <Check className="w-4 h-4 mr-2" /> Create
-                    </Button>
-                    <Button variant="ghost" onClick={() => setIsCreating(false)} className="h-11 px-4">
-                      Cancel
-                    </Button>
-                  </>
+                    <div className="flex items-center gap-2">
+                      <Button onClick={handleCreatePreset} className="flex-1 sm:flex-none h-11 px-4">
+                        <Check className="w-4 h-4 mr-2" /> Create
+                      </Button>
+                      <Button variant="ghost" onClick={() => setIsCreating(false)} className="flex-1 sm:flex-none h-11 px-4">
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
                 ) : (
-                  <Button onClick={() => setIsCreating(true)} className="h-11 px-4">
+                  <Button onClick={() => setIsCreating(true)} className="h-11 px-4 w-full sm:w-auto">
                     <Plus className="w-4 h-4 mr-2" /> Create New Preset
                   </Button>
                 )}
@@ -187,27 +189,27 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
       {editingPreset && (
         <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
           <CardHeader className="border-b border-border/50 pb-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">
-                <FileCode className="w-5 h-5 text-primary" />
-                <div>
-                  <CardTitle className="text-base">Editing Preset: {editingPreset.name}</CardTitle>
+                <FileCode className="w-5 h-5 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <CardTitle className="text-base truncate">Editing: {editingPreset.name}</CardTitle>
                   <CardDescription className="text-xs">cba_settings.sqf</CardDescription>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-9"
+                  className="h-9 px-2.5 sm:px-3 text-xs"
                   onClick={handleSelectAll}
                 >
-                  <Copy className="w-4 h-4 mr-2" /> Select All
+                  <Copy className="w-3.5 h-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Select All</span>
                 </Button>
                 <Button 
                   variant="outline" 
                   size="sm" 
-                  className="h-9"
+                  className="h-9 px-2.5 sm:px-3 text-xs"
                   onClick={() => {
                     const newName = prompt('Enter new name:', editingPreset.name)
                     if (newName && newName !== editingPreset.name) {
@@ -215,23 +217,23 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
                     }
                   }}
                 >
-                  <Edit2 className="w-4 h-4 mr-2" /> Rename
+                  <Edit2 className="w-3.5 h-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Rename</span>
                 </Button>
                 <Button 
                   variant="danger" 
                   size="sm" 
-                  className="h-9"
+                  className="h-9 px-2.5 sm:px-3 text-xs"
                   onClick={() => { if (editingPreset.id) handleDeletePreset(editingPreset.id) }}
                 >
-                  <Trash2 className="w-4 h-4 mr-2" /> Delete
+                  <Trash2 className="w-3.5 h-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Delete</span>
                 </Button>
                 <Button 
                   onClick={handleSavePreset} 
-                  className="h-9 bg-primary hover:bg-primary/90"
+                  className="h-9 px-3 sm:px-4 bg-primary hover:bg-primary/90 text-xs"
                   disabled={saveSuccess}
                 >
-                  {saveSuccess ? <Check className="w-4 h-4 mr-2" /> : <Save className="w-4 h-4 mr-2" />}
-                  {saveSuccess ? 'Saved' : 'Save Changes'}
+                  {saveSuccess ? <Check className="w-3.5 h-3.5 mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                  {saveSuccess ? 'Saved' : 'Save'}
                 </Button>
               </div>
             </div>
@@ -239,7 +241,7 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
           <CardContent className="p-0">
             <textarea
               ref={textareaRef}
-              className="w-full h-[500px] bg-background/50 p-6 font-mono text-sm focus:outline-none resize-none no-scrollbar"
+              className="w-full h-[350px] sm:h-[500px] bg-background/50 p-4 sm:p-6 font-mono text-base md:text-sm focus:outline-none resize-none custom-scrollbar"
               value={editingPreset.content}
               onChange={(e) => setEditingPreset({ ...editingPreset, content: e.target.value })}
               spellCheck={false}

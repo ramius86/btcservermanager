@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { ServerCog, Package, Sun, FileText, ShieldCheck, Activity, Volume2, Plus, Trash2 } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
+import { Tabs, TabsContent } from '../../../ui/Tabs'
 import { Input } from '../../../ui/Input'
 import { Switch } from '../../../ui/Switch'
 import { Select } from '../../../ui/Select'
@@ -11,6 +10,8 @@ import { ConfigViewerTab } from '../shared/ConfigViewerTab'
 import { LaunchParameter } from "../../../../dtos/ServerDto"
 import { CustomLaunchParametersInput } from '../../CustomLaunchParametersInput'
 import { ModSelector } from '../../ModSelector'
+import { SettingsTabNav } from '../shared/SettingsTabNav'
+import { CollapsibleCard } from '../shared/CollapsibleCard'
 
 interface DayZSettingsFormProps {
   server: any
@@ -29,56 +30,40 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 pb-4 border-b border-border/50">
+      <div className="flex flex-col gap-4 pb-4 border-b border-border/50">
         <div>
           <h2 className="text-xl font-bold tracking-tight">Server Configuration</h2>
           <p className="text-sm text-muted-foreground">Audit, optimize and deploy configurations for the DayZ Dedicated Engine.</p>
         </div>
-        <TabsList className="bg-muted/40 p-1 border border-border/50 rounded-xl w-full lg:w-auto grid grid-cols-3 lg:flex gap-1">
-          <TabsTrigger value="general" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <ServerCog className="w-4 h-4" /> General
-          </TabsTrigger>
-          <TabsTrigger value="gameplay" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <Sun className="w-4 h-4" /> Gameplay
-          </TabsTrigger>
-          <TabsTrigger value="security" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <ShieldCheck className="w-4 h-4" /> Security
-          </TabsTrigger>
-          <TabsTrigger value="performance" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <Activity className="w-4 h-4" /> Performance
-          </TabsTrigger>
-          <TabsTrigger value="mods" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <Package className="w-4 h-4" /> Mods
-          </TabsTrigger>
-          <TabsTrigger value="configs" className="rounded-lg text-xs font-bold uppercase tracking-wider gap-2 px-4 py-2.5">
-            <FileText className="w-4 h-4" /> Preview
-          </TabsTrigger>
-        </TabsList>
+        <SettingsTabNav
+          tabs={[
+            { value: 'general', label: 'General', icon: ServerCog },
+            { value: 'gameplay', label: 'Gameplay', icon: Sun },
+            { value: 'security', label: 'Security', icon: ShieldCheck },
+            { value: 'performance', label: 'Performance', icon: Activity },
+            { value: 'mods', label: 'Mods', icon: Package },
+            { value: 'configs', label: 'Preview', icon: FileText },
+          ]}
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+        />
       </div>
 
       {/* GENERAL TAB */}
-      <TabsContent value="general" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <ServerCog className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">General Settings</CardTitle>
-                <CardDescription className="text-muted-foreground">Essential identification and connectivity settings.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
-            <BaseGeneralFields 
-              server={server} 
-              onChange={updateServer} 
-              isArma3={false} 
-              isDayZ={true} 
-              isReforger={false} 
-            />
+      <TabsContent value="general" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard 
+          title="General Settings" 
+          description="Essential identification and connectivity settings." 
+          icon={ServerCog}
+          defaultOpen={true}
+        >
+          <BaseGeneralFields 
+            server={server} 
+            onChange={updateServer} 
+            isArma3={false} 
+            isDayZ={true} 
+            isReforger={false} 
+          />
             
             <div className="space-y-4 pt-8 border-t border-border/50">
               <div className="flex items-center gap-2">
@@ -195,27 +180,18 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
                 onChange={(params: LaunchParameter[]) => updateServer({ customLaunchParameters: params })}
               />
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
         <MaintenanceCard server={server} onChange={updateServer} />
       </TabsContent>
 
       {/* GAMEPLAY TAB */}
-      <TabsContent value="gameplay" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <Sun className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">Environment & Survival</CardTitle>
-                <CardDescription className="text-muted-foreground">World rules, time acceleration, and damage mechanics.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
+      <TabsContent value="gameplay" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Environment & Survival"
+          description="World rules, time acceleration, and damage mechanics."
+          icon={Sun}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {[
                 { id: 'serverTime', label: 'Initial Server Time', placeholder: 'SystemTime', hint: 'INITIAL DATE AND TIME ON BOOT. SET TO "SystemTime" OR USE EXACT FORMAT "YYYY/MM/DD/HH/MM".' },
@@ -297,24 +273,15 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
                 <p className="text-[10px] text-muted-foreground/80 font-medium ml-1 uppercase">DELAY IN SECONDS BEFORE NEW SURVIVOR ENTRY TRIGGER SPAWNS (DEFAULT: 5).</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
         {/* MESSAGE OF THE DAY (MOTD) CARD */}
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <Volume2 className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">Message of the Day (MOTD)</CardTitle>
-                <CardDescription className="text-muted-foreground">Configure global chat broadcast alerts and intervals.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-6 p-8">
+        <CollapsibleCard
+          title="Message of the Day (MOTD)"
+          description="Configure global chat broadcast alerts and intervals."
+          icon={Volume2}
+          defaultOpen={false}
+        >
             <div className="space-y-4">
               <div className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">MOTD Messages</div>
               <div className="space-y-3">
@@ -369,26 +336,17 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
                 TIME DELAY IN SECONDS BETWEEN CONSECUTIVE CHAT BROADCASTS (DEFAULT: 1 SECOND).
               </p>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* SECURITY & LOGS TAB */}
-      <TabsContent value="security" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <ShieldCheck className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">Security & Audit Logs</CardTitle>
-                <CardDescription className="text-muted-foreground">Protection systems and detailed server logging.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
+      <TabsContent value="security" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Security & Audit Logs"
+          description="Protection systems and detailed server logging."
+          icon={ShieldCheck}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
@@ -480,33 +438,24 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* PERFORMANCE TAB */}
-      <TabsContent value="performance" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <Activity className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">Performance & Network</CardTitle>
-                <CardDescription className="text-muted-foreground">Engine optimization and network traffic control.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
+      <TabsContent value="performance" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Performance & Network"
+          description="Engine optimization and network traffic control."
+          icon={Activity}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-4">
                 <div className="flex items-center gap-2">
                   <div className="w-1 h-3 bg-primary rounded-full" />
                   <h4 className="text-[10px] font-black uppercase tracking-widest text-muted-foreground">Queue Management</h4>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label htmlFor="dayz-loginQueueConcurrent" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Concurrent Logins</label>
                     <Input 
@@ -651,26 +600,22 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
                 <p className="text-[10px] text-muted-foreground/80 font-medium ml-1 uppercase">VOICE QUALITY CODEC COMPRESSION FACTOR MULTIPLIER ENFORCEMENT.</p>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* MODS TAB */}
-      <TabsContent value="mods" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardContent className="p-6 lg:p-8">
-            <ModSelector 
-              serverType={server.type}
-              selectedModIds={server.activeMods || []}
-              onChange={(mods: number[]) => updateServer({ activeMods: mods })}
-            />
-          </CardContent>
-        </Card>
+      <TabsContent value="mods" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="border border-border/50 bg-surface-elevated/20 rounded-xl overflow-hidden backdrop-blur-sm p-4 sm:p-6 lg:p-8">
+          <ModSelector 
+            serverType={server.type}
+            selectedModIds={server.activeMods || []}
+            onChange={(mods: number[]) => updateServer({ activeMods: mods })}
+          />
+        </div>
       </TabsContent>
 
       {/* CONFIGS PREVIEW TAB */}
-      <TabsContent value="configs" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <TabsContent value="configs" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <ConfigViewerTab serverId={server.id} />
       </TabsContent>
     </Tabs>

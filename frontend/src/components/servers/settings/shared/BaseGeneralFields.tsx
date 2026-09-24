@@ -23,7 +23,7 @@ export function BaseGeneralFields({ server, onChange, isArma3, isDayZ, isReforge
   else if (isReforger) queryPortLabel = 'A2S Port';
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8">
       <div className="space-y-2">
         <label htmlFor="server-name-input" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Server Name</label>
         <Input 
@@ -37,7 +37,7 @@ export function BaseGeneralFields({ server, onChange, isArma3, isDayZ, isReforge
         <p className="text-[10px] text-muted-foreground/80 font-medium ml-1">THE NAME DISPLAYED IN GLOBAL SERVER BROWSERS.</p>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 sm:gap-6 md:gap-8">
         <div className="space-y-2">
           <label htmlFor="server-port-input" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">{isArma3 || isDayZ ? 'Port' : 'Game Port'}</label>
           <Input 
