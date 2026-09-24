@@ -191,7 +191,7 @@ export function ServerSettingsPage() {
             className="h-9 px-3.5 shadow-md shadow-primary/20 font-bold uppercase tracking-wider text-xs"
           >
             <Save className="w-3.5 h-3.5 mr-1.5" />
-            Salva
+            Save
           </Button>
         </div>
 
@@ -212,7 +212,7 @@ export function ServerSettingsPage() {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="grid gap-6 sm:gap-8 min-w-0 w-full max-w-full">
+      <form onSubmit={handleSave} className="space-y-6 sm:space-y-8 w-full min-w-0 max-w-full">
         {renderForm()}
 
         {/* Mobile In-Flow Bottom Form Actions */}

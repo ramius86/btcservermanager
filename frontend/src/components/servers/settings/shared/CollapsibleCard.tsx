@@ -54,7 +54,7 @@ export function CollapsibleCard({
           </div>
           <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 md:hidden ml-1">
             <span className="text-[10px] uppercase font-bold text-muted-foreground/70 hidden sm:inline">
-              {isOpen ? 'Nascondi' : 'Espandi'}
+              {isOpen ? 'Collapse' : 'Expand'}
             </span>
             <div className={cn(
               "w-7 h-7 rounded-md bg-muted/40 border border-border/40 flex items-center justify-center text-muted-foreground transition-transform duration-200",
