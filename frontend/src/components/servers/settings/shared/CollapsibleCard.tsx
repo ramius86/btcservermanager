@@ -27,20 +27,20 @@ export function CollapsibleCard({
   const [isOpen, setIsOpen] = useState(defaultOpen)
 
   return (
-    <Card className={cn("border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm", className)}>
+    <Card className={cn("w-full min-w-0 max-w-full border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm", className)}>
       <div className="h-1 bg-primary" />
       <CardHeader 
         onClick={() => setIsOpen(prev => !prev)}
-        className="pb-4 sm:pb-6 cursor-pointer md:cursor-default select-none transition-colors hover:bg-muted/10 md:hover:bg-transparent"
+        className="p-4 sm:p-6 cursor-pointer md:cursor-default select-none transition-colors hover:bg-muted/10 md:hover:bg-transparent"
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+        <div className="flex items-center justify-between gap-2 sm:gap-3 min-w-0 w-full">
+          <div className="flex items-center gap-2.5 sm:gap-4 min-w-0 flex-1">
             {Icon && (
               <div className="w-9 h-9 sm:w-10 sm:h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20 text-primary shrink-0">
                 <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
             )}
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <CardTitle className="text-base sm:text-lg font-bold truncate">{title}</CardTitle>
                 {badge}
@@ -52,12 +52,12 @@ export function CollapsibleCard({
               )}
             </div>
           </div>
-          <div className="flex items-center gap-2 shrink-0 md:hidden">
-            <span className="text-[10px] uppercase font-bold text-muted-foreground/70">
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 md:hidden ml-1">
+            <span className="text-[10px] uppercase font-bold text-muted-foreground/70 hidden sm:inline">
               {isOpen ? 'Nascondi' : 'Espandi'}
             </span>
             <div className={cn(
-              "w-7 h-7 rounded-md bg-muted/40 flex items-center justify-center text-muted-foreground transition-transform duration-200",
+              "w-7 h-7 rounded-md bg-muted/40 border border-border/40 flex items-center justify-center text-muted-foreground transition-transform duration-200",
               isOpen ? "rotate-180" : ""
             )}>
               <ChevronDown className="w-4 h-4" />
@@ -69,7 +69,7 @@ export function CollapsibleCard({
         "transition-all duration-300",
         isOpen ? "block" : "hidden md:block"
       )}>
-        <CardContent className={cn("space-y-6 sm:space-y-8 p-4 sm:p-6 lg:p-8", contentClassName)}>
+        <CardContent className={cn("space-y-6 sm:space-y-8 p-4 pt-0 sm:p-6 sm:pt-0 lg:p-8 lg:pt-0", contentClassName)}>
           {children}
         </CardContent>
       </div>

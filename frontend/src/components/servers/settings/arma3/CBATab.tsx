@@ -113,8 +113,8 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0 w-full max-w-full">
+      <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm min-w-0 w-full max-w-full">
         <div className="h-1 bg-primary" />
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -187,7 +187,7 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
       </Card>
 
       {editingPreset && (
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
+        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm min-w-0 w-full max-w-full">
           <CardHeader className="border-b border-border/50 pb-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center gap-3">

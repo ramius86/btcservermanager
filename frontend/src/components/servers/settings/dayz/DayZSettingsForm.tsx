@@ -30,8 +30,8 @@ export function DayZSettingsForm({ server, setServer }: Readonly<DayZSettingsFor
 
   return (
     <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
-      <div className="flex flex-col gap-4 pb-4 border-b border-border/50">
-        <div>
+      <div className="flex flex-col gap-3 md:gap-4 pb-4 border-b border-border/50">
+        <div className="hidden md:block">
           <h2 className="text-xl font-bold tracking-tight">Server Configuration</h2>
           <p className="text-sm text-muted-foreground">Audit, optimize and deploy configurations for the DayZ Dedicated Engine.</p>
         </div>

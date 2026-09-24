@@ -105,13 +105,13 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0 w-full max-w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0">
           <h2 className="text-xl font-bold tracking-tight">Configuration Preview</h2>
           <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Real-time view of files currently saved on storage</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button 
             variant="outline" 
             size="sm" 
