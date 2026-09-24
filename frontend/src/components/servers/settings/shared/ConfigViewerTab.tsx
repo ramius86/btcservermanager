@@ -105,13 +105,13 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
   }
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-      <div className="flex items-center justify-between">
-        <div className="space-y-1">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300 min-w-0 w-full max-w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="space-y-1 min-w-0">
           <h2 className="text-xl font-bold tracking-tight">Configuration Preview</h2>
           <p className="text-xs text-muted-foreground uppercase tracking-widest font-semibold">Real-time view of files currently saved on storage</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           <Button 
             variant="outline" 
             size="sm" 
@@ -128,15 +128,15 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
       <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
         <div className="h-1 bg-primary" />
         <Tabs value={activeFile || ''} onValueChange={setActiveFile} className="w-full">
-          <div className="px-4 pt-4 border-b border-border/50 bg-surface-elevated/30">
-            <TabsList className="bg-transparent h-auto p-0 gap-4 overflow-x-auto no-scrollbar">
+          <div className="px-3 sm:px-4 pt-3 sm:pt-4 border-b border-border/50 bg-surface-elevated/30 overflow-x-auto no-scrollbar">
+            <TabsList className="bg-transparent h-auto p-0 gap-3 sm:gap-4 flex flex-nowrap w-max">
               {filenames.map(name => (
                 <TabsTrigger 
                   key={name}
                   value={name}
-                  className="rounded-none border-b-2 border-transparent px-1 py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all"
+                  className="rounded-none border-b-2 border-transparent px-1 py-2.5 sm:py-3 data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:text-foreground text-[10px] font-black uppercase tracking-[0.15em] sm:tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all shrink-0"
                 >
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 sm:gap-2">
                     {getFileIcon(name)}
                     {name}
                   </div>
@@ -148,13 +148,13 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
           {filenames.map(name => (
             <TabsContent key={name} value={name} className="mt-0 outline-none">
               <div className="relative group">
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
                   <div className="bg-muted/80 backdrop-blur border border-border rounded-md px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                     Read-Only
                   </div>
                 </div>
                 <div className="p-0 overflow-auto max-h-[600px] bg-muted/50 custom-scrollbar text-left">
-                  <pre className="p-6 text-[11px] font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap break-all">
+                  <pre className="p-4 sm:p-6 text-[11px] font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap break-all">
                     <code>{configs[name]}</code>
                   </pre>
                 </div>

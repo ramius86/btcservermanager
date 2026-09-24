@@ -75,6 +75,84 @@ interface ServerControlsProps {
   navigate: any
 }
 
+interface ServerActionButtonProps {
+  status: any
+  serverId: number
+  server: AnyServerDto
+  hasPortConflict: boolean
+  onStart: (id: number) => void
+  onStop: (id: number) => void
+}
+
+function ServerActionButton({
+  status,
+  serverId,
+  server: _server,
+  hasPortConflict,
+  onStart,
+  onStop,
+}: Readonly<ServerActionButtonProps>) {
+  if (status.isStarting) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        disabled 
+        className="w-9 h-9 text-amber-500 cursor-wait bg-amber-500/10" 
+        title="Starting Server..."
+      >
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      </Button>
+    )
+  }
+
+  if (status.isStopping) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        disabled 
+        className="w-9 h-9 text-destructive cursor-wait bg-destructive/10" 
+        title="Stopping Server..."
+      >
+        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+      </Button>
+    )
+  }
+
+  if (status.alive) {
+    return (
+      <Button 
+        variant="ghost" 
+        size="icon" 
+        onClick={(e) => { e.stopPropagation(); onStop(serverId); }} 
+        className="w-9 h-9 text-destructive hover:bg-destructive/10"
+        title="Stop Server"
+      >
+        <Square className="w-3.5 h-3.5 fill-current" />
+      </Button>
+    )
+  }
+
+  return (
+    <Button 
+      variant="ghost"
+      size="icon"
+      onClick={(e) => { e.stopPropagation(); onStart(serverId); }} 
+      disabled={hasPortConflict}
+      className={cn(
+        "w-9 h-9",
+        hasPortConflict
+          ? "text-muted-foreground/30 cursor-not-allowed"
+          : "text-success hover:bg-success/10"
+      )}
+      title={hasPortConflict ? "Port conflict" : "Start Server"}
+    >
+      <Play className="w-3.5 h-3.5 fill-current" />
+    </Button>
+  )
+}
+
 function ServerControls({
   server,
   status,
@@ -88,58 +166,29 @@ function ServerControls({
   navigate
 }: Readonly<ServerControlsProps>) {
   const sId = server.id!
+  const hasPortConflict = isServerWithSamePortRunning(server)
+
+  const onPerformanceClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (server.type === 'ARMA3') {
+      showToast("Arma 3 Performance stats coming soon", "info")
+      return
+    }
+    navigate(`/logs?type=server&serverId=${sId}&view=performance&game=${server.type}`)
+  }
 
   return (
-    <div className="flex flex-col items-end gap-1.5 pl-0 md:pl-4 border-l-0 md:border-l border-border/30">
-      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-        <div className="flex gap-1.5 items-center mr-1.5 pr-1.5 border-r border-border/30">
-          {status.isStarting ? (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              disabled 
-              className="w-9 h-9 text-amber-500 cursor-wait bg-amber-500/10" 
-              title="Starting Server..."
-            >
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            </Button>
-          ) : status.isStopping ? (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              disabled 
-              className="w-9 h-9 text-destructive cursor-wait bg-destructive/10" 
-              title="Stopping Server..."
-            >
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            </Button>
-          ) : status.alive ? (
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={(e) => { e.stopPropagation(); handleStop(sId); }} 
-              className="w-9 h-9 text-destructive hover:bg-destructive/10"
-              title="Stop Server"
-            >
-              <Square className="w-3.5 h-3.5 fill-current" />
-            </Button>
-          ) : (
-            <Button 
-              variant="ghost"
-              size="icon"
-              onClick={(e) => { e.stopPropagation(); handleStart(sId); }} 
-              disabled={isServerWithSamePortRunning(server)}
-              className={cn(
-                "w-9 h-9",
-                isServerWithSamePortRunning(server)
-                  ? "text-muted-foreground/30 cursor-not-allowed"
-                  : "text-success hover:bg-success/10"
-              )}
-              title={isServerWithSamePortRunning(server) ? "Port conflict" : "Start Server"}
-            >
-              <Play className="w-3.5 h-3.5 fill-current" />
-            </Button>
-          )}
+    <div className="flex flex-col items-end gap-1.5 pl-0 md:pl-4 border-l-0 md:border-l border-border/30 w-full sm:w-auto mt-2 sm:mt-0">
+      <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-between sm:justify-end w-full sm:w-auto">
+        <div className="flex gap-1 sm:gap-1.5 items-center mr-1 sm:mr-1.5 pr-1 sm:pr-1.5 border-r border-border/30">
+          <ServerActionButton
+            status={status}
+            serverId={sId}
+            server={server}
+            hasPortConflict={hasPortConflict}
+            onStart={handleStart}
+            onStop={handleStop}
+          />
           
           <Button 
             variant="ghost" 
@@ -176,14 +225,7 @@ function ServerControls({
             <Button 
               variant="ghost" 
               size="icon" 
-              onClick={(e) => { 
-                e.stopPropagation(); 
-                if (server.type === 'ARMA3') {
-                  showToast("Arma 3 Performance stats coming soon", "info");
-                  return;
-                }
-                navigate(`/logs?type=server&serverId=${sId}&view=performance&game=${server.type}`); 
-              }} 
+              onClick={onPerformanceClick} 
               className={cn(
                 "w-9 h-9",
                 server.type === 'REFORGER' ? "text-primary hover:bg-primary/10" : "text-muted-foreground opacity-50 hover:bg-accent"
@@ -295,7 +337,7 @@ function ServerInfoBar({
             </div>
           </>
         ) : (
-          <div className="h-[34px]" /> // Alignment Spacer
+          <div className="hidden md:block h-[34px]" /> // Alignment Spacer
         )}
       </div>
 
@@ -386,6 +428,40 @@ function ServerInfoBar({
   )
 }
 
+function getServerStatusBadgeClass(status: any): string {
+  if (status.isStarting) {
+    return "bg-amber-500/10 border-amber-500/20 text-amber-500"
+  }
+  if (status.isStopping) {
+    return "bg-destructive/10 border-destructive/20 text-destructive"
+  }
+  if (status.alive) {
+    return "bg-success/10 border-success/20 text-success"
+  }
+  return "bg-surface/50 border-border/50 text-muted-foreground/50"
+}
+
+function getServerStatusDotClass(status: any): string {
+  if (status.isStarting) {
+    return "bg-amber-500 animate-ping"
+  }
+  if (status.isStopping) {
+    return "bg-destructive animate-pulse"
+  }
+  if (status.alive) {
+    return "bg-success animate-pulse"
+  }
+  return "bg-muted-foreground/30"
+}
+
+function getServerStatusText(status: any, isInstalling: boolean): string {
+  if (status.isStarting) return "Starting"
+  if (status.isStopping) return "Stopping"
+  if (status.alive) return "Online"
+  if (isInstalling) return "Updating"
+  return "Offline"
+}
+
 function ServerCardItem({
   instance,
   index,
@@ -404,17 +480,9 @@ function ServerCardItem({
   showToast
 }: Readonly<ServerCardItemProps>) {
   const { server, status } = instance
-
-  let statusText = "Offline"
-  if (status.isStarting) {
-    statusText = "Starting"
-  } else if (status.isStopping) {
-    statusText = "Stopping"
-  } else if (status.alive) {
-    statusText = "Online"
-  } else if (installingGames[server.type]) {
-    statusText = "Updating"
-  }
+  const isInstalling = Boolean(installingGames[server.type])
+  const statusText = getServerStatusText(status, isInstalling)
+  const isServerActive = status.alive || status.isStarting
 
   return (
     <Draggable draggableId={server.id!.toString()} index={index}>
@@ -425,10 +493,10 @@ function ServerCardItem({
           className={cn(
             "group relative flex flex-col p-4 md:p-5 gap-4 border-border bg-surface-elevated/50 hover:border-primary/30",
             !snapshot.isDragging && "transition-[border-color,background-color,box-shadow] duration-300",
-            (status.alive || status.isStarting) && "border-primary/20 bg-surface-elevated/80 shadow-lg shadow-primary/5",
+            isServerActive && "border-primary/20 bg-surface-elevated/80 shadow-lg shadow-primary/5",
             snapshot.isDragging && "z-50 border-primary/50 shadow-2xl scale-[1.01] bg-surface-elevated"
           )}
-          style={provided.draggableProps.style as React.CSSProperties}
+          style={provided.draggableProps.style}
         >
           <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div 
@@ -442,12 +510,12 @@ function ServerCardItem({
             <div className={cn(
               "w-16 h-16 rounded-2xl flex items-center justify-center border shrink-0",
               !snapshot.isDragging && "transition-all duration-500",
-              (status.alive || status.isStarting) ? "bg-primary/10 border-primary/20 shadow-inner shadow-primary/5" : "bg-surface border-border opacity-60"
+              isServerActive ? "bg-primary/10 border-primary/20 shadow-inner shadow-primary/5" : "bg-surface border-border opacity-60"
             )}>
               <img 
                 src={getServerImage(server.type)} 
                 alt={server.type} 
-                className={cn("h-10 w-10 object-contain drop-shadow-md dark:invert-0 invert", !(status.alive || status.isStarting) && "grayscale")}
+                className={cn("h-10 w-10 object-contain drop-shadow-md dark:invert-0 invert", !isServerActive && "grayscale")}
               />
             </div>
 
@@ -466,28 +534,16 @@ function ServerCardItem({
                 <div className={cn(
                   "flex items-center gap-1.5 px-2 py-0.5 rounded-md border backdrop-blur-sm select-none",
                   !snapshot.isDragging && "transition-all duration-500",
-                  status.isStarting
-                    ? "bg-amber-500/10 border-amber-500/20 text-amber-500"
-                    : status.isStopping
-                    ? "bg-destructive/10 border-destructive/20 text-destructive"
-                    : status.alive 
-                    ? "bg-success/10 border-success/20 text-success" 
-                    : "bg-surface/50 border-border/50 text-muted-foreground/50"
+                  getServerStatusBadgeClass(status)
                 )}>
                   <div className={cn(
                     "w-1.5 h-1.5 rounded-full",
-                    status.isStarting
-                      ? "bg-amber-500 animate-ping"
-                      : status.isStopping
-                      ? "bg-destructive animate-pulse"
-                      : status.alive 
-                      ? "bg-success animate-pulse" 
-                      : "bg-muted-foreground/30"
+                    getServerStatusDotClass(status)
                   )} />
                   <span className="text-[8px] font-black uppercase tracking-[0.2em]">
                     {statusText}
                   </span>
-                  {(installingGames[server.type] || status.isStarting || status.isStopping) && (
+                  {(isInstalling || status.isStarting || status.isStopping) && (
                     <Loader2 className="w-2.5 h-2.5 animate-spin text-current ml-1" />
                   )}
                 </div>
@@ -765,20 +821,20 @@ export function ServersPage() {
   )
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto py-8 px-6">
+    <div className="space-y-6 sm:space-y-12 max-w-7xl mx-auto py-4 px-3 sm:py-8 sm:px-6">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-8">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">Servers</h1>
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-foreground">Servers</h1>
         </div>
-        <div className="flex flex-wrap gap-3">
-           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/ARMA3')} className="border-border bg-surface-elevated/50 hover:bg-surface">
-             <Plus className="w-4 h-4 mr-2" /> Arma 3
+        <div className="flex flex-wrap gap-2 sm:gap-3 w-full sm:w-auto">
+           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/ARMA3')} className="border-border bg-surface-elevated/50 hover:bg-surface flex-1 sm:flex-initial">
+             <Plus className="w-4 h-4 mr-1.5" /> Arma 3
            </Button>
-           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/REFORGER')} className="border-border bg-surface-elevated/50 hover:bg-surface">
-             <Plus className="w-4 h-4 mr-2" /> Reforger
+           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/REFORGER')} className="border-border bg-surface-elevated/50 hover:bg-surface flex-1 sm:flex-initial">
+             <Plus className="w-4 h-4 mr-1.5" /> Reforger
            </Button>
-           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/DAYZ')} className="border-border bg-surface-elevated/50 hover:bg-surface">
-             <Plus className="w-4 h-4 mr-2" /> DayZ
+           <Button variant="outline" size="sm" onClick={() => navigate('/servers/new/DAYZ')} className="border-border bg-surface-elevated/50 hover:bg-surface flex-1 sm:flex-initial">
+             <Plus className="w-4 h-4 mr-1.5" /> DayZ
            </Button>
         </div>
       </div>

@@ -5,7 +5,7 @@
  */
 import React from 'react'
 import { Button } from './ui/Button'
-import { Download, FileText, Activity, LayoutDashboard, Maximize2, Minimize2 } from 'lucide-react'
+import { Download, FileText, Activity, LayoutDashboard, Maximize2, Minimize2, ChevronLeft } from 'lucide-react'
 
 interface LogViewerHeaderProps {
   selectedFile: string | null
@@ -19,6 +19,7 @@ interface LogViewerHeaderProps {
   onToggleFullscreen: () => void
   onViewChange: (view: string) => void
   isLive: boolean
+  onOpenFileList?: () => void
 }
 
 export const LogViewerHeader: React.FC<Readonly<LogViewerHeaderProps>> = ({
@@ -32,16 +33,29 @@ export const LogViewerHeader: React.FC<Readonly<LogViewerHeaderProps>> = ({
   onDownload,
   onToggleFullscreen,
   onViewChange,
-  isLive
+  isLive,
+  onOpenFileList
 }) => {
   return (
     <div className="p-3 md:p-4 border-b border-border flex flex-col md:flex-row justify-between items-start md:items-center gap-3 bg-surface-elevated/30">
-      <div className="flex items-center gap-3 w-full md:w-auto">
-        <div className="w-8 h-8 bg-surface rounded-md flex items-center justify-center border border-border">
+      <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto">
+        {onOpenFileList && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onOpenFileList}
+            className="md:hidden h-8 px-2 text-xs flex items-center gap-1 shrink-0"
+            title="Files List"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">Files</span>
+          </Button>
+        )}
+        <div className="w-8 h-8 bg-surface rounded-md flex items-center justify-center border border-border shrink-0">
           <Activity className={`h-4 w-4 ${isLive ? 'text-success animate-pulse' : 'text-primary'}`} />
         </div>
-        <div>
-          <h3 className="text-xs font-bold text-foreground tracking-tight truncate max-w-[40vw]">{selectedFile || 'Standby for Source Selection'}</h3>
+        <div className="min-w-0 flex-1">
+          <h3 className="text-xs font-bold text-foreground tracking-tight truncate max-w-[200px] sm:max-w-xs md:max-w-md">{selectedFile || 'Standby for Source Selection'}</h3>
           {isLive && (
             <div className="flex items-center gap-1.5 mt-0.5">
               <div className="w-1.5 h-1.5 bg-success rounded-full animate-pulse" />

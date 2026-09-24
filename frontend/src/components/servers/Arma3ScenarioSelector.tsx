@@ -47,8 +47,8 @@ export function Arma3ScenarioSelector({ missions, onChange }: Readonly<Arma3Scen
 
       <div className="space-y-3">
         {missions.map((mission, idx) => (
-          <div key={`${mission.template || 'empty'}-${idx}`} className="flex gap-3 items-start bg-muted/50 p-3 rounded-lg border border-border">
-            <div className="flex-1 space-y-2">
+          <div key={`${mission.template || 'empty'}-${idx}`} className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-start bg-muted/50 p-3 sm:p-3.5 rounded-lg border border-border">
+            <div className="flex-1 space-y-1.5 sm:space-y-2">
               <label htmlFor={`mission-template-select-${idx}`} className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Mission Template (.pbo)</label>
               <Select 
                 id={`mission-template-select-${idx}`}
@@ -63,26 +63,29 @@ export function Arma3ScenarioSelector({ missions, onChange }: Readonly<Arma3Scen
                 ))}
               </Select>
             </div>
-            <div className="w-1/3 space-y-2">
-              <label htmlFor={`difficulty-select-${idx}`} className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Difficulty</label>
-              <Select 
-                id={`difficulty-select-${idx}`}
-                value={mission.difficulty} 
-                onChange={(e) => handleChange(idx, 'difficulty', e.target.value)}
+            <div className="flex items-end gap-2 w-full sm:w-1/3">
+              <div className="flex-1 space-y-1.5 sm:space-y-2">
+                <label htmlFor={`difficulty-select-${idx}`} className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Difficulty</label>
+                <Select 
+                  id={`difficulty-select-${idx}`}
+                  value={mission.difficulty} 
+                  onChange={(e) => handleChange(idx, 'difficulty', e.target.value)}
+                >
+                  <option value="Recruit" className="bg-surface-elevated">Recruit</option>
+                  <option value="Regular" className="bg-surface-elevated">Regular</option>
+                  <option value="Veteran" className="bg-surface-elevated">Veteran</option>
+                  <option value="Custom" className="bg-surface-elevated">Custom</option>
+                </Select>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => handleRemove(idx)}
+                className="h-11 w-11 sm:h-auto sm:w-auto text-muted-foreground hover:text-red-400 p-2 sm:p-1.5 rounded-lg hover:bg-red-400/10 transition-colors flex items-center justify-center shrink-0 border sm:border-0 border-border/50"
+                title="Remove Mission"
               >
-                <option value="Recruit" className="bg-surface-elevated">Recruit</option>
-                <option value="Regular" className="bg-surface-elevated">Regular</option>
-                <option value="Veteran" className="bg-surface-elevated">Veteran</option>
-                <option value="Custom" className="bg-surface-elevated">Custom</option>
-              </Select>
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            <button 
-              type="button" 
-              onClick={() => handleRemove(idx)}
-              className="mt-8 text-muted-foreground hover:text-red-400 p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
           </div>
         ))}
         {missions.length === 0 && (

@@ -10,9 +10,8 @@
  */
 import { useState } from 'react'
 import { ServerCog, ShieldCheck, Activity, Package, Cpu, FileText, Database, Users, AlertTriangle } from 'lucide-react'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs'
+import { Tabs, TabsContent } from '../../../ui/Tabs'
 import { ReforgerSavesManager } from './ReforgerSavesManager'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
 import { Input } from '../../../ui/Input'
 import { Switch } from '../../../ui/Switch'
 import { Textarea } from '../../../ui/Textarea'
@@ -24,6 +23,8 @@ import { CustomLaunchParametersInput } from '../../CustomLaunchParametersInput'
 import { ReforgerModSelector } from '../../ReforgerModSelector'
 import { ReforgerScenariosAutocomplete } from '../../ReforgerScenariosAutocomplete'
 import { ReforgerCustomNames } from './ReforgerCustomNames'
+import { SettingsTabNav } from '../shared/SettingsTabNav'
+import { CollapsibleCard } from '../shared/CollapsibleCard'
 
 interface ReforgerSettingsFormProps {
   server: any
@@ -43,46 +44,33 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
   }
 
   return (
-    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-      <TabsList className="bg-surface-elevated/50 p-1 border border-border rounded-lg w-fit justify-start overflow-x-auto gap-1 h-auto no-scrollbar">
-        {[
-          { value: 'general', label: 'General', icon: ServerCog },
-          { value: 'mods', label: 'Mods', icon: Package },
-          { value: 'security', label: 'Security', icon: ShieldCheck },
-          { value: 'network', label: 'Network', icon: Activity },
-          { value: 'properties', label: 'Properties', icon: Cpu },
-          ...(server.id && isInstalled ? [
-            { value: 'configs', label: 'Configs', icon: FileText },
-            { value: 'saves', label: 'Saved Scenarios', icon: Database },
-            { value: 'custom_names', label: 'Change Names', icon: Users }
-          ] : []),
-        ].map(tab => (
-          <TabsTrigger 
-            key={tab.value}
-            value={tab.value} 
-            className="rounded-md px-4 py-2.5 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground hover:text-foreground transition-all"
-          >
-            {tab.label}
-          </TabsTrigger>
-        ))}
-      </TabsList>
+    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full space-y-6">
+      <div className="pb-4 border-b border-border/50">
+        <SettingsTabNav
+          tabs={[
+            { value: 'general', label: 'General', icon: ServerCog },
+            { value: 'mods', label: 'Mods', icon: Package },
+            { value: 'security', label: 'Security', icon: ShieldCheck },
+            { value: 'network', label: 'Network', icon: Activity },
+            { value: 'properties', label: 'Properties', icon: Cpu },
+            ...(server.id && isInstalled ? [
+              { value: 'configs', label: 'Configs', icon: FileText },
+              { value: 'saves', label: 'Saved Scenarios', icon: Database },
+              { value: 'custom_names', label: 'Change Names', icon: Users }
+            ] : []),
+          ]}
+          activeTab={activeTab}
+        />
+      </div>
 
       {/* GENERAL TAB */}
-      <TabsContent value="general" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-4">
-              <div className="w-10 h-10 bg-primary/10 flex items-center justify-center rounded-lg border border-primary/20">
-                <ServerCog className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-lg font-bold">General Settings</CardTitle>
-                <CardDescription className="text-muted-foreground">Essential identification and connectivity settings.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-8">
+      <TabsContent value="general" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="General Settings"
+          description="Essential identification and connectivity settings."
+          icon={ServerCog}
+          defaultOpen={true}
+        >
             <BaseGeneralFields 
               server={server} 
               onChange={updateServer} 
@@ -165,27 +153,18 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
                 onChange={(params: LaunchParameter[]) => updateServer({ customLaunchParameters: params })}
               />
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
         <MaintenanceCard server={server} onChange={updateServer} />
       </TabsContent>
 
       {/* SECURITY TAB */}
-      <TabsContent value="security" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <ShieldCheck className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Security & Administration</CardTitle>
-                <CardDescription className="text-muted-foreground">Integrity verification and administrative authority.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8 p-6 lg:p-8">
+      <TabsContent value="security" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Security & Administration"
+          description="Integrity verification and administrative authority."
+          icon={ShieldCheck}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
@@ -247,26 +226,17 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
                 </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* NETWORK TAB */}
-      <TabsContent value="network" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Activity className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Network Replication</CardTitle>
-                <CardDescription className="text-muted-foreground">Streaming and spatial synchronization parameters.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 lg:p-8 space-y-8">
+      <TabsContent value="network" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Network Replication"
+          description="Streaming and spatial synchronization parameters."
+          icon={Activity}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               <div className="space-y-2">
                 <label htmlFor="reforger-networkViewDistance" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Broadcast Radius</label>
@@ -393,26 +363,17 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
                 </div>
               )}
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* PROPERTIES TAB */}
-      <TabsContent value="properties" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-              <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <Cpu className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Game Properties</CardTitle>
-                <CardDescription className="text-muted-foreground">In-game limits and simulation constraints.</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-10 p-6 lg:p-8">
+      <TabsContent value="properties" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <CollapsibleCard
+          title="Game Properties"
+          description="In-game limits and simulation constraints."
+          icon={Cpu}
+          defaultOpen={true}
+        >
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pb-10 border-b border-border/50">
               <div className="space-y-2">
                 <label htmlFor="reforger-serverMaxViewDistance" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Max View Distance</label>
@@ -479,25 +440,14 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
                 </div>
               ))}
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
 
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="h-1 bg-primary" />
-          <CardHeader className="pb-6">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-primary/10 border border-primary/20 rounded-lg">
-                <FileText className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <CardTitle className="text-xl font-bold">Mission Header Custom Settings</CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Specify custom parameters (such as ACE Settings) to be embedded directly into the server's Mission Header block.
-                </CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="p-6 lg:p-8 space-y-6">
+        <CollapsibleCard
+          title="Mission Header Custom Settings"
+          description="Specify custom parameters (such as ACE Settings) to be embedded directly into the server's Mission Header block."
+          icon={FileText}
+          defaultOpen={false}
+        >
             <div className="space-y-2">
               <label htmlFor="reforger-missionHeader" className="text-[10px] uppercase font-black tracking-widest text-muted-foreground ml-1">Mission Header JSON</label>
               <textarea
@@ -515,38 +465,34 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
                 MUST BE A VALID JSON OBJECT REPRESENTING THE INNER CONSTRAINTS OF THE missionHeader BLOCK.
               </p>
             </div>
-          </CardContent>
-        </Card>
+        </CollapsibleCard>
       </TabsContent>
 
       {/* MODS TAB */}
-      <TabsContent value="mods" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-        <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-          <div className="h-1 bg-primary" />
-          <CardContent className="p-6 lg:p-8">
-            <ReforgerModSelector 
-              selectedMods={server.activeMods || []}
-              onChange={(mods) => updateServer({ activeMods: mods })}
-            />
-          </CardContent>
-        </Card>
+      <TabsContent value="mods" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <div className="border border-border/50 bg-surface-elevated/20 rounded-xl overflow-hidden backdrop-blur-sm p-4 sm:p-6 lg:p-8">
+          <ReforgerModSelector 
+            selectedMods={server.activeMods || []}
+            onChange={(mods) => updateServer({ activeMods: mods })}
+          />
+        </div>
       </TabsContent>
 
       {/* CONFIGS PREVIEW TAB */}
-      <TabsContent value="configs" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+      <TabsContent value="configs" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
         <ConfigViewerTab serverId={server.id} />
       </TabsContent>
 
       {/* SAVES TAB */}
       {server.id && (
-        <TabsContent value="saves" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <TabsContent value="saves" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
           <ReforgerSavesManager serverId={server.id} />
         </TabsContent>
       )}
 
       {/* CUSTOM NAMES TAB */}
       {server.id && (
-        <TabsContent value="custom_names" className="pt-8 space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+        <TabsContent value="custom_names" className="pt-6 sm:pt-8 space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
           {server.activeMods?.some((mod: any) => mod.id === '69C4F1D85803A966') ? (
             <ReforgerCustomNames serverId={server.id} />
           ) : (

@@ -180,11 +180,11 @@ export function MembersPage() {
     }
 
     return (
-      <div className="overflow-x-auto">
+      <div className="overflow-x-auto relative">
         <table className="w-full text-left text-sm border-collapse">
-          <thead className="bg-surface/50 border-b border-border sticky top-0 z-10">
+          <thead className="bg-surface border-b border-border sticky top-0 z-20">
             <tr>
-              <th className="py-4 px-6 font-bold uppercase tracking-widest text-[10px] text-muted-foreground whitespace-nowrap min-w-[200px] border-r border-border/50">
+              <th className="py-4 px-4 sm:px-6 font-bold uppercase tracking-widest text-[10px] text-muted-foreground whitespace-nowrap min-w-[160px] sm:min-w-[200px] border-r border-border sticky left-0 z-30 bg-surface shadow-[2px_0_5px_rgba(0,0,0,0.25)]">
                 Nickname
               </th>
               {qualifications.map(q => {
@@ -399,17 +399,17 @@ function MemberRow({
 }>) {
   return (
     <tr className={`transition-colors ${isLocked ? 'hover:bg-accent/5' : 'hover:bg-primary/5'}`}>
-      <td className="py-3 px-6 font-bold text-foreground border-r border-border/50">
+      <td className="py-3 px-4 sm:px-6 font-bold text-foreground border-r border-border sticky left-0 z-10 bg-surface group-hover:bg-surface-elevated transition-colors shadow-[2px_0_5px_rgba(0,0,0,0.25)]">
         <div className="flex items-center justify-between group h-full">
           <span className="truncate pr-2">{member.displayName}</span>
           <button
             type="button"
             onClick={() => !isLocked && onFreeze(member)}
             disabled={isLocked}
-            className={`p-1 rounded transition-colors ${
+            className={`p-1.5 sm:p-1 rounded transition-colors touch-manipulation ${
               isLocked 
                 ? 'invisible' 
-                : 'hover:bg-destructive/20 text-destructive/70 hover:text-destructive opacity-0 group-hover:opacity-100 focus:opacity-100'
+                : 'hover:bg-destructive/20 text-destructive/70 hover:text-destructive opacity-70 md:opacity-0 md:group-hover:opacity-100 focus:opacity-100'
             }`}
             title={isLocked ? undefined : "Freeze Member (remove from active roster)"}
           >

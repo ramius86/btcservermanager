@@ -293,28 +293,29 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
                       />
                     ) : (
                       <>
-                        <span 
-                          className="font-medium cursor-pointer hover:underline"
-                          onDoubleClick={() => startRename(idx, q)}
+                        <button
+                          type="button"
+                          className="font-medium cursor-pointer hover:underline bg-transparent border-0 p-0 text-inherit text-left"
+                          onClick={() => startRename(idx, q)}
                         >
                           {q}
-                        </span>
+                        </button>
                         <button
                           type="button"
                           onClick={() => startRename(idx, q)}
-                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          className="p-1 sm:p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary touch-manipulation"
                           title="Rename"
                         >
-                          <Pencil className="w-3 h-3" />
+                          <Pencil className="w-3.5 h-3.5" />
                         </button>
                       </>
                     )}
-                    <div className="flex items-center gap-0.5 border-l border-primary/20 pl-1.5 ml-1">
+                    <div className="flex items-center gap-1 sm:gap-0.5 border-l border-primary/20 pl-1.5 ml-1">
                       {idx > 0 && (
                         <button
                           type="button"
                           onClick={() => moveQual(idx, -1)}
-                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          className="p-1 sm:p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary touch-manipulation"
                           title="Move Left"
                         >
                           <ChevronLeft className="w-3.5 h-3.5" />
@@ -324,7 +325,7 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
                         <button
                           type="button"
                           onClick={() => moveQual(idx, 1)}
-                          className="p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary"
+                          className="p-1 sm:p-0.5 hover:bg-primary/20 rounded transition-colors text-primary/70 hover:text-primary touch-manipulation"
                           title="Move Right"
                         >
                           <ChevronRight className="w-3.5 h-3.5" />
@@ -333,10 +334,10 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
                       <button
                         type="button"
                         onClick={() => removeQual(q)}
-                        className="p-0.5 hover:bg-primary/20 rounded-full transition-colors text-primary/70 hover:text-primary ml-1"
+                        className="p-1 sm:p-0.5 hover:bg-primary/20 rounded-full transition-colors text-primary/70 hover:text-primary ml-1 touch-manipulation"
                         title="Remove"
                       >
-                        <X className="w-3 h-3" />
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   </Badge>

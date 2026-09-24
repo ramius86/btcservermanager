@@ -37,6 +37,7 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
   const [newPresetName, setNewPresetName] = useState('')
   const [isSavingPreset, setIsSavingPreset] = useState(false)
   const [presetToDelete, setPresetToDelete] = useState<any>(null)
+  const [activeMobileTab, setActiveMobileTab] = useState<'available' | 'active'>('available')
 
   useEffect(() => {
     loadPresets()
@@ -181,62 +182,94 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
 
   return (
     <div className="space-y-6">
-      {/* PRESETS TOOLBAR */}
-      <div className="bg-surface-elevated/40 border border-border/50 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4">
-        <div className="flex-1 flex items-center gap-3 w-full">
-          <div className="p-2 bg-blue-500/10 rounded-lg">
-            <FolderOpen className="w-4 h-4 text-blue-400" />
+      {/* Mobile Tab Switcher (sm:hidden) */}
+      <div className="sm:hidden flex p-1 bg-surface-elevated/80 border border-border rounded-xl">
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('available')}
+          className={cn(
+            "flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all",
+            activeMobileTab === 'available'
+              ? "bg-primary text-primary-foreground shadow"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Workshop & Presets
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMobileTab('active')}
+          className={cn(
+            "flex-1 py-2 text-xs font-bold uppercase tracking-wider rounded-lg transition-all",
+            activeMobileTab === 'active'
+              ? "bg-primary text-primary-foreground shadow"
+              : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          Active Mods ({selectedMods.length})
+        </button>
+      </div>
+
+      {/* Available / Presets Container */}
+      <div className={cn("space-y-6", activeMobileTab === 'available' ? 'block' : 'hidden sm:block')}>
+        {/* PRESETS TOOLBAR */}
+        <div className="bg-surface-elevated/40 border border-border/50 rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-stretch sm:items-center gap-3 sm:gap-4">
+          <div className="flex-1 flex items-center gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+            <div className="p-2 bg-blue-500/10 rounded-lg shrink-0">
+              <FolderOpen className="w-4 h-4 text-blue-400" />
+            </div>
+            <div className="flex-1 min-w-[140px] sm:min-w-[180px]">
+              <Select 
+                value={selectedPresetId} 
+                onChange={(e) => setSelectedPresetId(e.target.value)}
+              >
+                <option value="" disabled className="bg-surface-elevated">Select a preset...</option>
+                {presets.map(p => (
+                  <option key={p.id} value={String(p.id)} className="bg-surface-elevated">{p.name} ({p.reforgerMods?.length || 0} mods)</option>
+                ))}
+              </Select>
+            </div>
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <Button 
+                type="button"
+                variant="secondary" 
+                size="sm" 
+                onClick={handleApplyPreset}
+                disabled={!selectedPresetId}
+                className="h-10 px-3 sm:px-4 font-bold uppercase tracking-widest text-[10px]"
+              >
+                Apply
+              </Button>
+              <Button 
+                type="button"
+                variant="danger" 
+                size="icon" 
+                onClick={() => setPresetToDelete(presets.find(p => String(p.id) === selectedPresetId))}
+                disabled={!selectedPresetId}
+                className="h-10 w-10 shrink-0"
+                title="Delete Preset"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
-          <div className="flex-1 min-w-[200px]">
-            <Select 
-              value={selectedPresetId} 
-              onChange={(e) => setSelectedPresetId(e.target.value)}
-            >
-              <option value="" disabled className="bg-surface-elevated">Select a preset...</option>
-              {presets.map(p => (
-                <option key={p.id} value={String(p.id)} className="bg-surface-elevated">{p.name} ({p.reforgerMods?.length || 0} mods)</option>
-              ))}
-            </Select>
-          </div>
+
+          <div className="h-8 w-px bg-border/50 hidden sm:block" />
+
           <Button 
             type="button"
-            variant="secondary" 
+            variant="outline" 
             size="sm" 
-            onClick={handleApplyPreset}
-            disabled={!selectedPresetId}
-            className="h-10 px-4 font-bold uppercase tracking-widest text-[10px]"
+            onClick={() => setSavePresetOpen(true)}
+            disabled={selectedMods.length === 0}
+            className="h-10 px-4 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px] w-full sm:w-auto"
           >
-            Apply
-          </Button>
-          <Button 
-            type="button"
-            variant="danger" 
-            size="icon" 
-            onClick={() => setPresetToDelete(presets.find(p => String(p.id) === selectedPresetId))}
-            disabled={!selectedPresetId}
-            className="h-10 w-10 shrink-0"
-            title="Delete Preset"
-          >
-            <Trash2 className="w-4 h-4" />
+            <Save className="w-3.5 h-3.5 mr-2" />
+            Save as Preset
           </Button>
         </div>
 
-        <div className="h-8 w-px bg-border/50 hidden sm:block" />
-
-        <Button 
-          type="button"
-          variant="outline" 
-          size="sm" 
-          onClick={() => setSavePresetOpen(true)}
-          disabled={selectedMods.length === 0}
-          className="h-10 px-4 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px] w-full sm:w-auto"
-        >
-          <Save className="w-3.5 h-3.5 mr-2" />
-          Save as Preset
-        </Button>
-      </div>
-
-      <div className="bg-muted/50 border border-border rounded-lg p-4 space-y-4">
+        <div className="bg-muted/50 border border-border rounded-lg p-3 sm:p-4 space-y-4">
         <div className="flex flex-col gap-1">
           <label htmlFor="reforger-workshop-search" className="text-xs font-black uppercase tracking-widest text-muted-foreground ml-1">Add Mod from Workshop</label>
           <div className="relative">
@@ -329,12 +362,13 @@ export function ReforgerModSelector({ selectedMods, onChange }: Readonly<Reforge
           </div>
         )}
       </div>
+    </div>
 
-      <div className="space-y-3">
-        <div className="flex justify-between items-center px-1">
-          <h3 className="text-sm font-black uppercase tracking-widest text-foreground/80">Active Mods ({selectedMods.length})</h3>
-          <span className="text-[10px] text-muted-foreground font-medium">Automatic scenario ID discovery enabled</span>
-        </div>
+    <div className={cn("space-y-3", activeMobileTab === 'active' ? 'block' : 'hidden sm:block')}>
+      <div className="flex justify-between items-center px-1">
+        <h3 className="text-sm font-black uppercase tracking-widest text-foreground/80">Active Mods ({selectedMods.length})</h3>
+        <span className="text-[10px] text-muted-foreground font-medium">Automatic scenario ID discovery enabled</span>
+      </div>
 
         <div className="grid gap-3">
           {selectedMods.length === 0 ? (

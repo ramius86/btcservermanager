@@ -156,47 +156,83 @@ export function ServerSettingsPage() {
   }
 
   return (
-    <div className="space-y-8 max-w-6xl mx-auto py-6 px-4 md:py-10 md:px-6">
-      <div className="flex flex-col md:flex-row md:items-center gap-4 md:gap-6">
-        <Button 
-          variant="outline" 
-          size="icon" 
-          onClick={() => navigate('/servers')}
-          className="h-10 w-10 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground self-start"
-        >
-          <ArrowLeft className="w-4 h-4" />
-        </Button>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl md:text-3xl font-bold tracking-tight text-foreground">
-              {isNew ? 'Initialize Instance' : 'Instance Configuration'}
-            </h1>
-            <Badge variant="secondary" className="px-3 py-0.5 text-[10px] font-mono tracking-widest bg-primary/10 text-primary border-primary/20">
-              {server.type}
-            </Badge>
+    <div className="space-y-6 sm:space-y-8 max-w-6xl mx-auto py-4 sm:py-6 px-3 sm:px-4 md:py-10 md:px-6 pb-24 md:pb-10 min-w-0 w-full max-w-full overflow-x-hidden">
+      <div className="flex items-start md:items-center justify-between gap-3 md:gap-6">
+        <div className="flex items-start md:items-center gap-3 md:gap-4 flex-1 min-w-0">
+          <Button 
+            variant="outline" 
+            size="icon" 
+            onClick={() => navigate('/servers')}
+            className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground mt-0.5 md:mt-0"
+          >
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold tracking-tight text-foreground truncate">
+                {isNew ? 'Initialize Instance' : 'Instance Configuration'}
+              </h1>
+              <Badge variant="secondary" className="px-2.5 py-0.5 text-[10px] font-mono tracking-widest bg-primary/10 text-primary border-primary/20 shrink-0">
+                {server.type}
+              </Badge>
+            </div>
+            <p className="text-muted-foreground text-xs sm:text-sm mt-1 truncate">
+              {isNew ? 'Deploying a new tactical environment' : server.name || 'instance'}
+            </p>
           </div>
-          <p className="text-muted-foreground text-sm mt-1">
-            {isNew ? 'Deploying a new tactical environment' : server.name || 'instance'}
-          </p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+
+        {/* Mobile Header Quick Save */}
+        <div className="flex items-center gap-2 md:hidden shrink-0">
+          <Button 
+            type="button" 
+            size="sm"
+            onClick={handleSave} 
+            className="h-9 px-3.5 shadow-md shadow-primary/20 font-bold uppercase tracking-wider text-xs"
+          >
+            <Save className="w-3.5 h-3.5 mr-1.5" />
+            Save
+          </Button>
+        </div>
+
+        {/* Desktop Header Actions */}
+        <div className="hidden md:flex items-center gap-3 w-auto shrink-0">
            <Button 
             type="button" 
             variant="outline" 
             onClick={() => navigate('/servers')}
-            className="flex-1 md:flex-none h-10 px-6 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px]"
+            className="h-10 px-6 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px]"
            >
              Cancel
            </Button>
-           <Button type="submit" onClick={handleSave} className="flex-1 md:flex-none h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
+           <Button type="submit" onClick={handleSave} className="h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
              <Save className="w-4 h-4 mr-2" />
              {isNew ? 'Deploy Instance' : 'Save Data'}
            </Button>
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="grid gap-8">
+      <form onSubmit={handleSave} className="space-y-6 sm:space-y-8 w-full min-w-0 max-w-full">
         {renderForm()}
+
+        {/* Mobile In-Flow Bottom Form Actions */}
+        <div className="flex md:hidden items-center gap-3 pt-6 border-t border-border/50">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={() => navigate('/servers')}
+            className="flex-1 h-11 border-border bg-surface-elevated/80 text-muted-foreground font-bold uppercase tracking-wider text-xs"
+          >
+            Cancel
+          </Button>
+          <Button 
+            type="submit" 
+            className="flex-[2] h-11 shadow-lg shadow-primary/20 font-bold uppercase tracking-wider text-xs"
+          >
+            <Save className="w-4 h-4 mr-2" />
+            {isNew ? 'Deploy Instance' : 'Save Data'}
+          </Button>
+        </div>
       </form>
     </div>
   )

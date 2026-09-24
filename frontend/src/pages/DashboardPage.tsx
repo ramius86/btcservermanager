@@ -234,10 +234,10 @@ export function DashboardPage() {
   const activeServers = servers.filter(s => s.status === 'Running' || s.status === 'Starting').length
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8 relative">
+    <div className="space-y-6 max-w-7xl mx-auto py-4 px-3 sm:py-6 sm:px-6 lg:px-8 relative">
       {sysInfo?.fox_easter_egg && <FoxEasterEgg />}
       {/* Primary KPIs */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <StatsCard
               title="CPU Load"
               value={sysInfo?.cpu_usage === undefined ? '...' : `${(sysInfo.cpu_usage * 100).toFixed(1)}%`}
@@ -619,18 +619,18 @@ function InstallationItem({
         </div>
       )}
 
-      <div className="flex-1 flex items-center gap-6">
-        <div className="w-14 h-14 bg-surface rounded-md flex items-center justify-center border border-border group-hover:border-primary/20 transition-colors shrink-0">
+      <div className="flex-1 flex items-start sm:items-center gap-3 sm:gap-6 w-full">
+        <div className="w-12 h-12 sm:w-14 sm:h-14 bg-surface rounded-md flex items-center justify-center border border-border group-hover:border-primary/20 transition-colors shrink-0">
           <img 
             src={getInstallationIcon(inst.type)} 
             alt={inst.type} 
-            className="h-10 w-10 object-contain dark:invert-0 invert"
+            className="h-8 w-8 sm:h-10 sm:w-10 object-contain dark:invert-0 invert"
           />
         </div>
 
         <div className="flex-1 grid grid-cols-1 gap-2 sm:grid-cols-[1.2fr_1fr_1fr] sm:gap-4 items-center">
           <div className="min-w-0">
-            <h4 className="text-lg font-bold text-foreground tracking-tight truncate mb-1">
+            <h4 className="text-base sm:text-lg font-bold text-foreground tracking-tight truncate mb-1">
               {inst.type === 'DAYZ_EXP' ? 'DAYZ EXP' : inst.type}
             </h4>
             <div className="flex flex-col">
@@ -673,7 +673,7 @@ function InstallationItem({
         </div>
       </div>
       
-      <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end">
+      <div className="flex items-center gap-4 md:gap-8 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 border-border/40 pt-3 md:pt-0">
         <div className="flex flex-col items-end min-w-[140px]">
           {isInstalling ? (
             <div className="w-full space-y-2">

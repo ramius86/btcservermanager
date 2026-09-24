@@ -42,6 +42,7 @@ export function EventsPage() {
   const [imageBase64, setImageBase64] = useState<string>('')
   const [rawImageSrc, setRawImageSrc] = useState<string>('')
   const [isCropOpen, setIsCropOpen] = useState(false)
+  const [isCreateOpen, setIsCreateOpen] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   
   const [eventToDelete, setEventToDelete] = useState<number | null>(null)
@@ -181,6 +182,7 @@ export function EventsPage() {
       setTitle('')
       setImageBase64('')
       if (fileInputRef.current) fileInputRef.current.value = ''
+      setIsCreateOpen(false)
       loadData()
     } catch (err: any) {
       showToast(err.message || "Failed to post event", "error")
@@ -276,7 +278,7 @@ export function EventsPage() {
   }
 
   return (
-    <div className="space-y-12 max-w-7xl mx-auto py-8 px-6">
+    <div className="space-y-6 sm:space-y-12 max-w-7xl mx-auto py-4 px-3 sm:py-8 sm:px-6">
       <ImageCropperModal 
         isOpen={isCropOpen} 
         onClose={() => {
@@ -287,23 +289,46 @@ export function EventsPage() {
         onCropComplete={(b64) => setImageBase64(b64)} 
       />
 
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-8">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-4xl font-bold tracking-tight text-foreground">Discord Events</h1>
-          <p className="text-muted-foreground mt-1">Post events to Discord with RSVP buttons</p>
+          <h1 className="text-2xl sm:text-4xl font-bold tracking-tight text-foreground">Discord Events</h1>
+          <p className="text-sm text-muted-foreground mt-1">Post events to Discord with RSVP buttons</p>
         </div>
-        <Link to="/events/stats">
-          <Button variant="outline" className="gap-2">
-            <BarChart3 className="w-4 h-4" /> Attendance Stats
+        <div className="flex items-center gap-2 self-stretch sm:self-auto justify-between sm:justify-end">
+          <Button 
+            type="button"
+            variant={isCreateOpen ? "secondary" : "primary"} 
+            className="lg:hidden gap-1.5 flex-1 sm:flex-initial"
+            onClick={() => setIsCreateOpen(!isCreateOpen)}
+          >
+            <Plus className={`w-4 h-4 transition-transform ${isCreateOpen ? 'rotate-45' : ''}`} />
+            {isCreateOpen ? 'Close Form' : 'New Event'}
           </Button>
-        </Link>
+          <Link to="/events/stats" className="flex-1 sm:flex-initial">
+            <Button variant="outline" className="gap-2 w-full sm:w-auto">
+              <BarChart3 className="w-4 h-4" /> 
+              <span className="hidden sm:inline">Attendance Stats</span>
+              <span className="sm:hidden">Stats</span>
+            </Button>
+          </Link>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 sm:gap-8">
         {/* Create Form */}
-        <div className="lg:col-span-1">
-          <Card className="p-6 border-border bg-surface-elevated/50">
-            <h2 className="text-xl font-bold mb-4">Create Event</h2>
+        <div className={`lg:col-span-1 ${isCreateOpen ? 'block' : 'hidden lg:block'}`}>
+          <Card className="p-4 sm:p-6 border-border bg-surface-elevated/50">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold">Create Event</h2>
+              <button 
+                type="button" 
+                onClick={() => setIsCreateOpen(false)} 
+                className="lg:hidden p-1 text-muted-foreground hover:text-foreground"
+                aria-label="Close Create Event Form"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
             <form onSubmit={handleCreate} className="space-y-4">
               <div>
                 <label htmlFor="event-title" className="block text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">Title</label>
@@ -501,67 +526,69 @@ export function EventsPage() {
                     </div>
                   </div>
 
-                <div className="flex items-center gap-6 border-l border-border pl-6 w-full sm:w-auto">
-                  <div className="flex gap-4">
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-success mb-1 whitespace-nowrap">Going</span>
-                      <span className="text-lg font-mono font-black">{event.going?.length || 0}</span>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 border-t sm:border-t-0 sm:border-l border-border pt-4 sm:pt-0 pl-0 sm:pl-6 w-full sm:w-auto">
+                  <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full sm:w-auto text-center">
+                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-success mb-0.5 whitespace-nowrap">Going</span>
+                      <span className="text-base sm:text-lg font-mono font-black">{event.going?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-1 whitespace-nowrap">Not</span>
-                      <span className="text-lg font-mono font-black">{event.notGoing?.length || 0}</span>
+                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-0.5 whitespace-nowrap">Not</span>
+                      <span className="text-base sm:text-lg font-mono font-black">{event.notGoing?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-1 whitespace-nowrap">Maybe</span>
-                      <span className="text-lg font-mono font-black">{event.maybe?.length || 0}</span>
+                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-0.5 whitespace-nowrap">Maybe</span>
+                      <span className="text-base sm:text-lg font-mono font-black">{event.maybe?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1 whitespace-nowrap">No Resp.</span>
-                      <span className="text-lg font-mono font-black">{event.noResponse?.length || 0}</span>
+                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5 whitespace-nowrap">No Resp.</span>
+                      <span className="text-base sm:text-lg font-mono font-black">{event.noResponse?.length || 0}</span>
                     </div>
                   </div>
                   
-                  {rosterEnabled && (
-                    <Link to={`/events/${event.id}/roster`} className="ml-auto">
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
-                        className="h-8 px-2.5 gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60 text-[10px] font-bold uppercase tracking-wider"
-                        title="Interactive Squad Roster"
-                      >
-                        <ListOrdered className="w-3.5 h-3.5" />
-                        Roster
-                      </Button>
-                    </Link>
-                  )}
+                  <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
+                    {rosterEnabled && (
+                      <Link to={`/events/${event.id}/roster`} className="mr-auto sm:mr-0 sm:ml-auto">
+                        <Button 
+                          variant="outline" 
+                          size="sm" 
+                          className="h-8 px-2.5 gap-1.5 border-primary/40 text-primary hover:bg-primary/10 hover:border-primary/60 text-[10px] font-bold uppercase tracking-wider"
+                          title="Interactive Squad Roster"
+                        >
+                          <ListOrdered className="w-3.5 h-3.5" />
+                          Roster
+                        </Button>
+                      </Link>
+                    )}
 
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className={`text-success hover:bg-success/10 ${rosterEnabled ? '' : 'ml-auto'}`}
-                    onClick={() => setRsvpEvent({ id: event.id, title: event.title })}
-                    title="Manage RSVPs"
-                  >
-                    <Users className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-primary hover:bg-primary/10"
-                    onClick={() => handleOpenEdit(event)}
-                    title="Edit Event"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </Button>
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="text-destructive hover:bg-destructive/10"
-                    onClick={() => setEventToDelete(event.id)}
-                    title="Delete Event"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className={`text-success hover:bg-success/10 ${rosterEnabled ? '' : 'mr-auto sm:mr-0 sm:ml-auto'}`}
+                      onClick={() => setRsvpEvent({ id: event.id, title: event.title })}
+                      title="Manage RSVPs"
+                    >
+                      <Users className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-primary hover:bg-primary/10"
+                      onClick={() => handleOpenEdit(event)}
+                      title="Edit Event"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-destructive hover:bg-destructive/10"
+                      onClick={() => setEventToDelete(event.id)}
+                      title="Delete Event"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </Card>
               )
