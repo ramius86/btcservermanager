@@ -13,7 +13,12 @@ import { Textarea } from '../ui/Textarea'
 import { useToast } from '../ui/Toast'
 import type { RosterSquad, DiscordChannel } from '../../services/api'
 import { DiscordService } from '../../services/api'
-import { formatRosterForDiscord, buildDefaultRosterHeader } from './rosterUtils'
+import {
+  formatRosterForDiscord,
+  buildDefaultRosterHeader,
+  reconcileSquadsWithCandidates,
+  type RosterCandidate,
+} from './rosterUtils'
 import { ChannelCombobox } from './ChannelCombobox'
 
 interface RosterExportModalProps {
@@ -23,6 +28,7 @@ interface RosterExportModalProps {
   readonly defaultChannelId?: string
   readonly channels: DiscordChannel[]
   readonly squads: RosterSquad[]
+  readonly candidates?: RosterCandidate[]
   readonly headerText?: string
   readonly onHeaderChange?: (header: string) => void
   readonly dateTime?: string
@@ -39,6 +45,7 @@ export function RosterExportModal({
   defaultChannelId = '',
   channels,
   squads,
+  candidates,
   headerText: initialHeaderText,
   onHeaderChange,
   dateTime,
@@ -80,8 +87,11 @@ export function RosterExportModal({
   }, [defaultChannelId, channels])
 
   const formattedText = useMemo(() => {
-    return formatRosterForDiscord(headerText, squads)
-  }, [headerText, squads])
+    const reconciledSquads = candidates && candidates.length > 0
+      ? reconcileSquadsWithCandidates(squads, candidates)
+      : squads
+    return formatRosterForDiscord(headerText, reconciledSquads)
+  }, [headerText, squads, candidates])
 
   const handleCopy = async () => {
     try {

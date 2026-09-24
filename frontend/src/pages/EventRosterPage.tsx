@@ -18,6 +18,7 @@ import {
   ChevronDown,
   ChevronUp,
   RotateCcw,
+  RefreshCw,
   Radio,
   ListOrdered,
 } from 'lucide-react'
@@ -46,6 +47,8 @@ import {
   generateId,
   buildDefaultRosterHeader,
   formatRosterForDiscord,
+  reconcileSquadsWithCandidates,
+  cleanPlayerName,
 } from '../components/roster/rosterUtils'
 import { SlotPickerModal } from '../components/roster/SlotPickerModal'
 import { RosterTemplateModal } from '../components/roster/RosterTemplateModal'
@@ -234,7 +237,7 @@ function assignCandidateInSquads(
             if (candidate) {
               return {
                 ...sl,
-                assignedPlayerName: candidate.name,
+                assignedPlayerName: cleanPlayerName(candidate.name),
                 assignedUserId: candidate.id,
                 isMaybe: candidate.isMaybe,
                 isGuest: candidate.isGuest,
@@ -243,7 +246,7 @@ function assignCandidateInSquads(
             if (guestName) {
               return {
                 ...sl,
-                assignedPlayerName: guestName,
+                assignedPlayerName: cleanPlayerName(guestName),
                 assignedUserId: '',
                 isMaybe: false,
                 isGuest: true,
@@ -369,6 +372,35 @@ export function EventRosterPage() {
   const [lastSyncedText, setLastSyncedText] = useState('')
   const isInitialMount = React.useRef(true)
 
+  const [refreshingRSVPs, setRefreshingRSVPs] = useState(false)
+
+  const handleRefreshRSVPs = async () => {
+    if (!eventId || refreshingRSVPs) return
+    try {
+      setRefreshingRSVPs(true)
+      const detail = await DiscordService.getEventDetail(eventId)
+      setEventDetail(detail)
+      showToast('RSVP list updated from Discord', 'success')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Unknown error'
+      showToast('Failed to refresh RSVPs: ' + msg, 'error')
+    } finally {
+      setRefreshingRSVPs(false)
+    }
+  }
+
+  const handleOpenExportModal = async () => {
+    if (eventId) {
+      try {
+        const detail = await DiscordService.getEventDetail(eventId)
+        setEventDetail(detail)
+      } catch {
+        // Pre-fetch is best-effort, continue to open modal
+      }
+    }
+    setIsExportModalOpen(true)
+  }
+
   useEffect(() => {
     if (eventId) {
       loadInitialData()
@@ -393,7 +425,12 @@ export function EventRosterPage() {
 
       const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType)
       const initial = parseInitialRosterState(savedRoster, defaultHeader)
-      if (initial.squads.length > 0) setSquads(initial.squads)
+      const loadedGuests = initial.guests.length > 0 ? initial.guests : []
+      const initialCandidates = extractCandidates(detail, members || [], loadedGuests)
+
+      if (initial.squads.length > 0) {
+        setSquads(reconcileSquadsWithCandidates(initial.squads, initialCandidates))
+      }
       setHeaderText(initial.headerText)
       if (initial.guests.length > 0) setGuests(initial.guests)
       if (initial.preview) setPreviewConfig(initial.preview)
@@ -409,6 +446,61 @@ export function EventRosterPage() {
   const allCandidates = useMemo<RosterCandidate[]>(() => {
     return extractCandidates(eventDetail, clanMembers, guests)
   }, [eventDetail, clanMembers, guests])
+
+  // Synchronize squads when candidate pool RSVPs change (e.g. Maybe <-> Going)
+  const isInitialSyncDone = React.useRef(false)
+  useEffect(() => {
+    if (loading) return
+    if (!isInitialSyncDone.current) {
+      isInitialSyncDone.current = true
+      return
+    }
+
+    setSquads(prev => {
+      if (prev.length === 0) return prev
+      const reconciled = reconcileSquadsWithCandidates(prev, allCandidates)
+      const isDiff = prev.some((sq, sqIdx) => {
+        const recSq = reconciled[sqIdx]
+        if (!recSq || sq.slots.length !== recSq.slots.length) return true
+        return sq.slots.some((sl, slIdx) => {
+          const recSl = recSq.slots[slIdx]
+          return (
+            sl.isMaybe !== recSl.isMaybe ||
+            sl.assignedPlayerName !== recSl.assignedPlayerName ||
+            sl.assignedUserId !== recSl.assignedUserId
+          )
+        })
+      })
+      return isDiff ? reconciled : prev
+    })
+  }, [allCandidates, loading])
+
+  // Background polling & Window focus auto-refresh for Discord event RSVPs
+  useEffect(() => {
+    if (!eventId || loading) return
+
+    const pollDetail = async () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      try {
+        const detail = await DiscordService.getEventDetail(eventId)
+        setEventDetail(detail)
+      } catch {
+        // Silently ignore background polling network errors
+      }
+    }
+
+    const intervalId = setInterval(pollDetail, 30000)
+
+    const handleFocus = () => {
+      pollDetail()
+    }
+    window.addEventListener('focus', handleFocus)
+
+    return () => {
+      clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+    }
+  }, [eventId, loading])
 
   // Track who is assigned and who is unassigned
   const { assignedNames, unassignedCandidates } = useMemo(() => {
@@ -757,7 +849,7 @@ export function EventRosterPage() {
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setIsExportModalOpen(true)}
+              onClick={handleOpenExportModal}
               disabled={squads.length === 0}
               className="text-xs font-semibold h-9"
               title="Preview, copy formatted slotlist, or publish directly to Discord"
@@ -808,6 +900,16 @@ export function EventRosterPage() {
             <span className="text-muted-foreground">
               ({eventDetail?.going?.length || 0} Going, {eventDetail?.maybe?.length || 0} Maybe)
             </span>
+            <button
+              type="button"
+              onClick={handleRefreshRSVPs}
+              disabled={refreshingRSVPs}
+              className="text-muted-foreground hover:text-primary p-0.5 rounded transition-colors ml-0.5"
+              title="Refresh RSVPs from Discord"
+              aria-label="Refresh RSVPs from Discord"
+            >
+              <RefreshCw className={`w-3 h-3 ${refreshingRSVPs ? 'animate-spin text-primary' : ''}`} />
+            </button>
           </div>
           <div className="h-3 w-px bg-border" />
           <div className="flex items-center gap-2">
@@ -868,9 +970,23 @@ export function EventRosterPage() {
                   <Users className="w-4 h-4 text-primary" />
                   <CardTitle className="text-sm font-bold">Player Pool</CardTitle>
                 </div>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {unassignedCandidates.length} unassigned
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={handleRefreshRSVPs}
+                    disabled={refreshingRSVPs}
+                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                    title="Refresh RSVPs from Discord"
+                    aria-label="Refresh RSVPs from Discord"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${refreshingRSVPs ? 'animate-spin text-primary' : ''}`} />
+                  </Button>
+                  <Badge variant="outline" className="text-[10px] font-mono">
+                    {unassignedCandidates.length} unassigned
+                  </Badge>
+                </div>
               </div>
 
               {/* Search */}
@@ -1285,6 +1401,7 @@ export function EventRosterPage() {
         defaultChannelId={eventDetail?.channelId}
         channels={channels}
         squads={squads}
+        candidates={allCandidates}
         headerText={headerText}
         onHeaderChange={setHeaderText}
         dateTime={eventDetail?.dateTime}

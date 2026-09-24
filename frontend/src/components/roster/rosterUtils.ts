@@ -343,6 +343,125 @@ export function smartFillSquads(
 }
 
 /**
+ * Strips trailing (?) or (?) suffixes from a player name to ensure
+ * clean names even if historical data contained the suffix.
+ */
+export function cleanPlayerName(name?: string): string {
+  if (!name) return ''
+  return name.replace(/\s*\(\?\)\s*$/, '').trim()
+}
+
+/**
+ * Searches for a matching candidate in the pool using:
+ * 1. Assigned user ID
+ * 2. Exact cleaned name (case-insensitive)
+ * 3. Tag-stripped clan name (e.g. "=BTC= Cpt.Ramius86" matches "Cpt.Ramius86")
+ */
+function matchCandidateForSlot(
+  slot: RosterSlot,
+  candidateById: Map<string, RosterCandidate>,
+  candidateByName: Map<string, RosterCandidate>,
+  candidateByStrippedName: Map<string, RosterCandidate>
+): RosterCandidate | undefined {
+  if (slot.assignedUserId && candidateById.has(slot.assignedUserId)) {
+    return candidateById.get(slot.assignedUserId)
+  }
+
+  const cleaned = cleanPlayerName(slot.assignedPlayerName).toLowerCase()
+  if (!cleaned) return undefined
+
+  if (candidateByName.has(cleaned)) {
+    return candidateByName.get(cleaned)
+  }
+
+  const strippedCleaned = cleaned.replace(/^=[^=]+=\s*/, '').trim()
+  if (strippedCleaned && candidateByStrippedName.has(strippedCleaned)) {
+    return candidateByStrippedName.get(strippedCleaned)
+  }
+
+  return undefined
+}
+
+/**
+ * Reconciles the slots of existing squads with the latest candidate pool / Discord RSVPs.
+ * For each assigned slot:
+ * - Cleans any historical ' (?)' baked into assignedPlayerName
+ * - Matches the player against current candidate pool
+ * - Updates slot.isMaybe to match the candidate's current RSVP state
+ * - If candidate is found and slot was missing assignedUserId, updates it
+ */
+export function reconcileSquadsWithCandidates(
+  squads: RosterSquad[],
+  candidates: RosterCandidate[]
+): RosterSquad[] {
+  if (!candidates || candidates.length === 0) {
+    return squads.map(sq => ({
+      ...sq,
+      slots: sq.slots.map(sl => ({
+        ...sl,
+        assignedPlayerName: cleanPlayerName(sl.assignedPlayerName),
+      })),
+    }))
+  }
+
+  const candidateById = new Map<string, RosterCandidate>()
+  const candidateByName = new Map<string, RosterCandidate>()
+  const candidateByStrippedName = new Map<string, RosterCandidate>()
+
+  for (const c of candidates) {
+    if (c.id) {
+      candidateById.set(c.id, c)
+    }
+    const lowerName = c.name.toLowerCase().trim()
+    candidateByName.set(lowerName, c)
+
+    const stripped = lowerName.replace(/^=[^=]+=\s*/, '').trim()
+    if (stripped) {
+      candidateByStrippedName.set(stripped, c)
+    }
+  }
+
+  return squads.map(squad => ({
+    ...squad,
+    slots: squad.slots.map(slot => {
+      if (!slot.assignedPlayerName || !slot.assignedPlayerName.trim()) {
+        return {
+          ...slot,
+          assignedPlayerName: '',
+          assignedUserId: '',
+          isMaybe: false,
+          isGuest: false,
+        }
+      }
+
+      const cleanedName = cleanPlayerName(slot.assignedPlayerName)
+      const matched = matchCandidateForSlot(
+        { ...slot, assignedPlayerName: cleanedName },
+        candidateById,
+        candidateByName,
+        candidateByStrippedName
+      )
+
+      if (matched) {
+        return {
+          ...slot,
+          assignedPlayerName: cleanedName,
+          assignedUserId: matched.id || slot.assignedUserId,
+          isMaybe: matched.isMaybe,
+          isGuest: matched.isGuest ?? slot.isGuest ?? false,
+        }
+      }
+
+      return {
+        ...slot,
+        assignedPlayerName: cleanedName,
+        isMaybe: false,
+      }
+    }),
+  }))
+}
+
+/**
  * Formats the entire roster structure into a Discord-ready text message:
  * - Header (e.g. "@here slotlist per stasera")
  * - Single figure squads (e.g. "NOMAD - Raven" or "GM - Ramius")
@@ -364,8 +483,9 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
     // Solo figure squad (e.g., Squad with 1 slot whose name is NOMAD or GM or COMANDO)
     if (squad.slots.length === 1 && (squadName.toUpperCase().includes('NOMAD') || squadName.toUpperCase().includes('COMANDO') || squadName.toUpperCase() === 'GM' || squadName.toUpperCase() === 'PL')) {
       const slot = squad.slots[0]
-      const playerName = slot.assignedPlayerName
-        ? `${slot.assignedPlayerName}${slot.isMaybe ? ' (?)' : ''}`
+      const cleanName = cleanPlayerName(slot.assignedPlayerName)
+      const playerName = cleanName
+        ? `${cleanName}${slot.isMaybe ? ' (?)' : ''}`
         : ''
       lines.push(`${squadName} - ${playerName}`)
       lines.push('')
@@ -379,8 +499,9 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
 
     for (const slot of squad.slots) {
       const role = slot.role.trim() || 'SL'
-      const playerName = slot.assignedPlayerName
-        ? `${slot.assignedPlayerName}${slot.isMaybe ? ' (?)' : ''}`
+      const cleanName = cleanPlayerName(slot.assignedPlayerName)
+      const playerName = cleanName
+        ? `${cleanName}${slot.isMaybe ? ' (?)' : ''}`
         : ''
       lines.push(`${role} - ${playerName}`)
     }
