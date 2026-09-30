@@ -302,10 +302,33 @@ export interface RosterSquad {
 	slots: RosterSlot[]
 }
 
+export interface RosterPart {
+	id: string
+	name: string
+	squads: RosterSquad[]
+}
+
+export interface DiscordEmbedField {
+	name: string
+	value: string
+	inline?: boolean
+}
+
+export interface DiscordEmbed {
+	title?: string
+	description?: string
+	color?: number
+	fields?: DiscordEmbedField[]
+	footer?: { text: string }
+	timestamp?: string
+}
+
 export interface EventRosterData {
 	eventId: number
 	headerText?: string
-	squads: RosterSquad[]
+	squads?: RosterSquad[]
+	parts?: RosterPart[]
+	activePartIndex?: number
 	updatedAt?: string
 }
 
@@ -354,8 +377,8 @@ export const DiscordService = {
 	sendTestAlert: (channelId: string): Promise<{ success: boolean }> => fetchApi('/discord/alerts/test', { method: 'POST', body: JSON.stringify({ channelId }) }),
 	getEventRoster: (eventId: number): Promise<{ eventId: number; data: string; updatedAt: string }> => fetchApi(`/discord/events/${eventId}/roster`),
 	saveEventRoster: (eventId: number, data: { data: string; gameType: string; assignments: { userId: string; playerName: string; role: string }[] }): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster`, { method: 'PUT', body: JSON.stringify(data) }),
-	publishEventRoster: (eventId: number, channelId: string, message: string): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster/publish`, { method: 'POST', body: JSON.stringify({ channelId, message }) }),
-	syncEventRosterPreview: (eventId: number, data: { channelId: string; messageId?: string; message: string }): Promise<{ success: boolean; channelId: string; messageId: string }> => fetchApi(`/discord/events/${eventId}/roster/preview`, { method: 'POST', body: JSON.stringify(data) }),
+	publishEventRoster: (eventId: number, channelId: string, message: string, embed?: DiscordEmbed): Promise<{ success: boolean }> => fetchApi(`/discord/events/${eventId}/roster/publish`, { method: 'POST', body: JSON.stringify({ channelId, message, embed }) }),
+	syncEventRosterPreview: (eventId: number, data: { channelId: string; messageId?: string; message: string; embed?: DiscordEmbed }): Promise<{ success: boolean; channelId: string; messageId: string }> => fetchApi(`/discord/events/${eventId}/roster/preview`, { method: 'POST', body: JSON.stringify(data) }),
 	getRosterTemplates: (): Promise<RosterTemplate[]> => fetchApi('/discord/roster/templates'),
 	saveRosterTemplate: (data: { name: string; gameType: string; structure: string }): Promise<RosterTemplate> => fetchApi('/discord/roster/templates', { method: 'POST', body: JSON.stringify(data) }),
 	deleteRosterTemplate: (id: number): Promise<void> => fetchApi(`/discord/roster/templates/${id}`, { method: 'DELETE' }),

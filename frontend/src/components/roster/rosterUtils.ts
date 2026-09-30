@@ -1,4 +1,4 @@
-import type { RosterSquad, RosterSlot, PlayerRoleStat } from '../../services/api'
+import type { RosterSquad, RosterSlot, PlayerRoleStat, RosterPart, DiscordEmbed, DiscordEmbedField } from '../../services/api'
 
 export interface RosterCandidate {
   id: string
@@ -124,39 +124,39 @@ const ROLE_MATCHERS: Array<{
   roles: string[]
   qualPatterns: string[]
 }> = [
-  {
-    roles: ['me', 'tl/me', 'doc'],
-    qualPatterns: ['med', 'sanit', 'cls', 'doc'],
-  },
-  {
-    roles: ['sl', 'tl', 'sl/tl', 'pl', 'gm'],
-    qualPatterns: ['capo', 'lead', 'comand', 'sl', 'tl', 'ufficiale'],
-  },
-  {
-    roles: ['mg', 'ar', 'amg', 'aar', 'asst.ar'],
-    qualPatterns: ['mitragli', 'mg', 'ar', 'gunner', 'support'],
-  },
-  {
-    roles: ['at'],
-    qualPatterns: ['anti', 'at', 'tank', 'rpg', 'missil'],
-  },
-  {
-    roles: ['sap', 'sapper', 'gen'],
-    qualPatterns: ['sap', 'geni', 'guastat', 'eod', 'demol', 'miner'],
-  },
-  {
-    roles: ['mk', 'sniper'],
-    qualPatterns: ['scelto', 'mark', 'snip', 'tirator', 'dmr'],
-  },
-  {
-    roles: ['gre'],
-    qualPatterns: ['grenad', 'lanciagranate', 'gre'],
-  },
-  {
-    roles: ['rif'],
-    qualPatterns: ['fucil', 'rif'],
-  },
-]
+    {
+      roles: ['me', 'tl/me', 'doc'],
+      qualPatterns: ['med', 'sanit', 'cls', 'doc'],
+    },
+    {
+      roles: ['sl', 'tl', 'sl/tl', 'pl', 'gm'],
+      qualPatterns: ['capo', 'lead', 'comand', 'sl', 'tl', 'ufficiale'],
+    },
+    {
+      roles: ['mg', 'ar', 'amg', 'aar', 'asst.ar'],
+      qualPatterns: ['mitragli', 'mg', 'ar', 'gunner', 'support'],
+    },
+    {
+      roles: ['at'],
+      qualPatterns: ['anti', 'at', 'tank', 'rpg', 'missil'],
+    },
+    {
+      roles: ['sap', 'sapper', 'gen'],
+      qualPatterns: ['sap', 'geni', 'guastat', 'eod', 'demol', 'miner'],
+    },
+    {
+      roles: ['mk', 'sniper'],
+      qualPatterns: ['scelto', 'mark', 'snip', 'tirator', 'dmr'],
+    },
+    {
+      roles: ['gre'],
+      qualPatterns: ['grenad', 'lanciagranate', 'gre'],
+    },
+    {
+      roles: ['rif'],
+      qualPatterns: ['fucil', 'rif'],
+    },
+  ]
 
 /**
  * Checks if a member qualification matches a given squad role code.
@@ -531,36 +531,36 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
   return lines.join('\n').trim()
 }
 
-const IT_DAYS = [
-  'domenica',
-  'lunedì',
-  'martedì',
-  'mercoledì',
-  'giovedì',
-  'venerdì',
-  'sabato',
+const EN_DAYS = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
 ] as const
 
-const IT_MONTHS = [
-  'Gennaio',
-  'Febbraio',
-  'Marzo',
-  'Aprile',
-  'Maggio',
-  'Giugno',
-  'Luglio',
-  'Agosto',
-  'Settembre',
-  'Ottobre',
-  'Novembre',
-  'Dicembre',
+const EN_MONTHS = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
 ] as const
 
 /**
- * Formats an event date string (e.g. "2026-09-23T20:30") into Italian localized text:
- * e.g. "mercoledì 23 Settembre"
+ * Formats an event date string (e.g. "2026-09-23T20:30") into English localized text:
+ * e.g. "Wednesday, September 23"
  */
-export function formatItalianEventDate(dateTimeStr?: string): string {
+export function formatEnglishEventDate(dateTimeStr?: string): string {
   if (!dateTimeStr) return ''
 
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateTimeStr.trim())
@@ -582,11 +582,11 @@ export function formatItalianEventDate(dateTimeStr?: string): string {
     return ''
   }
 
-  const dayOfWeek = IT_DAYS[dateObj.getDay()]
+  const dayOfWeek = EN_DAYS[dateObj.getDay()]
   const dayOfMonth = dateObj.getDate()
-  const monthName = IT_MONTHS[dateObj.getMonth()]
+  const monthName = EN_MONTHS[dateObj.getMonth()]
 
-  return `${dayOfWeek} ${dayOfMonth} ${monthName}`
+  return `${dayOfWeek}, ${monthName} ${dayOfMonth}`
 }
 
 /**
@@ -607,15 +607,179 @@ export function formatRosterGameName(gameType?: string): string {
 
 /**
  * Constructs the default Discord roster header message based on date and game:
- * e.g. "@here Slotlist per l'evento di questa sera, mercoledì 23 Settembre su ArmA III"
+ * e.g. "@here Slotlist for tonight's event, Wednesday, September 23 on ArmA III"
  */
 export function buildDefaultRosterHeader(dateTimeStr?: string, gameType?: string): string {
-  const formattedDate = formatItalianEventDate(dateTimeStr)
+  const formattedDate = formatEnglishEventDate(dateTimeStr)
   const formattedGame = formatRosterGameName(gameType)
 
   if (formattedDate) {
-    return `@here Slotlist per l'evento di questa sera, ${formattedDate} su ${formattedGame}`
+    return `@here Slotlist for tonight's event, ${formattedDate} on ${formattedGame}`
   }
-  return `@here Slotlist per l'evento di questa sera su ${formattedGame}`
+  return `@here Slotlist for tonight's event on ${formattedGame}`
+}
+
+/**
+ * Formats squads specifically for Discord Embed fields with clean monospace code ticks for roles.
+ */
+export function formatSquadsForEmbedField(squads: RosterSquad[]): string {
+  const lines: string[] = []
+
+  for (const squad of squads) {
+    const squadName = squad.name.trim()
+
+    if (isSoloFigureSquad(squadName, squad.slots.length)) {
+      const slot = squad.slots[0]
+      const cleanName = cleanPlayerName(slot.assignedPlayerName)
+      const playerName = formatPlayerSuffix(cleanName, slot.isMaybe) || '---'
+      lines.push(`**${squadName}** - ${playerName}`, '')
+      continue
+    }
+
+    if (squadName) {
+      lines.push(`**${squadName}**`)
+    }
+
+    for (const slot of squad.slots) {
+      const role = (slot.role.trim() || 'SL').padEnd(3, ' ')
+      const cleanName = cleanPlayerName(slot.assignedPlayerName)
+      const playerName = formatPlayerSuffix(cleanName, slot.isMaybe) || '---'
+      lines.push(`\`${role}\` ${playerName}`)
+    }
+
+    lines.push('')
+  }
+
+  const result = lines.join('\n').trim()
+  return result || 'No slots defined'
+}
+
+/**
+ * Builds a rich Discord Embed for the roster.
+ * When there are 2 or more parts, places them side-by-side using inline: true!
+ */
+export function buildRosterDiscordEmbed(
+  parts: RosterPart[],
+  eventTitle?: string,
+  gameType?: string
+): DiscordEmbed {
+  const title = eventTitle
+    ? `${eventTitle} - Slotlist`
+    : `Event Slotlist - ${formatRosterGameName(gameType)}`
+
+  const embed: DiscordEmbed = {
+    title,
+    color: 16048263, // BTC Amber
+    fields: [],
+    footer: {
+      text: 'BTC Clan Server Manager',
+    },
+  }
+
+  if (parts.length === 1) {
+    const fieldValue = formatSquadsForEmbedField(parts[0].squads)
+    embed.fields = [
+      {
+        name: 'SLOTLIST',
+        value: fieldValue.length > 1024 ? fieldValue.substring(0, 1020) + '...' : fieldValue,
+        inline: false,
+      },
+    ]
+    return embed
+  }
+
+  const fields: DiscordEmbedField[] = []
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i]
+    const partName = p.name?.trim() || `PART ${i + 1}`
+    const fieldValue = formatSquadsForEmbedField(p.squads)
+
+    fields.push({
+      name: partName,
+      value: fieldValue.length > 1024 ? fieldValue.substring(0, 1020) + '...' : fieldValue,
+      inline: true,
+    })
+  }
+
+  embed.fields = fields
+  return embed
+}
+
+/**
+ * Formats multi-part roster into clean plain text for copying to clipboard.
+ * If 1 part: returns standard classic format.
+ * If >= 2 parts: formats each part with distinct headers and dividers without emojis.
+ */
+export function formatRosterPartsForDiscord(headerText: string, parts: RosterPart[]): string {
+  if (parts.length <= 1) {
+    const sq = parts[0]?.squads || []
+    return formatRosterForDiscord(headerText, sq)
+  }
+
+  const sections: string[] = []
+  if (headerText?.trim()) {
+    sections.push(headerText.trim())
+  }
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    const partTitle = part.name?.trim() || `PART ${i + 1}`
+    const body = formatRosterForDiscord('', part.squads)
+    sections.push(`${partTitle}\n----------------------------------------\n${body}`)
+  }
+
+  return sections.join('\n\n========================================\n\n').trim()
+}
+
+/**
+ * Swaps two assigned players between two slots in a squad list.
+ */
+export function swapPlayerSlots(
+  squads: RosterSquad[],
+  sourceSquadId: string,
+  sourceSlotId: string,
+  targetSquadId: string,
+  targetSlotId: string
+): RosterSquad[] {
+  let sourceSlot: RosterSlot | null = null
+  let targetSlot: RosterSlot | null = null
+
+  for (const sq of squads) {
+    for (const sl of sq.slots) {
+      if (sq.id === sourceSquadId && sl.id === sourceSlotId) {
+        sourceSlot = sl
+      }
+      if (sq.id === targetSquadId && sl.id === targetSlotId) {
+        targetSlot = sl
+      }
+    }
+  }
+
+  if (!sourceSlot || !targetSlot) return squads
+
+  return squads.map(sq => ({
+    ...sq,
+    slots: sq.slots.map(sl => {
+      if (sq.id === sourceSquadId && sl.id === sourceSlotId) {
+        return {
+          ...sl,
+          assignedPlayerName: targetSlot.assignedPlayerName,
+          assignedUserId: targetSlot.assignedUserId,
+          isMaybe: targetSlot.isMaybe,
+          isGuest: targetSlot.isGuest,
+        }
+      }
+      if (sq.id === targetSquadId && sl.id === targetSlotId) {
+        return {
+          ...sl,
+          assignedPlayerName: sourceSlot.assignedPlayerName,
+          assignedUserId: sourceSlot.assignedUserId,
+          isMaybe: sourceSlot.isMaybe,
+          isGuest: sourceSlot.isGuest,
+        }
+      }
+      return sl
+    }),
+  }))
 }
 

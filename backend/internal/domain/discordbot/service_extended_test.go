@@ -124,17 +124,17 @@ func TestService_SyncRosterPreview(t *testing.T) {
 	}
 
 	// 1. New message creation when messageID is empty
-	msgID, err := svc.SyncRosterPreview(context.Background(), "chan123", "", "Hello roster")
+	msgID, err := svc.SyncRosterPreview(context.Background(), "chan123", "", "Hello roster", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "new_msg", msgID)
 
 	// 2. Edit existing message when messageID is provided
-	editedID, err := svc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "Updated roster")
+	editedID, err := svc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "Updated roster", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "existing_msg", editedID)
 
 	// 3. Error when bot session is nil
 	nilSvc := &Service{}
-	_, err = nilSvc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "test")
+	_, err = nilSvc.SyncRosterPreview(context.Background(), "chan123", "existing_msg", "test", nil)
 	assert.Error(t, err)
 }

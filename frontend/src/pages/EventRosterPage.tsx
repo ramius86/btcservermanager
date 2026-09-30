@@ -21,6 +21,9 @@ import {
   RefreshCw,
   Radio,
   ListOrdered,
+  ArrowLeftRight,
+  Edit3,
+  Check,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -33,6 +36,7 @@ import {
   DiscordEventDetail,
   DiscordChannel,
   RosterSquad,
+  RosterPart,
   PlayerRoleStat,
   ClanMember,
   RosterPreviewConfig,
@@ -46,7 +50,9 @@ import {
   qualificationMatchesRole,
   generateId,
   buildDefaultRosterHeader,
-  formatRosterForDiscord,
+  formatRosterPartsForDiscord,
+  buildRosterDiscordEmbed,
+  swapPlayerSlots,
   reconcileSquadsWithCandidates,
   cleanPlayerName,
 } from '../components/roster/rosterUtils'
@@ -54,45 +60,86 @@ import { SlotPickerModal } from '../components/roster/SlotPickerModal'
 import { RosterTemplateModal } from '../components/roster/RosterTemplateModal'
 import { RosterExportModal } from '../components/roster/RosterExportModal'
 import { RosterLivePreviewModal } from '../components/roster/RosterLivePreviewModal'
+import { AddPartModal } from '../components/roster/AddPartModal'
+import { SwapSlotModal } from '../components/roster/SwapSlotModal'
 
 function parseSavedRosterData(
   rawData: string,
   defaultHeader: string
 ): {
-  squads: RosterSquad[] | null
+  parts: RosterPart[]
+  activePartIndex: number
   headerText: string
   guests: string[] | null
   preview: RosterPreviewConfig | null
 } {
   try {
     const parsed = JSON.parse(rawData)
-    const squads = Array.isArray(parsed?.squads) ? parsed.squads : null
+    let parts: RosterPart[] = []
+
+    if (Array.isArray(parsed?.parts) && parsed.parts.length > 0) {
+      parts = parsed.parts.map((p: any, idx: number) => ({
+        id: String(p.id || `part-${idx + 1}`),
+        name: String(p.name || `PART ${idx + 1}`),
+        squads: Array.isArray(p.squads) ? p.squads : [],
+      }))
+    } else if (Array.isArray(parsed?.squads)) {
+      parts = [
+        {
+          id: 'part-1',
+          name: 'PART 1',
+          squads: parsed.squads,
+        },
+      ]
+    } else {
+      parts = [
+        {
+          id: 'part-1',
+          name: 'PART 1',
+          squads: [],
+        },
+      ]
+    }
+
+    const activePartIndex =
+      typeof parsed?.activePartIndex === 'number' && parsed.activePartIndex < parts.length && parsed.activePartIndex >= 0
+        ? parsed.activePartIndex
+        : 0
+
     const headerText =
-      parsed?.headerText && parsed.headerText !== '@here slotlist per stasera'
+      parsed?.headerText && !parsed.headerText.includes('slotlist per stasera')
         ? parsed.headerText
         : defaultHeader
+
     const guests = Array.isArray(parsed?.guests) ? parsed.guests : null
     const preview =
       parsed?.preview && typeof parsed.preview === 'object'
         ? {
-            enabled: Boolean(parsed.preview.enabled),
-            channelId: String(parsed.preview.channelId || ''),
-            messageId: String(parsed.preview.messageId || ''),
-            lastSyncedAt: parsed.preview.lastSyncedAt,
-          }
+          enabled: Boolean(parsed.preview.enabled),
+          channelId: String(parsed.preview.channelId || ''),
+          messageId: String(parsed.preview.messageId || ''),
+          lastSyncedAt: parsed.preview.lastSyncedAt,
+        }
         : null
 
-    return { squads, headerText, guests, preview }
+    return { parts, activePartIndex, headerText, guests, preview }
   } catch (e) {
     console.error('Failed to parse saved roster', e)
-    return { squads: null, headerText: defaultHeader, guests: null, preview: null }
+    return {
+      parts: [{ id: 'part-1', name: 'PART 1', squads: [] }],
+      activePartIndex: 0,
+      headerText: defaultHeader,
+      guests: null,
+      preview: null,
+    }
   }
 }
 
 function persistPreviewState(
   targetEventId: number,
   hText: string,
-  sq: RosterSquad[],
+  parts: RosterPart[],
+  activePartIdx: number,
   gst: string[],
   gType: string | undefined,
   cfg: RosterPreviewConfig
@@ -100,7 +147,8 @@ function persistPreviewState(
   const payloadData = JSON.stringify({
     eventId: targetEventId,
     headerText: hText,
-    squads: sq,
+    parts,
+    activePartIndex: activePartIdx,
     guests: gst,
     preview: cfg,
   })
@@ -207,12 +255,12 @@ function unassignSlotInSquads(squads: RosterSquad[], squadId: string, slotId: st
         slots: s.slots.map(sl =>
           sl.id === slotId
             ? {
-                ...sl,
-                assignedPlayerName: '',
-                assignedUserId: '',
-                isMaybe: false,
-                isGuest: false,
-              }
+              ...sl,
+              assignedPlayerName: '',
+              assignedUserId: '',
+              isMaybe: false,
+              isGuest: false,
+            }
             : sl
         ),
       }
@@ -317,14 +365,16 @@ function parseInitialRosterState(savedRoster: any, defaultHeader: string) {
   if (savedRoster?.data) {
     const parsed = parseSavedRosterData(savedRoster.data, defaultHeader)
     return {
-      squads: parsed.squads || [],
+      parts: parsed.parts,
+      activePartIndex: parsed.activePartIndex,
       headerText: parsed.headerText,
       guests: parsed.guests || [],
       preview: parsed.preview || null,
     }
   }
   return {
-    squads: [] as RosterSquad[],
+    parts: [{ id: 'part-1', name: 'PART 1', squads: [] }] as RosterPart[],
+    activePartIndex: 0,
     headerText: defaultHeader,
     guests: [] as string[],
     preview: null,
@@ -343,10 +393,37 @@ export function EventRosterPage() {
   const [clanMembers, setClanMembers] = useState<ClanMember[]>([])
   const [learningStats, setLearningStats] = useState<PlayerRoleStat[]>([])
 
-  // Main roster state
-  const [squads, setSquads] = useState<RosterSquad[]>([])
+  // Main multi-part roster state
+  const [parts, setParts] = useState<RosterPart[]>([{ id: 'part-1', name: 'PART 1', squads: [] }])
+  const [activePartIndex, setActivePartIndex] = useState(0)
   const [guests, setGuests] = useState<string[]>([])
   const [headerText, setHeaderText] = useState('')
+
+  // Multi-part & Swap modals
+  const [isAddPartModalOpen, setIsAddPartModalOpen] = useState(false)
+  const [swapSourceSlot, setSwapSourceSlot] = useState<{
+    squadId: string
+    squadName: string
+    slotId: string
+    role: string
+    playerName: string
+  } | null>(null)
+  const [isEditingPartName, setIsEditingPartName] = useState(false)
+  const [partNameInput, setPartNameInput] = useState('')
+
+  // Active part and squads computation
+  const currentActiveIdx = Math.min(activePartIndex, Math.max(0, parts.length - 1))
+  const activePart = parts[currentActiveIdx] || { id: 'part-1', name: 'PART 1', squads: [] }
+  const squads = activePart.squads
+
+  const setSquads = (updater: RosterSquad[] | ((prev: RosterSquad[]) => RosterSquad[])) => {
+    setParts(prevParts => {
+      const idx = Math.min(activePartIndex, Math.max(0, prevParts.length - 1))
+      const current = prevParts[idx] || { id: 'part-1', name: 'PART 1', squads: [] }
+      const updatedSquads = typeof updater === 'function' ? updater(current.squads) : updater
+      return prevParts.map((p, pIdx) => (pIdx === idx ? { ...p, squads: updatedSquads } : p))
+    })
+  }
 
   // Search & Filters in Sidebar
   const [searchQuery, setSearchQuery] = useState('')
@@ -428,9 +505,12 @@ export function EventRosterPage() {
       const loadedGuests = initial.guests.length > 0 ? initial.guests : []
       const initialCandidates = extractCandidates(detail, members || [], loadedGuests)
 
-      if (initial.squads.length > 0) {
-        setSquads(reconcileSquadsWithCandidates(initial.squads, initialCandidates))
-      }
+      const reconciledParts = initial.parts.map(p => ({
+        ...p,
+        squads: reconcileSquadsWithCandidates(p.squads, initialCandidates),
+      }))
+      setParts(reconciledParts)
+      setActivePartIndex(initial.activePartIndex)
       setHeaderText(initial.headerText)
       if (initial.guests.length > 0) setGuests(initial.guests)
       if (initial.preview) setPreviewConfig(initial.preview)
@@ -456,22 +536,15 @@ export function EventRosterPage() {
       return
     }
 
-    setSquads(prev => {
-      if (prev.length === 0) return prev
-      const reconciled = reconcileSquadsWithCandidates(prev, allCandidates)
-      const isDiff = prev.some((sq, sqIdx) => {
-        const recSq = reconciled[sqIdx]
-        if (!recSq || sq.slots.length !== recSq.slots.length) return true
-        return sq.slots.some((sl, slIdx) => {
-          const recSl = recSq.slots[slIdx]
-          return (
-            sl.isMaybe !== recSl.isMaybe ||
-            sl.assignedPlayerName !== recSl.assignedPlayerName ||
-            sl.assignedUserId !== recSl.assignedUserId
-          )
-        })
+    setParts(prevParts => {
+      return prevParts.map(part => {
+        if (part.squads.length === 0) return part
+        const reconciled = reconcileSquadsWithCandidates(part.squads, allCandidates)
+        return {
+          ...part,
+          squads: reconciled,
+        }
       })
-      return isDiff ? reconciled : prev
     })
   }, [allCandidates, loading])
 
@@ -601,12 +674,16 @@ export function EventRosterPage() {
       const payloadData = JSON.stringify({
         eventId,
         headerText,
-        squads,
+        parts,
+        activePartIndex: currentActiveIdx,
         guests,
         preview: previewConfig,
       })
 
-      const assignments = extractRosterAssignments(squads)
+      const assignments: { userId: string; playerName: string; role: string }[] = []
+      for (const p of parts) {
+        assignments.push(...extractRosterAssignments(p.squads))
+      }
 
       await DiscordService.saveEventRoster(eventId, {
         data: payloadData,
@@ -616,7 +693,7 @@ export function EventRosterPage() {
 
       showToast('Roster saved and role preferences updated successfully!', 'success')
       // Refresh learning stats
-      DiscordService.getLearningStats().then(setLearningStats).catch(() => {})
+      DiscordService.getLearningStats().then(setLearningStats).catch(() => { })
     } catch (err: any) {
       showToast('Failed to save roster: ' + (err.message || 'Unknown error'), 'error')
     } finally {
@@ -633,11 +710,13 @@ export function EventRosterPage() {
     if (shouldSyncNow && newConfig.enabled && newConfig.channelId) {
       setIsLiveSyncing(true)
       try {
-        const textToSync = formatRosterForDiscord(headerText, squads)
+        const textToSync = formatRosterPartsForDiscord(headerText, parts)
+        const embedToSync = buildRosterDiscordEmbed(parts, eventDetail?.title, eventDetail?.gameType)
         const res = await DiscordService.syncEventRosterPreview(eventId, {
           channelId: newConfig.channelId,
           messageId: newConfig.messageId,
-          message: textToSync,
+          message: headerText,
+          embed: embedToSync,
         })
         currentMessageId = res.messageId
         updatedLastSyncedAt = new Date().toISOString()
@@ -657,22 +736,19 @@ export function EventRosterPage() {
 
     // Persist preview config to DB in background
     try {
-      const payloadData = JSON.stringify({
+      persistPreviewState(
         eventId,
         headerText,
-        squads,
+        parts,
+        currentActiveIdx,
         guests,
-        preview: {
+        eventDetail?.gameType,
+        {
           ...newConfig,
           messageId: currentMessageId,
           lastSyncedAt: updatedLastSyncedAt,
-        },
-      })
-      await DiscordService.saveEventRoster(eventId, {
-        data: payloadData,
-        gameType: eventDetail?.gameType || 'all',
-        assignments: [],
-      })
+        }
+      )
     } catch (saveErr) {
       console.warn('Failed to background persist preview config', saveErr)
     }
@@ -691,7 +767,7 @@ export function EventRosterPage() {
       return
     }
 
-    const currentFormatted = formatRosterForDiscord(headerText, squads)
+    const currentFormatted = formatRosterPartsForDiscord(headerText, parts)
     if (currentFormatted === lastSyncedText) {
       return
     }
@@ -699,10 +775,12 @@ export function EventRosterPage() {
     const timer = setTimeout(async () => {
       try {
         setIsLiveSyncing(true)
+        const embedToSync = buildRosterDiscordEmbed(parts, eventDetail?.title, eventDetail?.gameType)
         const res = await DiscordService.syncEventRosterPreview(eventId, {
           channelId: previewConfig.channelId,
           messageId: previewConfig.messageId,
-          message: currentFormatted,
+          message: headerText,
+          embed: embedToSync,
         })
         setLastSyncedText(currentFormatted)
         const now = new Date().toISOString()
@@ -718,7 +796,7 @@ export function EventRosterPage() {
             lastSyncedAt: now,
           }
           setPreviewConfig(updated)
-          persistPreviewState(eventId, headerText, squads, guests, eventDetail?.gameType, updated)
+          persistPreviewState(eventId, headerText, parts, currentActiveIdx, guests, eventDetail?.gameType, updated)
         }
       } catch (err) {
         console.error('Failed to auto-sync roster preview to Discord', err)
@@ -728,8 +806,86 @@ export function EventRosterPage() {
     }, 1000)
 
     return () => clearTimeout(timer)
-  }, [squads, headerText, guests, previewConfig.enabled, previewConfig.channelId, previewConfig.messageId, eventId, lastSyncedText, loading])
+  }, [parts, headerText, guests, previewConfig.enabled, previewConfig.channelId, previewConfig.messageId, eventId, lastSyncedText, loading, currentActiveIdx, eventDetail])
 
+  // Part Actions
+  const handleAddPart = (name: string, mode: 'clone_all' | 'clone_structure' | 'empty') => {
+    const newPartId = generateId('part')
+    let newSquads: RosterSquad[] = []
+
+    if (mode === 'clone_all') {
+      newSquads = activePart.squads.map(sq => ({
+        id: generateId('squad'),
+        name: sq.name,
+        slots: sq.slots.map(sl => ({
+          ...sl,
+          id: generateId('slot'),
+        })),
+      }))
+    } else if (mode === 'clone_structure') {
+      newSquads = activePart.squads.map(sq => ({
+        id: generateId('squad'),
+        name: sq.name,
+        slots: sq.slots.map(sl => ({
+          id: generateId('slot'),
+          role: sl.role,
+          assignedPlayerName: '',
+          assignedUserId: '',
+          isMaybe: false,
+          isGuest: false,
+        })),
+      }))
+    }
+
+    const newPart: RosterPart = {
+      id: newPartId,
+      name,
+      squads: newSquads,
+    }
+    setParts(prev => [...prev, newPart])
+    setActivePartIndex(parts.length)
+    showToast(`Added ${name}!`, 'success')
+  }
+
+  const handleDeletePart = (partIdx: number) => {
+    if (parts.length <= 1) return
+    const partName = parts[partIdx]?.name || `PART ${partIdx + 1}`
+    setParts(prev => prev.filter((_, idx) => idx !== partIdx))
+    setActivePartIndex(prev => Math.max(0, Math.min(prev, parts.length - 2)))
+    showToast(`Removed ${partName}`, 'info')
+  }
+
+  const handleSavePartName = () => {
+    const trimmed = partNameInput.trim()
+    if (trimmed) {
+      setParts(prev => prev.map((p, idx) => (idx === currentActiveIdx ? { ...p, name: trimmed } : p)))
+    }
+    setIsEditingPartName(false)
+  }
+
+  const handleSwapPlayer = (targetSquadId: string, targetSlotId: string, targetPlayerName: string) => {
+    if (!swapSourceSlot) return
+    setSquads(prev =>
+      swapPlayerSlots(prev, swapSourceSlot.squadId, swapSourceSlot.slotId, targetSquadId, targetSlotId)
+    )
+    showToast(`Swapped ${swapSourceSlot.playerName} (${swapSourceSlot.role}) with ${targetPlayerName}`, 'success')
+    setSwapSourceSlot(null)
+  }
+
+  const getPlayerRolesAcrossParts = (candidateName: string): { partName: string; role: string }[] => {
+    const clean = cleanPlayerName(candidateName).toLowerCase().trim()
+    const results: { partName: string; role: string }[] = []
+    for (const p of parts) {
+      for (const sq of p.squads) {
+        for (const sl of sq.slots) {
+          if (cleanPlayerName(sl.assignedPlayerName).toLowerCase().trim() === clean) {
+            results.push({ partName: p.name, role: sl.role })
+          }
+        }
+      }
+    }
+    return results
+  }
 
   // Add Guest Player
   const handleAddGuestPlayer = (e: React.SyntheticEvent<HTMLFormElement>) => {
@@ -748,7 +904,7 @@ export function EventRosterPage() {
   const handleReset = () => {
     setSquads([])
     setIsResetConfirmOpen(false)
-    showToast('Board cleared', 'info')
+    showToast('Active part cleared', 'info')
   }
 
   if (loading) {
@@ -825,11 +981,10 @@ export function EventRosterPage() {
               variant={previewConfig.enabled ? 'secondary' : 'outline'}
               size="sm"
               onClick={() => setIsPreviewModalOpen(true)}
-              className={`text-xs font-semibold h-9 relative gap-1.5 transition-colors ${
-                previewConfig.enabled
+              className={`text-xs font-semibold h-9 relative gap-1.5 transition-colors ${previewConfig.enabled
                   ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20'
                   : ''
-              }`}
+                }`}
               title="Open Discord Live Preview settings"
             >
               <Radio className={`w-3.5 h-3.5 ${previewConfig.enabled ? 'animate-pulse text-emerald-400' : 'text-primary'}`} />
@@ -936,11 +1091,10 @@ export function EventRosterPage() {
         <button
           type="button"
           onClick={() => setActiveMobileTab('squads')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-            activeMobileTab === 'squads'
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeMobileTab === 'squads'
               ? 'bg-primary text-primary-foreground shadow-md'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           <ListOrdered className="w-3.5 h-3.5" />
           Squads ({squads.length})
@@ -948,11 +1102,10 @@ export function EventRosterPage() {
         <button
           type="button"
           onClick={() => setActiveMobileTab('players')}
-          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${
-            activeMobileTab === 'players'
+          className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-bold uppercase tracking-wider transition-all ${activeMobileTab === 'players'
               ? 'bg-primary text-primary-foreground shadow-md'
               : 'text-muted-foreground hover:text-foreground'
-          }`}
+            }`}
         >
           <Users className="w-3.5 h-3.5" />
           Player Pool ({unassignedCandidates.length})
@@ -1005,27 +1158,24 @@ export function EventRosterPage() {
                 <button
                   type="button"
                   onClick={() => setFilterType('all')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
-                    filterType === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   All ({unassignedCandidates.length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterType('going')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
-                    filterType === 'going' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'going' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Going ({unassignedCandidates.filter(c => !c.isMaybe).length})
                 </button>
                 <button
                   type="button"
                   onClick={() => setFilterType('maybe')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
-                    filterType === 'maybe' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'maybe' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                    }`}
                 >
                   Maybe ({unassignedCandidates.filter(c => c.isMaybe).length})
                 </button>
@@ -1043,11 +1193,10 @@ export function EventRosterPage() {
                 filteredUnassigned.map(candidate => (
                   <div
                     key={candidate.id + candidate.name}
-                    className={`p-2.5 rounded-lg border transition-all ${
-                      candidate.isMaybe
+                    className={`p-2.5 rounded-lg border transition-all ${candidate.isMaybe
                         ? 'border-warning/30 bg-warning/5 hover:border-warning/50'
                         : 'border-border bg-surface/40 hover:border-primary/40'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-xs font-bold text-foreground truncate">{candidate.name}</span>
@@ -1071,6 +1220,20 @@ export function EventRosterPage() {
                           >
                             <Award className="w-2 h-2" />
                             {q}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {parts.length > 1 && (
+                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-border/40">
+                        {getPlayerRolesAcrossParts(candidate.name).map((pr, prIdx) => (
+                          <span
+                            key={prIdx}
+                            className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-muted-foreground bg-surface border border-border px-1.5 py-0.2 rounded"
+                          >
+                            <span className="text-[7px] uppercase font-semibold text-primary">{pr.partName}:</span>
+                            <span>{pr.role}</span>
                           </span>
                         ))}
                       </div>
@@ -1163,9 +1326,110 @@ export function EventRosterPage() {
 
         {/* Right Main Board: Squads and Slots */}
         <div className={`lg:col-span-8 xl:col-span-9 space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
+          {/* Mission Parts Tab Bar */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-surface-elevated/70 border border-border rounded-xl">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {parts.map((part, idx) => {
+                const isActive = idx === currentActiveIdx
+                return (
+                  <button
+                    key={part.id}
+                    type="button"
+                    onClick={() => {
+                      setActivePartIndex(idx)
+                      setIsEditingPartName(false)
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-black tracking-wider uppercase transition-all flex items-center gap-2 ${isActive
+                        ? 'bg-primary text-primary-foreground shadow-sm'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-surface border border-transparent'
+                      }`}
+                  >
+                    <span>{part.name}</span>
+                    <span
+                      className={`text-[10px] px-1 py-0.2 rounded font-mono ${isActive
+                          ? 'bg-primary-foreground/20 text-primary-foreground'
+                          : 'bg-surface text-muted-foreground'
+                        }`}
+                    >
+                      {part.squads.length}
+                    </span>
+                  </button>
+                )
+              })}
+
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setIsAddPartModalOpen(true)}
+                className="h-7 text-xs font-semibold gap-1 text-primary hover:bg-primary/10 border-primary/30"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Part
+              </Button>
+            </div>
+
+            {/* Active Part Rename / Remove Actions */}
+            <div className="flex items-center gap-2">
+              {isEditingPartName ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    value={partNameInput}
+                    onChange={e => setPartNameInput(e.target.value)}
+                    placeholder="Part name..."
+                    className="h-7 text-xs font-bold uppercase tracking-wider w-32 bg-surface border-border"
+                    autoFocus
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSavePartName()
+                      if (e.key === 'Escape') setIsEditingPartName(false)
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleSavePartName}
+                    className="h-7 px-2 text-xs"
+                  >
+                    <Check className="w-3 h-3" />
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setPartNameInput(activePart.name)
+                    setIsEditingPartName(true)
+                  }}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground gap-1"
+                  title="Rename active part"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Rename</span>
+                </Button>
+              )}
+
+              {parts.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDeletePart(currentActiveIdx)}
+                  className="h-7 px-2 text-xs text-muted-foreground hover:text-destructive hover:bg-destructive/10 gap-1"
+                  title="Remove this mission part"
+                >
+                  <Trash2 className="w-3 h-3" />
+                  <span>Remove Part</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
-              <span>Squads & Slotlist</span>
+              <span>{activePart.name} - Squads & Slotlist</span>
               <span className="text-xs font-normal text-muted-foreground">({squads.length} squads)</span>
             </h2>
 
@@ -1246,8 +1510,8 @@ export function EventRosterPage() {
                     {squad.slots.map(slot => {
                       const hasBrevetto = slot.assignedPlayerName
                         ? clanMembers
-                            .find(cm => cm.displayName.toLowerCase() === slot.assignedPlayerName?.toLowerCase())
-                            ?.qualifications.some(q => qualificationMatchesRole(q, slot.role))
+                          .find(cm => cm.displayName.toLowerCase() === slot.assignedPlayerName?.toLowerCase())
+                          ?.qualifications.some(q => qualificationMatchesRole(q, slot.role))
                         : false
 
                       return (
@@ -1293,6 +1557,23 @@ export function EventRosterPage() {
                                   )}
                                 </div>
                                 <div className="flex items-center gap-1 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setSwapSourceSlot({
+                                        squadId: squad.id,
+                                        squadName: squad.name,
+                                        slotId: slot.id,
+                                        role: slot.role,
+                                        playerName: slot.assignedPlayerName!,
+                                      })
+                                    }
+                                    className="text-[10px] text-muted-foreground hover:text-primary px-1 font-medium flex items-center gap-0.5"
+                                    title="Swap player with another slot"
+                                  >
+                                    <ArrowLeftRight className="w-2.5 h-2.5" />
+                                    Swap
+                                  </button>
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1382,6 +1663,26 @@ export function EventRosterPage() {
         />
       )}
 
+      {/* Add Part Modal */}
+      <AddPartModal
+        isOpen={isAddPartModalOpen}
+        onClose={() => setIsAddPartModalOpen(false)}
+        currentPartCount={parts.length}
+        activePartName={activePart.name}
+        onAddPart={handleAddPart}
+      />
+
+      {/* Swap Slot Modal */}
+      {swapSourceSlot && (
+        <SwapSlotModal
+          isOpen={!!swapSourceSlot}
+          onClose={() => setSwapSourceSlot(null)}
+          sourceSlot={swapSourceSlot}
+          squads={squads}
+          onSwap={handleSwapPlayer}
+        />
+      )}
+
       {/* Templates Modal */}
       <RosterTemplateModal
         isOpen={isTemplateModalOpen}
@@ -1401,11 +1702,13 @@ export function EventRosterPage() {
         defaultChannelId={eventDetail?.channelId}
         channels={channels}
         squads={squads}
+        parts={parts}
         candidates={allCandidates}
         headerText={headerText}
         onHeaderChange={setHeaderText}
         dateTime={eventDetail?.dateTime}
         gameType={eventDetail?.gameType}
+        eventTitle={eventDetail?.title}
       />
 
       {/* Discord Live Preview Modal */}
@@ -1423,7 +1726,7 @@ export function EventRosterPage() {
         open={isResetConfirmOpen}
         onOpenChange={setIsResetConfirmOpen}
         title="Clear Roster Board?"
-        description="Are you sure you want to remove all squads and slots? Any unsaved changes will be lost."
+        description="Are you sure you want to remove all squads and slots for the active part? Any unsaved changes will be lost."
         onConfirm={handleReset}
         confirmLabel="Clear All"
         variant="danger"

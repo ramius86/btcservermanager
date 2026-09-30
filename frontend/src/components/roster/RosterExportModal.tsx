@@ -5,16 +5,19 @@ import {
   Send,
   MessageSquare,
   Loader2,
+  Columns,
 } from 'lucide-react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
+import { Badge } from '../ui/Badge'
 import { useToast } from '../ui/Toast'
-import type { RosterSquad, DiscordChannel } from '../../services/api'
+import type { RosterSquad, DiscordChannel, RosterPart } from '../../services/api'
 import { DiscordService } from '../../services/api'
 import {
-  formatRosterForDiscord,
+  formatRosterPartsForDiscord,
+  buildRosterDiscordEmbed,
   buildDefaultRosterHeader,
   reconcileSquadsWithCandidates,
   type RosterCandidate,
@@ -28,15 +31,16 @@ interface RosterExportModalProps {
   readonly defaultChannelId?: string
   readonly channels: DiscordChannel[]
   readonly squads: RosterSquad[]
+  readonly parts?: RosterPart[]
   readonly candidates?: RosterCandidate[]
   readonly headerText?: string
   readonly onHeaderChange?: (header: string) => void
   readonly dateTime?: string
   readonly gameType?: string
+  readonly eventTitle?: string
 }
 
 const ROSTER_CHANNEL_STORAGE_KEY = 'discord_roster_channel'
-
 
 export function RosterExportModal({
   isOpen,
@@ -45,11 +49,13 @@ export function RosterExportModal({
   defaultChannelId = '',
   channels,
   squads,
+  parts,
   candidates,
   headerText: initialHeaderText,
   onHeaderChange,
   dateTime,
   gameType,
+  eventTitle,
 }: RosterExportModalProps) {
   const { showToast } = useToast()
 
@@ -86,12 +92,28 @@ export function RosterExportModal({
     }
   }, [defaultChannelId, channels])
 
-  const formattedText = useMemo(() => {
+  const effectiveParts: RosterPart[] = useMemo(() => {
+    if (parts && parts.length > 0) {
+      return parts.map(p => ({
+        ...p,
+        squads: candidates && candidates.length > 0
+          ? reconcileSquadsWithCandidates(p.squads, candidates)
+          : p.squads,
+      }))
+    }
     const reconciledSquads = candidates && candidates.length > 0
       ? reconcileSquadsWithCandidates(squads, candidates)
       : squads
-    return formatRosterForDiscord(headerText, reconciledSquads)
-  }, [headerText, squads, candidates])
+    return [{ id: 'part-1', name: 'PART 1', squads: reconciledSquads }]
+  }, [parts, squads, candidates])
+
+  const formattedText = useMemo(() => {
+    return formatRosterPartsForDiscord(headerText, effectiveParts)
+  }, [headerText, effectiveParts])
+
+  const discordEmbed = useMemo(() => {
+    return buildRosterDiscordEmbed(effectiveParts, eventTitle, gameType)
+  }, [effectiveParts, eventTitle, gameType])
 
   const handleCopy = async () => {
     try {
@@ -121,7 +143,7 @@ export function RosterExportModal({
     try {
       setSending(true)
       localStorage.setItem(ROSTER_CHANNEL_STORAGE_KEY, selectedChannel)
-      await DiscordService.publishEventRoster(eventId, selectedChannel, formattedText)
+      await DiscordService.publishEventRoster(eventId, selectedChannel, headerText, discordEmbed)
       showToast('Slotlist published to Discord channel!', 'success')
       onClose()
     } catch (err: any) {
@@ -133,14 +155,22 @@ export function RosterExportModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
-      <DialogContent className="sm:max-w-[600px] max-h-[90vh] flex flex-col p-0 overflow-hidden border-border bg-surface-elevated">
+      <DialogContent className="sm:max-w-[620px] max-h-[90vh] flex flex-col p-0 overflow-hidden border-border bg-surface-elevated">
         <DialogHeader className="p-5 pb-3 border-b border-border bg-surface/50">
-          <DialogTitle className="text-base font-bold flex items-center gap-2">
-            <MessageSquare className="w-4 h-4 text-primary" />
-            Export Slotlist for Discord
-          </DialogTitle>
+          <div className="flex items-center justify-between">
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <MessageSquare className="w-4 h-4 text-primary" />
+              Export Slotlist for Discord
+            </DialogTitle>
+            {effectiveParts.length >= 2 && (
+              <Badge variant="outline" className="text-[10px] font-bold uppercase tracking-wider text-primary border-primary/30 flex items-center gap-1">
+                <Columns className="w-3 h-3" />
+                {effectiveParts.length} Parts Side-by-Side
+              </Badge>
+            )}
+          </div>
           <p className="text-xs text-muted-foreground">
-            Copy the formatted roster directly into Discord or send it directly to an announcement channel.
+            Copy the formatted roster directly into Discord or post it directly as an announcement embed with side-by-side columns.
           </p>
         </DialogHeader>
 
@@ -156,7 +186,7 @@ export function RosterExportModal({
                 setHeaderText(e.target.value)
                 onHeaderChange?.(e.target.value)
               }}
-              placeholder="e.g. @here Slotlist per l'evento di questa sera..."
+              placeholder="e.g. @here Slotlist for tonight's event..."
               className="h-8 text-xs bg-surface border-border"
             />
           </div>
@@ -164,10 +194,10 @@ export function RosterExportModal({
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label htmlFor="roster-preview-textarea" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                Discord Formatted Preview
+                Formatted Text Preview (Clipboard / Fallback)
               </label>
               <span className="text-[10px] font-mono text-muted-foreground">
-                {formattedText.length} / 2000 characters
+                {formattedText.length} characters
               </span>
             </div>
             <Textarea

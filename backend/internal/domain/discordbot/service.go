@@ -995,27 +995,49 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	}
 }
 
-func (s *Service) PublishRosterMessage(ctx context.Context, channelID, message string) error {
+func (s *Service) sendRosterMessage(channelID, message string, embed *discordgo.MessageEmbed) (*discordgo.Message, error) {
+	if embed != nil {
+		return s.session.ChannelMessageSendComplex(channelID, &discordgo.MessageSend{
+			Content: message,
+			Embeds:  []*discordgo.MessageEmbed{embed},
+		})
+	}
+	return s.session.ChannelMessageSend(channelID, message)
+}
+
+func (s *Service) editRosterMessage(channelID, messageID, message string, embed *discordgo.MessageEmbed) (*discordgo.Message, error) {
+	if embed != nil {
+		embeds := []*discordgo.MessageEmbed{embed}
+		return s.session.ChannelMessageEditComplex(&discordgo.MessageEdit{
+			Channel: channelID,
+			ID:      messageID,
+			Content: &message,
+			Embeds:  &embeds,
+		})
+	}
+	return s.session.ChannelMessageEdit(channelID, messageID, message)
+}
+
+func (s *Service) PublishRosterMessage(ctx context.Context, channelID, message string, embed *discordgo.MessageEmbed) error {
 	if s.session == nil {
 		return errors.New(errBotNotConfigured)
 	}
-	_, err := s.session.ChannelMessageSend(channelID, message)
+	_, err := s.sendRosterMessage(channelID, message, embed)
 	return err
 }
 
-func (s *Service) SyncRosterPreview(ctx context.Context, channelID, messageID, message string) (string, error) {
+func (s *Service) SyncRosterPreview(ctx context.Context, channelID, messageID, message string, embed *discordgo.MessageEmbed) (string, error) {
 	if s.session == nil {
 		return "", errors.New(errBotNotConfigured)
 	}
 
 	if messageID != "" {
-		msg, err := s.session.ChannelMessageEdit(channelID, messageID, message)
-		if err == nil && msg != nil {
+		if msg, err := s.editRosterMessage(channelID, messageID, message, embed); err == nil && msg != nil {
 			return msg.ID, nil
 		}
 	}
 
-	msg, err := s.session.ChannelMessageSend(channelID, message)
+	msg, err := s.sendRosterMessage(channelID, message, embed)
 	if err != nil {
 		return "", err
 	}

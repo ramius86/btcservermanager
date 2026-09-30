@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/bwmarrin/discordgo"
 	"github.com/go-chi/chi/v5"
 )
 
@@ -16,14 +17,16 @@ type SaveRosterRequest struct {
 }
 
 type PublishRosterRequest struct {
-	ChannelID string `json:"channelId"`
-	Message   string `json:"message"`
+	ChannelID string                  `json:"channelId"`
+	Message   string                  `json:"message"`
+	Embed     *discordgo.MessageEmbed `json:"embed,omitempty"`
 }
 
 type SyncRosterPreviewRequest struct {
-	ChannelID string `json:"channelId"`
-	MessageID string `json:"messageId"`
-	Message   string `json:"message"`
+	ChannelID string                  `json:"channelId"`
+	MessageID string                  `json:"messageId"`
+	Message   string                  `json:"message"`
+	Embed     *discordgo.MessageEmbed `json:"embed,omitempty"`
 }
 
 type SaveTemplateRequest struct {
@@ -106,12 +109,12 @@ func (r *Router) handlePublishDiscordEventRoster(w http.ResponseWriter, req *htt
 		return
 	}
 
-	if payload.ChannelID == "" || payload.Message == "" {
-		http.Error(w, "channelId and message are required", http.StatusBadRequest)
+	if payload.ChannelID == "" || (payload.Message == "" && payload.Embed == nil) {
+		http.Error(w, "channelId and message (or embed) are required", http.StatusBadRequest)
 		return
 	}
 
-	if err := r.discordService.PublishRosterMessage(req.Context(), payload.ChannelID, payload.Message); err != nil {
+	if err := r.discordService.PublishRosterMessage(req.Context(), payload.ChannelID, payload.Message, payload.Embed); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -131,12 +134,12 @@ func (r *Router) handleSyncDiscordEventRosterPreview(w http.ResponseWriter, req 
 		return
 	}
 
-	if payload.ChannelID == "" || payload.Message == "" {
-		http.Error(w, "channelId and message are required", http.StatusBadRequest)
+	if payload.ChannelID == "" || (payload.Message == "" && payload.Embed == nil) {
+		http.Error(w, "channelId and message (or embed) are required", http.StatusBadRequest)
 		return
 	}
 
-	msgID, err := r.discordService.SyncRosterPreview(req.Context(), payload.ChannelID, payload.MessageID, payload.Message)
+	msgID, err := r.discordService.SyncRosterPreview(req.Context(), payload.ChannelID, payload.MessageID, payload.Message, payload.Embed)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
