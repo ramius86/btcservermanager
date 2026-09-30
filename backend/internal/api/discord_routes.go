@@ -31,6 +31,7 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Get("/users", r.handleGetDiscordUsers)
 	mux.Patch("/users/{id}/active", r.handleUpdateDiscordUserActive)
 	mux.Delete("/users/{id}", r.handleDeleteDiscordUser)
+	mux.Post("/users/merge", r.handleMergeDiscordUsers)
 	mux.Get("/members", r.handleGetDiscordGuildMembers)
 	mux.Put("/events/{id}/participants", r.handleUpdateDiscordEventParticipation)
 	mux.Get("/clan-members", r.handleGetClanMembers)
@@ -299,6 +300,47 @@ func (r *Router) handleDeleteDiscordUser(w http.ResponseWriter, req *http.Reques
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+type MergeDiscordUsersRequest struct {
+	SourceUserID string `json:"sourceUserId"`
+	TargetUserID string `json:"targetUserId"`
+}
+
+func (r *Router) handleMergeDiscordUsers(w http.ResponseWriter, req *http.Request) {
+	if r.discordRepo == nil {
+		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+		return
+	}
+
+	var payload MergeDiscordUsersRequest
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if payload.SourceUserID == "" || payload.TargetUserID == "" {
+		http.Error(w, "Both sourceUserId and targetUserId are required", http.StatusBadRequest)
+		return
+	}
+	if payload.SourceUserID == payload.TargetUserID {
+		http.Error(w, "sourceUserId and targetUserId cannot be the same", http.StatusBadRequest)
+		return
+	}
+
+	if r.discordService != nil {
+		if err := r.discordService.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		if err := r.discordRepo.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID, ""); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	r.json(w, map[string]bool{"success": true})
 }
 
 func (r *Router) handleGetDiscordGuildMembers(w http.ResponseWriter, req *http.Request) {

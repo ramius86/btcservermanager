@@ -24,7 +24,7 @@
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.0"
+    "vite": "^8.3.1"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",
@@ -38,12 +38,12 @@
     "chartjs-plugin-zoom": "^2.2.0",
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
-    "lucide-react": "^1.47.0",
+    "lucide-react": "^1.49.0",
     "qrcode.react": "^4.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-image-crop": "^11.1.2",
     "react-router-dom": "^7.18.4",
-    "react-virtuoso": "^4.18.13",
+    "react-virtuoso": "^4.18.16",
     "tailwind-merge": "^3.7.0"
   }
 }

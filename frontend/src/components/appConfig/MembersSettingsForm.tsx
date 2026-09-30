@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Users, Save, Info, Plus, X, Shield, Medal, ChevronLeft, ChevronRight, Pencil, Snowflake, UserPlus } from 'lucide-react'
+import { Users, Save, Info, Plus, X, Shield, Medal, ChevronLeft, ChevronRight, Pencil, Snowflake, UserPlus, GitMerge } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -7,6 +7,7 @@ import { Badge } from '../ui/Badge'
 import { useToast } from '../ui/Toast'
 import { DiscordService } from '../../services/api'
 import type { DiscordRole, DiscordUser } from '../../services/api'
+import { MergeDiscordUsersModal } from './MergeDiscordUsersModal'
 
 interface MembersSettings {
   memberRoleIds: string[]
@@ -33,6 +34,7 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
   const [pendingRenames, setPendingRenames] = useState<{ oldName: string, newName: string }[]>([])
 
   const [frozenUsers, setFrozenUsers] = useState<DiscordUser[]>([])
+  const [showMergeModal, setShowMergeModal] = useState(false)
 
   useEffect(() => {
     setLocalSettings(settings)
@@ -383,6 +385,31 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
             </div>
           </div>
 
+          {/* Account Maintenance / Duplicate Account Cleanup */}
+          <div className="space-y-4 pt-6 border-t border-border/50">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-lg border border-border/60 bg-surface/30">
+              <div className="space-y-1">
+                <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                  <GitMerge className="w-3 h-3 text-primary" />
+                  Account Maintenance
+                </label>
+                <p className="text-[10px] text-muted-foreground italic ml-1">
+                  Merge duplicate Discord IDs when a player creates a new account to unify attendance history and qualifications.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowMergeModal(true)}
+                className="text-xs border-border hover:bg-surface-elevated flex items-center gap-1.5 shrink-0 self-start sm:self-auto"
+              >
+                <GitMerge className="w-3.5 h-3.5 text-primary" />
+                Merge Accounts...
+              </Button>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-border">
             <div className="flex items-center gap-3 px-3 py-2 bg-primary/5 rounded-lg border border-primary/10 max-w-sm">
               <Info className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -406,6 +433,14 @@ export function MembersSettingsForm({ settings, onSave }: Readonly<MembersSettin
           </div>
         </form>
       </CardContent>
+
+      <MergeDiscordUsersModal
+        open={showMergeModal}
+        onOpenChange={setShowMergeModal}
+        onSuccess={() => {
+          fetchFrozenUsers()
+        }}
+      />
     </Card>
   )
 }

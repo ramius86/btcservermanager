@@ -639,6 +639,40 @@ func (s *Service) DeleteUser(ctx context.Context, userID string) error {
 	return s.repo.DeleteUserAndParticipations(ctx, userID)
 }
 
+func (s *Service) MergeUsers(ctx context.Context, sourceUserID, targetUserID string) error {
+	if sourceUserID == "" || targetUserID == "" {
+		return errors.New("both source and target user IDs are required")
+	}
+	if sourceUserID == targetUserID {
+		return errors.New("source and target user IDs cannot be the same")
+	}
+
+	var targetUsername string
+	if s.session != nil && s.guildID != "" {
+		if member, err := s.session.GuildMember(s.guildID, targetUserID); err == nil && member != nil {
+			targetUsername = getMemberDisplayName(member)
+		}
+	}
+
+	if err := s.repo.MergeUsers(ctx, sourceUserID, targetUserID, targetUsername); err != nil {
+		return err
+	}
+
+	go func() {
+		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		events, err := s.repo.GetAllEvents(bgCtx)
+		if err != nil {
+			return
+		}
+		for _, e := range events {
+			_ = s.updateEventMessageEmbed(bgCtx, &e)
+		}
+	}()
+
+	return nil
+}
+
 func formatUsersForField(users []string) string {
 	if len(users) == 0 {
 		return "-"

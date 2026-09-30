@@ -346,6 +346,7 @@ export const DiscordService = {
 	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
 	setUserActive: (id: string, active: boolean, username?: string): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, username }) }),
 	deleteUser: (id: string): Promise<void> => fetchApi(`/discord/users/${id}`, { method: 'DELETE' }),
+	mergeUsers: (data: { sourceUserId: string, targetUserId: string }): Promise<{ success: boolean }> => fetchApi('/discord/users/merge', { method: 'POST', body: JSON.stringify(data) }),
 	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),
 	updateEventParticipation: (eventId: number, data: { userId: string, username: string, status: string }): Promise<void> => fetchApi(`/discord/events/${eventId}/participants`, { method: 'PUT', body: JSON.stringify(data) }),
 	getClanMembers: (): Promise<ClanMember[]> => fetchApi('/discord/clan-members'),

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 )
 
 type Repository struct {
@@ -711,6 +712,150 @@ func (r *Repository) RecordPlayerRoleUsage(ctx context.Context, records []Player
 		if _, err := stmt.ExecContext(ctx, uid, rec.PlayerName, rec.Role, gameType); err != nil {
 			return err
 		}
+	}
+
+	return tx.Commit()
+}
+
+// MergeUsers merges sourceUserID into targetUserID across all discord tables and removes sourceUserID.
+func (r *Repository) MergeUsers(ctx context.Context, sourceUserID, targetUserID, targetUsername string) error {
+	if sourceUserID == "" || targetUserID == "" {
+		return errors.New("both source and target user IDs are required")
+	}
+	if sourceUserID == targetUserID {
+		return errors.New("source and target user IDs cannot be the same")
+	}
+
+	tx, err := r.db.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback()
+	}()
+
+	// 1. Ensure target user exists in discord_users as active
+	if targetUsername != "" {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO discord_users (id, username, is_active, updated_at)
+			VALUES (?, ?, 1, datetime('now'))
+			ON CONFLICT(id) DO UPDATE SET
+				is_active = 1,
+				username = excluded.username,
+				updated_at = datetime('now')
+		`, targetUserID, targetUsername)
+	} else {
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO discord_users (id, username, is_active, updated_at)
+			VALUES (?, COALESCE((SELECT username FROM discord_users WHERE id = ?), ?), 1, datetime('now'))
+			ON CONFLICT(id) DO UPDATE SET
+				is_active = 1,
+				updated_at = datetime('now')
+		`, targetUserID, sourceUserID, targetUserID)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to ensure target user: %w", err)
+	}
+
+	// 2. Transfer discord_event_participations
+	// Delete any source user participations for events where the target user has already responded
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM discord_event_participations
+		WHERE user_id = ? AND event_id IN (
+			SELECT event_id FROM discord_event_participations WHERE user_id = ?
+		)
+	`, sourceUserID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("failed to remove duplicate event participations: %w", err)
+	}
+
+	// Transfer all remaining participations to target user
+	_, err = tx.ExecContext(ctx, `
+		UPDATE discord_event_participations
+		SET user_id = ?
+		WHERE user_id = ?
+	`, targetUserID, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to transfer event participations: %w", err)
+	}
+
+	// 3. Transfer member_qualifications
+	_, err = tx.ExecContext(ctx, `
+		INSERT OR IGNORE INTO member_qualifications (user_id, qualification_name)
+		SELECT ?, qualification_name
+		FROM member_qualifications
+		WHERE user_id = ?
+	`, targetUserID, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to transfer qualifications: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx, `DELETE FROM member_qualifications WHERE user_id = ?`, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to clean source qualifications: %w", err)
+	}
+
+	// 4. Transfer and merge discord_player_role_history
+	// For conflicting (role, game_type), combine play_count and update last_used_at
+	_, err = tx.ExecContext(ctx, `
+		UPDATE discord_player_role_history
+		SET play_count = play_count + (
+			SELECT s.play_count
+			FROM discord_player_role_history s
+			WHERE s.user_id = ? AND s.role = discord_player_role_history.role AND s.game_type = discord_player_role_history.game_type
+		),
+		last_used_at = MAX(last_used_at, (
+			SELECT s.last_used_at
+			FROM discord_player_role_history s
+			WHERE s.user_id = ? AND s.role = discord_player_role_history.role AND s.game_type = discord_player_role_history.game_type
+		))
+		WHERE user_id = ?
+		  AND EXISTS (
+			SELECT 1 FROM discord_player_role_history s
+			WHERE s.user_id = ? AND s.role = discord_player_role_history.role AND s.game_type = discord_player_role_history.game_type
+		  )
+	`, sourceUserID, sourceUserID, targetUserID, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to update role history play counts: %w", err)
+	}
+
+	// Delete conflicting rows from source user
+	_, err = tx.ExecContext(ctx, `
+		DELETE FROM discord_player_role_history
+		WHERE user_id = ?
+		  AND EXISTS (
+			SELECT 1 FROM discord_player_role_history t
+			WHERE t.user_id = ? AND t.role = discord_player_role_history.role AND t.game_type = discord_player_role_history.game_type
+		  )
+	`, sourceUserID, targetUserID)
+	if err != nil {
+		return fmt.Errorf("failed to remove conflicting source role history: %w", err)
+	}
+
+	// Transfer remaining non-conflicting rows to target user
+	_, err = tx.ExecContext(ctx, `
+		UPDATE discord_player_role_history
+		SET user_id = ?
+		WHERE user_id = ?
+	`, targetUserID, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to reassign role history: %w", err)
+	}
+
+	// 5. Update roster JSON data in discord_event_rosters
+	_, err = tx.ExecContext(ctx, `
+		UPDATE discord_event_rosters
+		SET data = replace(data, ?, ?)
+		WHERE data LIKE '%' || ? || '%'
+	`, sourceUserID, targetUserID, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to update event rosters: %w", err)
+	}
+
+	// 6. Delete source user from discord_users
+	_, err = tx.ExecContext(ctx, `DELETE FROM discord_users WHERE id = ?`, sourceUserID)
+	if err != nil {
+		return fmt.Errorf("failed to delete source user: %w", err)
 	}
 
 	return tx.Commit()
