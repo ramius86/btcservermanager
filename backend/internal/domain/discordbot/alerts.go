@@ -17,7 +17,7 @@ const (
 	colorAlertGame    = 0xFEE75C // Amber/Yellow
 	colorAlertTest    = 0x57F287 // Green
 
-	footerText = "BTC Server Manager"
+	footerText = "=BTC= Server Manager"
 )
 
 func (s *Service) SendServerOfflineAlert(channelID, serverName, serverType string, isCrash bool, exitErr error) error {

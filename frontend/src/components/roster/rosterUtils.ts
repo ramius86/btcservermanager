@@ -650,8 +650,11 @@ export function formatSquadsForEmbedField(squads: RosterSquad[]): string {
     lines.push('')
   }
 
-  const result = lines.join('\n').trim()
-  return result || 'No slots defined'
+  const content = lines.join('\n').trim()
+  if (!content) return 'No slots defined'
+
+  // \u200b at start and end provides vertical spacing immune to Discord's auto-trim
+  return `\u200b\n${content}\n\u200b`
 }
 
 /**
@@ -672,7 +675,7 @@ export function buildRosterDiscordEmbed(
     color: 16048263, // BTC Amber
     fields: [],
     footer: {
-      text: 'BTC Clan Server Manager',
+      text: '=BTC= Server Manager',
     },
   }
 
@@ -680,8 +683,8 @@ export function buildRosterDiscordEmbed(
     const fieldValue = formatSquadsForEmbedField(parts[0].squads)
     embed.fields = [
       {
-        name: 'SLOTLIST',
-        value: fieldValue.length > 1024 ? fieldValue.substring(0, 1020) + '...' : fieldValue,
+        name: '🔹 SLOTLIST',
+        value: fieldValue.length > 1024 ? fieldValue.substring(0, 1018) + '...\n\u200b' : fieldValue,
         inline: false,
       },
     ]
@@ -691,12 +694,13 @@ export function buildRosterDiscordEmbed(
   const fields: DiscordEmbedField[] = []
   for (let i = 0; i < parts.length; i++) {
     const p = parts[i]
-    const partName = p.name?.trim() || `PART ${i + 1}`
+    const rawPartName = p.name?.trim() || `PART ${i + 1}`
+    const partName = rawPartName.startsWith('🔹') ? rawPartName : `🔹 ${rawPartName}`
     const fieldValue = formatSquadsForEmbedField(p.squads)
 
     fields.push({
       name: partName,
-      value: fieldValue.length > 1024 ? fieldValue.substring(0, 1020) + '...' : fieldValue,
+      value: fieldValue.length > 1024 ? fieldValue.substring(0, 1018) + '...\n\u200b' : fieldValue,
       inline: true,
     })
   }
