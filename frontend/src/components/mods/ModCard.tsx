@@ -10,6 +10,7 @@ import { Button, cn } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
 import { Switch } from '../ui/Switch'
+import { isModInProgress } from '../../dtos/ModDto'
 
 interface ModCardProps {
   mod: any
@@ -19,6 +20,46 @@ interface ModCardProps {
   isUpdating: boolean
 }
 
+type BadgeVariant = 'primary' | 'secondary' | 'outline' | 'success' | 'danger' | 'warning'
+
+function getModStatusBadge(mod: any, inProgress: boolean): { statusVariant: BadgeVariant; statusText: string } {
+  if (inProgress) {
+    const isUpdate = Boolean(mod.needsUpdate || (mod.fileSize && mod.fileSize > 0))
+    return {
+      statusVariant: 'primary',
+      statusText: isUpdate ? 'UPDATING' : 'DOWNLOADING',
+    }
+  }
+
+  if (mod.installationStatus === 'FINISHED') {
+    return {
+      statusVariant: mod.needsUpdate ? 'warning' : 'success',
+      statusText: mod.needsUpdate ? 'UPDATE AVAILABLE' : 'INSTALLED',
+    }
+  }
+
+  if (mod.installationStatus === 'ERROR') {
+    return { statusVariant: 'danger', statusText: 'ERROR' }
+  }
+
+  if (mod.installationStatus === 'NOT_INSTALLED') {
+    return { statusVariant: 'secondary', statusText: 'NOT INSTALLED' }
+  }
+
+  return { statusVariant: 'secondary', statusText: mod.installationStatus || 'UNKNOWN' }
+}
+
+function getUpdateButtonTitle(inProgress: boolean, needsUpdate: boolean): string {
+  if (inProgress) return 'Update in progress...'
+  if (needsUpdate) return 'Update Mod'
+  return 'Re-download / Verify Mod'
+}
+
+function getDeleteButtonTitle(inProgress: boolean): string {
+  if (inProgress) return 'Cannot delete while update/installation is in progress'
+  return 'Delete Mod'
+}
+
 export const ModCard: React.FC<Readonly<ModCardProps>> = ({
   mod,
   onUpdate,
@@ -26,21 +67,10 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
   onToggleServerOnly,
   isUpdating
 }) => {
-  let statusVariant: 'success' | 'danger' | 'secondary' | 'warning' = 'secondary';
-  if (mod.installationStatus === 'FINISHED') {
-    if (mod.needsUpdate) statusVariant = 'warning';
-    else statusVariant = 'success';
-  }
-  else if (mod.installationStatus === 'ERROR') statusVariant = 'danger';
-
-  let statusText = mod.installationStatus;
-  if (mod.installationStatus === 'FINISHED') {
-    if (mod.needsUpdate) statusText = 'UPDATE AVAILABLE';
-    else statusText = 'INSTALLED';
-  }
-  else if (mod.installationStatus === 'INSTALLATION_IN_PROGRESS') {
-    statusText = (mod.needsUpdate || mod.fileSize > 0) ? 'UPDATING' : 'DOWNLOADING';
-  }
+  const inProgress = isUpdating || isModInProgress(mod.installationStatus)
+  const { statusVariant, statusText } = getModStatusBadge(mod, inProgress)
+  const updateTitle = getUpdateButtonTitle(inProgress, Boolean(mod.needsUpdate))
+  const deleteTitle = getDeleteButtonTitle(inProgress)
 
   return (
     <Card key={mod.id} className="group border-border bg-surface-elevated/40 hover:bg-surface-elevated/60 transition-all duration-300">
@@ -76,9 +106,12 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
             </h3>
             <Badge 
               variant={statusVariant} 
-              className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1.5"
+              className={cn(
+                "text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1.5",
+                inProgress && "font-bold"
+              )}
             >
-              {mod.installationStatus === 'INSTALLATION_IN_PROGRESS' && (
+              {inProgress && (
                 <RefreshCw className="w-2.5 h-2.5 animate-spin" />
               )}
               {statusText}
@@ -115,6 +148,7 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
             </span>
             <Switch 
               checked={mod.serverOnly} 
+              disabled={inProgress}
               onCheckedChange={() => onToggleServerOnly(mod)}
             />
           </div>
@@ -123,20 +157,21 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
             <Button 
               variant="ghost" 
               size="icon" 
-              className="w-9 h-9 text-muted-foreground hover:text-primary hover:bg-primary/10" 
+              className="w-9 h-9 text-muted-foreground hover:text-primary hover:bg-primary/10 disabled:opacity-50" 
               onClick={() => onUpdate(mod)}
-              disabled={isUpdating}
-              title="Update Mod"
+              disabled={inProgress}
+              title={updateTitle}
             >
-              <RefreshCw className={cn("w-4 h-4", isUpdating && "animate-spin")} />
+              <RefreshCw className={cn("w-4 h-4", inProgress && "animate-spin text-primary")} />
             </Button>
             
             <Button 
               variant="ghost" 
               size="icon" 
-              className="w-9 h-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10" 
+              className="w-9 h-9 text-muted-foreground hover:text-destructive hover:bg-destructive/10 disabled:opacity-50" 
               onClick={() => onDelete(mod)}
-              title="Delete Mod"
+              disabled={inProgress}
+              title={deleteTitle}
             >
               <Trash2 className="w-4 h-4" />
             </Button>

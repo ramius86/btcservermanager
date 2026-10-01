@@ -11,7 +11,21 @@ export interface ModDto {
     serverOnly: boolean;
     biKeys: string[];
     thumbnail?: string;
+    needsUpdate?: boolean;
 }
+
+export const IN_PROGRESS_MOD_STATUSES = new Set([
+    'INSTALLATION_IN_PROGRESS',
+    'DOWNLOADING',
+    'PREALLOCATING',
+    'COMMITTING',
+    'VERIFYING',
+    'IN_QUEUE'
+]);
+
+export const isModInProgress = (status?: string | null): boolean => {
+    return Boolean(status && IN_PROGRESS_MOD_STATUSES.has(status));
+};
 
 export interface SteamCmdItemInfoDto {
     itemId: number;

@@ -5,7 +5,8 @@
  * Features: ARMA3/DayZ filtering, Workshop search integration, and preset CRUD.
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { Upload, Search, Plus, AlertCircle, RefreshCw, CheckCircle, AlertTriangle, Download } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { Upload, Search, Plus, AlertCircle, RefreshCw, CheckCircle, AlertTriangle, Download, Terminal } from 'lucide-react'
 import { Button, cn } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
@@ -15,6 +16,7 @@ import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../components/ui/Dialog'
 import { useToast } from '../components/ui/Toast'
 import { useWebSocket } from '../contexts/WebSocketContext'
+import { isModInProgress } from '../dtos/ModDto'
 
 // Modular Components
 import { ModCard } from '../components/mods/ModCard'
@@ -26,9 +28,14 @@ import { Virtuoso } from 'react-virtuoso'
 
 function applyInstallProgress(mods: any[], itemId: number, status: string, loadData: () => void) {
   return mods.map(mod => {
-    if (mod.id === itemId) {
+    if (String(mod.id) === String(itemId)) {
       if (status === 'FINISHED') {
         setTimeout(loadData, 1000)
+        return { ...mod, installationStatus: status, needsUpdate: false, errorStatus: null }
+      }
+      if (status === 'ERROR') {
+        setTimeout(loadData, 1000)
+        return { ...mod, installationStatus: status }
       }
       return { ...mod, installationStatus: status }
     }
@@ -42,6 +49,11 @@ function applyMetadataUpdated(mods: any[], updatedMod: any) {
 
 function applyModDeleted(mods: any[], id: number) {
   return mods.filter(mod => mod.id !== id)
+}
+
+function applyOptimisticInProgress(mods: any[], targetIds: (string | number)[]) {
+  const targetIdSet = new Set(targetIds.map(String))
+  return mods.map(m => (targetIdSet.has(String(m.id)) ? { ...m, installationStatus: 'INSTALLATION_IN_PROGRESS' } : m))
 }
 
 function useModsData(filter: string) {
@@ -167,39 +179,55 @@ function useSteamSearch(filter: string) {
   }
 }
 
-function useFilteredMods(mods: any[], searchQuery: string, sortBy: string) {
-  const filtered = mods.filter(mod => {
-    if (!searchQuery.trim()) return true
-    const q = searchQuery.toLowerCase()
-    return (
-      (mod.name?.toLowerCase().includes(q)) ||
-      (String(mod.id)?.includes(q))
-    )
-  })
+function compareModPriority(a: any, b: any): number {
+  const aInProgress = isModInProgress(a.installationStatus)
+  const bInProgress = isModInProgress(b.installationStatus)
+  if (aInProgress !== bInProgress) {
+    return aInProgress ? -1 : 1
+  }
 
-  return filtered.sort((a, b) => {
-    // 1. Prioritize mods that need update
-    const aNeedsUpdate = a.needsUpdate === true && a.installationStatus !== 'INSTALLATION_IN_PROGRESS';
-    const bNeedsUpdate = b.needsUpdate === true && b.installationStatus !== 'INSTALLATION_IN_PROGRESS';
-    
-    if (aNeedsUpdate && !bNeedsUpdate) return -1;
-    if (!aNeedsUpdate && bNeedsUpdate) return 1;
+  const aNeedsUpdate = Boolean(a.needsUpdate)
+  const bNeedsUpdate = Boolean(b.needsUpdate)
+  if (aNeedsUpdate !== bNeedsUpdate) {
+    return aNeedsUpdate ? -1 : 1
+  }
 
-    // 2. Normal sorting
-    if (sortBy === 'recent') {
+  return 0
+}
+
+function compareModsBySortField(a: any, b: any, sortBy: string): number {
+  switch (sortBy) {
+    case 'recent': {
       const dateA = a.installedAt ? new Date(a.installedAt).getTime() : 0
       const dateB = b.installedAt ? new Date(b.installedAt).getTime() : 0
       return dateB - dateA
     }
-    if (sortBy === 'updated') {
+    case 'updated': {
       const dateA = a.lastUpdated ? new Date(a.lastUpdated).getTime() : 0
       const dateB = b.lastUpdated ? new Date(b.lastUpdated).getTime() : 0
       return dateB - dateA
     }
-    if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '')
-    if (sortBy === 'id') return String(a.id).localeCompare(String(b.id))
-    if (sortBy === 'size') return (b.fileSize || 0) - (a.fileSize || 0)
-    return 0
+    case 'name':
+      return (a.name || '').localeCompare(b.name || '')
+    case 'id':
+      return String(a.id).localeCompare(String(b.id))
+    case 'size':
+      return (b.fileSize || 0) - (a.fileSize || 0)
+    default:
+      return 0
+  }
+}
+
+function useFilteredMods(mods: any[], searchQuery: string, sortBy: string) {
+  const query = searchQuery.trim().toLowerCase()
+  const filtered = query
+    ? mods.filter(mod => mod.name?.toLowerCase().includes(query) || String(mod.id)?.includes(query))
+    : [...mods]
+
+  return filtered.sort((a, b) => {
+    const priorityDiff = compareModPriority(a, b)
+    if (priorityDiff !== 0) return priorityDiff
+    return compareModsBySortField(a, b, sortBy)
   })
 }
 
@@ -346,28 +374,24 @@ const gameInfo: Record<string, { name: string, icon: string }> = {
   'REFORGER': { name: 'Arma Reforger', icon: '/reforger.png' },
 }
 
-const ModsDashboardStatusPanel = ({ updateMods, currentInProgress, errorMods, downloadingMods, updatingMods, peakInProgress }: any) => {
+const ModsDashboardStatusPanel = ({ pendingUpdateMods = [], currentInProgress = 0, errorMods = [], downloadingMods = [], updatingMods = [], peakInProgress = 0 }: any) => {
+  const allUpdated = pendingUpdateMods.length === 0 && currentInProgress === 0 && errorMods.length === 0
+
   return (
     <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 mb-2 bg-surface-elevated/40 border border-border rounded-xl shadow-sm">
       <div className="flex flex-wrap items-center gap-6">
-        {updateMods.length === 0 && currentInProgress === 0 && errorMods.length === 0 ? (
+        {allUpdated ? (
           <div className="flex items-center gap-2 text-emerald-500">
             <CheckCircle className="w-5 h-5" />
             <span className="text-sm font-bold uppercase tracking-widest">All mods updated</span>
           </div>
         ) : (
           <>
-            {updateMods.length > 0 && (
+            {pendingUpdateMods.length > 0 && (
               <div className="flex items-center gap-2 text-amber-500">
                 <AlertTriangle className="w-5 h-5" />
-                <span className="text-sm font-bold uppercase tracking-widest">{updateMods.length} mod{updateMods.length === 1 ? '' : 's'} need update</span>
-              </div>
-            )}
-            {downloadingMods.length > 0 && (
-              <div className="flex items-center gap-2 text-blue-400">
-                <Download className="w-5 h-5 animate-pulse" />
                 <span className="text-sm font-bold uppercase tracking-widest">
-                  {downloadingMods.length} mod{downloadingMods.length === 1 ? '' : 's'} downloading
+                  {pendingUpdateMods.length} mod{pendingUpdateMods.length === 1 ? ' needs' : 's need'} update
                 </span>
               </div>
             )}
@@ -376,6 +400,14 @@ const ModsDashboardStatusPanel = ({ updateMods, currentInProgress, errorMods, do
                 <RefreshCw className="w-5 h-5 animate-spin" />
                 <span className="text-sm font-bold uppercase tracking-widest">
                   {updatingMods.length} mod{updatingMods.length === 1 ? '' : 's'} updating
+                </span>
+              </div>
+            )}
+            {downloadingMods.length > 0 && (
+              <div className="flex items-center gap-2 text-blue-400">
+                <Download className="w-5 h-5 animate-pulse" />
+                <span className="text-sm font-bold uppercase tracking-widest">
+                  {downloadingMods.length} mod{downloadingMods.length === 1 ? '' : 's'} downloading
                 </span>
               </div>
             )}
@@ -394,14 +426,78 @@ const ModsDashboardStatusPanel = ({ updateMods, currentInProgress, errorMods, do
   )
 }
 
-const UpdateWarningAlert = ({ updateMods, handleUpdatePending, updatingAll }: any) => {
-  if (updateMods.length === 0) return null;
+const UpdateInProgressAlert = ({ updatingMods, downloadingMods }: { updatingMods: any[]; downloadingMods: any[] }) => {
+  const navigate = useNavigate()
+  const total = updatingMods.length + downloadingMods.length
+  if (total === 0) return null
+
+  const isUpdating = updatingMods.length > 0
+  const updatingNoun = updatingMods.length === 1 ? 'mod' : 'mods'
+  const downloadingNoun = downloadingMods.length === 1 ? 'mod' : 'mods'
+  const alertTitle = isUpdating
+    ? `Updating ${updatingMods.length} ${updatingNoun} via SteamCMD...`
+    : `Downloading ${downloadingMods.length} ${downloadingNoun} via SteamCMD...`
+
+  return (
+    <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 p-4 bg-primary/10 border border-primary/30 rounded-xl shadow-sm animate-in fade-in slide-in-from-top-2">
+      <div className="flex items-start gap-3 flex-1 min-w-0">
+        <RefreshCw className="w-5 h-5 text-primary shrink-0 mt-0.5 animate-spin" />
+        <div className="space-y-1.5 flex-1 min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm font-bold text-foreground">
+              {alertTitle}
+            </span>
+            {isUpdating && downloadingMods.length > 0 && (
+              <Badge variant="outline" className="text-[10px] text-muted-foreground border-border">
+                +{downloadingMods.length} downloading
+              </Badge>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+            {updatingMods.concat(downloadingMods).map((m: any) => (
+              <Badge
+                key={m.id}
+                variant="primary"
+                className="text-[10px] py-0.5 px-2 flex items-center gap-1.5 font-medium bg-surface/80 border-primary/30"
+              >
+                <RefreshCw className="w-2.5 h-2.5 animate-spin text-primary" />
+                <span className="font-semibold truncate max-w-[200px]" title={m.name || m.id}>
+                  {m.name || `Mod ${m.id}`}
+                </span>
+                <span className="text-[9px] opacity-75 uppercase font-mono tracking-wider">
+                  {m.needsUpdate || m.fileSize > 0 ? 'Updating' : 'Downloading'}
+                </span>
+              </Badge>
+            ))}
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            SteamCMD is downloading and updating files in the background. Because SteamCMD does not stream progress percentages for workshop items, this status remains active until the download finishes and the mod files are verified and linked.
+          </p>
+        </div>
+      </div>
+      <div className="flex items-center gap-2 shrink-0 self-end md:self-center">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => navigate('/logs?type=steamcmd')}
+          className="bg-surface-elevated/80 border-primary/30 text-primary hover:bg-primary/20 text-xs font-bold uppercase tracking-wider"
+        >
+          <Terminal className="w-3.5 h-3.5 mr-1.5" />
+          SteamCMD Logs
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+const UpdateWarningAlert = ({ updateMods, handleUpdatePending, updatingAll, isAnyUpdating }: any) => {
+  if (updateMods.length === 0) return null
   return (
     <div className="flex items-start gap-3 p-3 bg-amber-900/15 border border-amber-500/30 rounded-lg animate-in fade-in slide-in-from-top-2">
       <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
       <div className="flex-1">
         <p className="text-sm font-bold text-amber-500">
-          {updateMods.length} mod{updateMods.length === 1 ? '' : 's'} have updates available
+          {updateMods.length} mod{updateMods.length === 1 ? ' has' : 's have'} updates available
         </p>
         <ul className="mt-2 mb-2 text-xs text-amber-500/90 list-disc list-inside space-y-1">
           {updateMods.map((m: any) => (
@@ -409,12 +505,17 @@ const UpdateWarningAlert = ({ updateMods, handleUpdatePending, updatingAll }: an
           ))}
         </ul>
         <p className="text-xs text-amber-500/80">
-          Click 'Update Outdated Mods' to start the installation process. Until then, the server will continue to use the currently installed versions.
+          Click '{isAnyUpdating ? 'Update Remaining Mods' : 'Update Outdated Mods'}' to start the installation process. Until then, the server will continue to use the currently installed versions.
         </p>
       </div>
-      <Button size="sm" onClick={handleUpdatePending} disabled={updatingAll} className="shrink-0 bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 hover:text-amber-400 border border-amber-500/30">
+      <Button
+        size="sm"
+        onClick={handleUpdatePending}
+        disabled={updatingAll}
+        className="shrink-0 bg-amber-500/20 text-amber-500 hover:bg-amber-500/30 hover:text-amber-400 border border-amber-500/30"
+      >
         <RefreshCw className={cn("w-3.5 h-3.5 mr-2", updatingAll && "animate-spin")} />
-        Update Outdated Mods
+        {isAnyUpdating ? `Update Remaining (${updateMods.length})` : 'Update Outdated Mods'}
       </Button>
     </div>
   )
@@ -440,7 +541,7 @@ const ErrorModsAlert = ({ errorMods }: any) => {
 export function ModsPage() {
   const { showToast } = useToast()
   const [filter, setFilter] = useState('ARMA3')
-  const { mods, presets, loading, setLoading, loadData } = useModsData(filter)
+  const { mods, setMods, presets, loading, setLoading, loadData } = useModsData(filter)
   const steamSearch = useSteamSearch(filter)
   const [searchQuery, setSearchQuery] = useState('')
   const [sortBy, setSortBy] = useState('name') // name, id, size, date
@@ -490,12 +591,12 @@ export function ModsPage() {
   // Mods with errors
   const errorMods = mods.filter(m => m.installationStatus === 'ERROR')
 
-  // Mods that need update
-  const updateMods = mods.filter(m => m.needsUpdate === true && m.installationStatus !== 'INSTALLATION_IN_PROGRESS')
+  // Mods actively installing or updating
+  const updatingMods = mods.filter(m => isModInProgress(m.installationStatus) && (m.needsUpdate || (m.fileSize && m.fileSize > 0)))
+  const downloadingMods = mods.filter(m => isModInProgress(m.installationStatus) && !m.needsUpdate && !m.fileSize)
 
-  // Mods actively installing
-  const updatingMods = mods.filter(m => m.installationStatus === 'INSTALLATION_IN_PROGRESS' && (m.needsUpdate || m.fileSize > 0))
-  const downloadingMods = mods.filter(m => m.installationStatus === 'INSTALLATION_IN_PROGRESS' && !m.needsUpdate && !m.fileSize)
+  // Mods that need update and have not started yet
+  const pendingUpdateMods = mods.filter(m => m.needsUpdate === true && !isModInProgress(m.installationStatus))
 
   const currentInProgress = updatingMods.length + downloadingMods.length
 
@@ -582,12 +683,14 @@ export function ModsPage() {
 
   const handleUpdateAll = async () => {
     setUpdatingAll(true)
+    setMods(prev => prev.map(m => ({ ...m, installationStatus: 'INSTALLATION_IN_PROGRESS' })))
     try {
       await WorkshopService.updateAll()
       showToast("All mods update check started.", "success")
     } catch (err) {
       console.error(err)
       showToast("Failed to update all mods", "error")
+      loadData(true)
     } finally {
       setUpdatingAll(false)
     }
@@ -595,12 +698,16 @@ export function ModsPage() {
 
   const handleUpdatePending = async () => {
     setUpdatingAll(true)
+    const targets = [...pendingUpdateMods]
+    const targetIds = targets.map(um => um.id)
+    setMods(prev => applyOptimisticInProgress(prev, targetIds))
     try {
-      await WorkshopService.install(updateMods)
-      showToast(`Started updating ${updateMods.length} mods.`, "success")
+      await WorkshopService.install(targets)
+      showToast(`Started updating ${targets.length} mod${targets.length === 1 ? '' : 's'}.`, "success")
     } catch (err) {
       console.error(err)
       showToast("Failed to start updates", "error")
+      loadData(true)
     } finally {
       setUpdatingAll(false)
     }
@@ -608,12 +715,14 @@ export function ModsPage() {
 
   const handleUpdateMod = async (mod: any) => {
     setUpdatingModIds(prev => [...prev, mod.id])
+    setMods(prev => applyOptimisticInProgress(prev, [mod.id]))
     try {
       await WorkshopService.install([mod])
       showToast(`Update started for '${mod.name}'.`, "success")
     } catch (err) {
       console.error(err)
       showToast("Failed to start update", "error")
+      loadData(true)
     } finally {
       setUpdatingModIds(prev => prev.filter(id => id !== mod.id))
     }
@@ -746,7 +855,7 @@ export function ModsPage() {
 
         {/* Dashboard Status Panel */}
         <ModsDashboardStatusPanel
-          updateMods={updateMods}
+          pendingUpdateMods={pendingUpdateMods}
           currentInProgress={currentInProgress}
           errorMods={errorMods}
           downloadingMods={downloadingMods}
@@ -788,11 +897,18 @@ export function ModsPage() {
             </div>
           </div>
 
+          {/* Active In-Progress Alert */}
+          <UpdateInProgressAlert
+            updatingMods={updatingMods}
+            downloadingMods={downloadingMods}
+          />
+
           {/* Warning Alert for Updates */}
           <UpdateWarningAlert
-            updateMods={updateMods}
+            updateMods={pendingUpdateMods}
             handleUpdatePending={handleUpdatePending}
             updatingAll={updatingAll}
+            isAnyUpdating={currentInProgress > 0}
           />
 
           {/* Error Alert */}
