@@ -47,4 +47,14 @@ func TestCrypto(t *testing.T) {
 			t.Error("expected error for invalid base64")
 		}
 	})
+
+	t.Run("Missing SECRET_KEY returns error", func(t *testing.T) {
+		os.Unsetenv("SECRET_KEY")
+		defer os.Setenv("SECRET_KEY", "test-secret")
+
+		_, err := encrypt("password")
+		if err == nil {
+			t.Error("expected error when SECRET_KEY is missing")
+		}
+	})
 }

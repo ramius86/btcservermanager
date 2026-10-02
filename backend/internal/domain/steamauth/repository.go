@@ -79,13 +79,19 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 
 	tokenToSave := current.SteamGuardToken
 	if a.SteamGuardToken != "" {
-		enc, _ := encrypt(a.SteamGuardToken)
+		enc, err := encrypt(a.SteamGuardToken)
+		if err != nil {
+			return err
+		}
 		tokenToSave = enc
 	}
 
 	refreshTokenToSave := current.RefreshToken
 	if a.RefreshToken != "" {
-		enc, _ := encrypt(a.RefreshToken)
+		enc, err := encrypt(a.RefreshToken)
+		if err != nil {
+			return err
+		}
 		refreshTokenToSave = enc
 	}
 
