@@ -160,6 +160,21 @@ func (r *Repository) getReforgerPresetMods(ctx context.Context, presetID int64) 
 }
 
 func (r *Repository) Save(ctx context.Context, p *ModPreset) error {
+	// Ensure mods exist in workshopRepo for non-Reforger presets so FK constraints are met
+	if p.Type != server.TypeReforger && r.workshopRepo != nil {
+		for _, m := range p.Mods {
+			if _, err := r.workshopRepo.GetModByID(ctx, m.ID); err != nil {
+				placeholder := &workshop.WorkshopMod{
+					ID:                 m.ID,
+					Name:               m.Name,
+					ServerType:         p.Type,
+					InstallationStatus: workshop.InstallationNotInstalled,
+				}
+				_ = r.workshopRepo.Save(ctx, placeholder)
+			}
+		}
+	}
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -176,7 +191,10 @@ func (r *Repository) Save(ctx context.Context, p *ModPreset) error {
 			return err
 		}
 
-		id, _ = res.LastInsertId()
+		id, err = res.LastInsertId()
+		if err != nil {
+			return err
+		}
 		p.ID = id
 	} else {
 		query := `UPDATE mod_preset SET name = ?, type = ? WHERE id = ?`
@@ -191,15 +209,23 @@ func (r *Repository) Save(ctx context.Context, p *ModPreset) error {
 
 	// Sync mods
 	if p.Type == server.TypeReforger {
-		_, _ = tx.ExecContext(ctx, "DELETE FROM reforger_preset_mod WHERE preset_id = ?", id)
+		if _, err := tx.ExecContext(ctx, "DELETE FROM reforger_preset_mod WHERE preset_id = ?", id); err != nil {
+			return err
+		}
 		for _, m := range p.ReforgerMods {
 			args := []any{id, m.ID, m.Name, m.Thumbnail}
-			_, _ = tx.ExecContext(ctx, "INSERT INTO reforger_preset_mod (preset_id, mod_id, name, thumbnail) VALUES (?, ?, ?, ?)", args...)
+			if _, err := tx.ExecContext(ctx, "INSERT INTO reforger_preset_mod (preset_id, mod_id, name, thumbnail) VALUES (?, ?, ?, ?)", args...); err != nil {
+				return err
+			}
 		}
 	} else {
-		_, _ = tx.ExecContext(ctx, "DELETE FROM preset_mod WHERE preset_id = ?", id)
+		if _, err := tx.ExecContext(ctx, "DELETE FROM preset_mod WHERE preset_id = ?", id); err != nil {
+			return err
+		}
 		for _, m := range p.Mods {
-			_, _ = tx.ExecContext(ctx, "INSERT INTO preset_mod (preset_id, mod_id) VALUES (?, ?)", id, m.ID)
+			if _, err := tx.ExecContext(ctx, "INSERT INTO preset_mod (preset_id, mod_id) VALUES (?, ?)", id, m.ID); err != nil {
+				return err
+			}
 		}
 	}
 
