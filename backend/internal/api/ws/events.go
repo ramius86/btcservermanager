@@ -12,6 +12,7 @@ const (
 	EvtServerUpdated            EventType = "server_updated"
 	EvtReforgerScenariosUpdated EventType = "reforger_scenarios_updated"
 	EvtModMetadataUpdated       EventType = "mod_metadata_updated"
+	EvtModDeleted               EventType = "mod_deleted"
 )
 
 type Event struct {
