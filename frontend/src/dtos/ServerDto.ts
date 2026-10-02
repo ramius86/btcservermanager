@@ -82,10 +82,6 @@ export interface Arma3NetworkSettings {
     minErrorToSend: number | null;
     minErrorToSendNear: number | null;
     maxPacketSize: number | null;
-    disconnectTimeout: number | null;
-    maxPing: number | null;
-    maxDesync: number | null;
-    maxPacketLoss: number | null;
     steamProtocolMaxDataSize: number | null;
 }
 
@@ -103,7 +99,7 @@ export interface Arma3ServerDto extends ServerDto {
     persistent: boolean;
     battlEye: boolean;
     vonEnabled: boolean;
-    verifySignatures: boolean;
+    verifySignatures: number;
     serverCommandPassword: string;
     motd: string[];
     motdInterval: number | null;
@@ -118,6 +114,24 @@ export interface Arma3ServerDto extends ServerDto {
     additionalOptions: string;
     difficultySettings: Arma3DifficultySettings | null;
     networkSettings: Arma3NetworkSettings | null;
+    disconnectTimeout: number | null;
+    maxPing: number | null;
+    maxDesync: number | null;
+    maxPacketLoss: number | null;
+    kickDuplicate?: boolean;
+    kickOnSlowNetworkPing?: boolean;
+    kickOnSlowNetworkPacketLoss?: boolean;
+    kickOnSlowNetworkDesync?: boolean;
+    kickOnSlowNetworkDisconnect?: boolean;
+    forcedDifficulty?: string;
+    autoSelectMission?: boolean;
+    randomMissionOrder?: boolean;
+    missionsToServerRestart?: number;
+    voteThreshold?: number | null;
+    voteMissionPlayers?: number | null;
+    lobbyTimeout?: number | null;
+    vonCodec?: number | null;
+    vonCodecQuality?: number;
     cbaPresetId: number | null;
     cbaPreset: CBAPresetDto | null;
     enableDebugConsole: number;
@@ -233,7 +247,7 @@ export interface ReforgerServerDto extends ServerDto {
     addonsVerify?: boolean;
     addonsRepair: boolean;
     noThrow: boolean;
-    missionHeader: string;
+    missionHeader?: Record<string, any> | string | null;
     activeMods: Array<ReforgerModDto>;
     admins?: string[];
     nwkResolution?: number;
