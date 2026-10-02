@@ -15,6 +15,7 @@ import (
 // It uses keyfunc to handle the fetching and auto-refreshing of public keys (JWK Set) in the background.
 type cfAccessValidator struct {
 	teamDomain string
+	aud        string
 	debugMode  bool
 	jwks       jwt.Keyfunc
 	mu         sync.RWMutex
@@ -31,10 +32,11 @@ func normalizeTeamDomain(domain string) string {
 	return strings.TrimSuffix(domain, "/")
 }
 
-func newCFAccessValidator(teamDomain string, debugMode bool) *cfAccessValidator {
+func newCFAccessValidator(teamDomain, aud string, debugMode bool) *cfAccessValidator {
 	teamDomain = normalizeTeamDomain(teamDomain)
 	v := &cfAccessValidator{
 		teamDomain: teamDomain,
+		aud:        strings.TrimSpace(aud),
 		debugMode:  debugMode,
 	}
 
@@ -123,6 +125,38 @@ func (v *cfAccessValidator) validateToken(tokenStr string) (int, bool) {
 	token, err := jwt.Parse(tokenStr, k)
 	if err != nil || !token.Valid {
 		return http.StatusForbidden, false
+	}
+
+	// Validate claims if aud or teamDomain configured
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return http.StatusForbidden, false
+	}
+
+	if v.aud != "" {
+		audList, err := claims.GetAudience()
+		if err != nil {
+			return http.StatusForbidden, false
+		}
+		found := false
+		for _, a := range audList {
+			if a == v.aud {
+				found = true
+				break
+			}
+		}
+		if !found {
+			log.Printf("[CFAccess] Token rejected: audience %v does not match configured CF_ACCESS_AUD %s", audList, v.aud)
+			return http.StatusForbidden, false
+		}
+	}
+
+	if v.teamDomain != "" {
+		iss, err := claims.GetIssuer()
+		if err != nil || iss != v.teamDomain {
+			log.Printf("[CFAccess] Token rejected: issuer %q does not match configured CF_TEAM_DOMAIN %q", iss, v.teamDomain)
+			return http.StatusForbidden, false
+		}
 	}
 
 	return 0, true

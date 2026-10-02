@@ -131,7 +131,13 @@ func (c *Client) close() {
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string) {
 	opts := &websocket.AcceptOptions{}
 	if allowedOrigin == "" {
-		opts.InsecureSkipVerify = true
+		// Secure default: allow same host (r.Host) and local development, preventing CSWSH
+		hostPattern := r.Host
+		if hostPattern != "" {
+			opts.OriginPatterns = []string{hostPattern, "localhost:*", "127.0.0.1:*"}
+		} else {
+			opts.OriginPatterns = []string{"localhost:*", "127.0.0.1:*"}
+		}
 	} else {
 		opts.OriginPatterns = []string{allowedOrigin}
 	}

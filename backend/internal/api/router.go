@@ -99,7 +99,7 @@ func (r *Router) Init() http.Handler {
 	mux.Use(CorsHandler(r.config.AllowedOrigin))
 	mux.Use(r.securityHeaders)
 
-	cfValidator := newCFAccessValidator(r.config.CFTeamDomain, r.config.DebugMode)
+	cfValidator := newCFAccessValidator(r.config.CFTeamDomain, r.config.CFAccessAud, r.config.DebugMode)
 
 	// Mount the CSP report receiver outside the Cloudflare Access validation
 	mux.Post("/api/csp-report", r.handleCSPReport)
