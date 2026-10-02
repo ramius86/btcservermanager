@@ -47,6 +47,18 @@ func (m *LogManager) CleanLogs(ctx context.Context, maxDays, maxSizeMB int, excl
 	return nil
 }
 
+var cleanableLogExtensions = []string{".log", ".rpt", ".adm", ".bidump", ".mdmp"}
+
+func isCleanableLogFile(name string) bool {
+	lower := strings.ToLower(name)
+	for _, ext := range cleanableLogExtensions {
+		if strings.HasSuffix(lower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
 func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, maxDays int, protected map[string]bool) ([]fileInfo, error) {
 	var files []fileInfo
 
@@ -61,7 +73,7 @@ func (m *LogManager) walkAndCleanAge(ctx context.Context, threshold time.Time, m
 			return err
 		}
 
-		if d.IsDir() || !strings.HasSuffix(d.Name(), ".log") {
+		if d.IsDir() || !isCleanableLogFile(d.Name()) {
 			return nil
 		}
 
