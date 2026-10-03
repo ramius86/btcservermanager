@@ -4,6 +4,7 @@ import (
 	"btcservermanager/internal/domain/server"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -29,6 +30,14 @@ func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := r.serverService.StartServer(context.Background(), id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrServerAlreadyRunning) || errors.Is(err, server.ErrPortConflict) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -44,6 +53,14 @@ func (r *Router) handleStopServer(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := r.serverService.StopServer(ctx, id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrServerNotRunning) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -58,6 +75,14 @@ func (r *Router) handleRestartServer(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := r.serverService.RestartServer(context.Background(), id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrPortConflict) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -127,6 +152,10 @@ func (r *Router) handleUpdateAutoRestart(w http.ResponseWriter, req *http.Reques
 	}
 
 	if err := r.serverService.SetAutomaticRestart(ctx, id, body.Enabled, body.Time); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

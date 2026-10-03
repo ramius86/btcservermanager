@@ -164,14 +164,16 @@ func (s *Service) UpdateServer(ctx context.Context, srv any) (any, error) {
 
 	if s.processManager != nil {
 		if s.processManager.GetInstanceInfo(id) != nil {
-			return nil, errors.New("cannot modify running server")
+			return nil, ErrCannotModifyRunning
 		}
 	}
 
 	// Merge existing passwords if they are masked or empty in the update request
-	if oldSrv, err := s.repo.GetServerByID(ctx, id); err == nil {
-		MergeMaskedPasswords(srv, oldSrv)
+	oldSrv, err := s.repo.GetServerByID(ctx, id)
+	if err != nil {
+		return nil, err
 	}
+	MergeMaskedPasswords(srv, oldSrv)
 
 	updatedID, err := s.repo.Save(ctx, srv)
 	if err != nil {
@@ -281,7 +283,7 @@ func (s *Service) DeleteServer(ctx context.Context, id int64) error {
 
 	if s.processManager != nil {
 		if s.processManager.GetInstanceInfo(id) != nil {
-			return errors.New("cannot delete running server")
+			return ErrCannotDeleteRunning
 		}
 	}
 

@@ -168,7 +168,7 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 
 	if m.isServerAlreadyRunning(id) {
 		m.emitStatus(id, true)
-		return nil
+		return ErrServerAlreadyRunning
 	}
 
 	// Validate Ports
@@ -423,7 +423,7 @@ func (m *ProcessManager) checkPortConflict(id int64, port, queryPort int) error 
 			portConflict := otherProc.port == port || otherProc.queryPort == port ||
 				otherProc.port == queryPort || otherProc.queryPort == queryPort
 			if portConflict {
-				conflict = fmt.Errorf("port conflict: ports %d or %d are already in use by running server ID %d", port, queryPort, otherID)
+				conflict = fmt.Errorf("%w: ports %d or %d are already in use by running server ID %d", ErrPortConflict, port, queryPort, otherID)
 				return false
 			}
 		}
@@ -549,11 +549,11 @@ func (m *ProcessManager) stopHeadlessClients(id int64) {
 func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) error {
 	p, ok := m.processes.Load(s.ID)
 	if !ok {
-		return errors.New("server is not running")
+		return ErrServerNotRunning
 	}
 	proc, okProc := p.(*Process)
 	if !okProc || !proc.IsAlive() {
-		return errors.New("server is not running")
+		return ErrServerNotRunning
 	}
 
 	m.hcMu.Lock()
