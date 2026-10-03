@@ -53,6 +53,7 @@ type Process struct {
 	exited              bool
 	stopping            bool
 	fastDownloadEnabled bool
+	stopFastDLSync      sync.Once
 }
 
 func (p *Process) IsAlive() bool {
@@ -66,6 +67,7 @@ type ProcessManager struct {
 	processes       sync.Map // map[int64]*Process
 	headlessClients sync.Map // map[int64][]*HeadlessClient
 	hcMu            sync.Mutex
+	startMu         sync.Mutex
 	paths           PathProvider
 	launcher        *Launcher
 	debugMode       bool
@@ -156,6 +158,9 @@ func (m *ProcessManager) UpdateQueryInfo(id int64, players int, mapName, mission
 }
 
 func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+
 	id, name, t, maxPlayers, port, queryPort, err := m.parseServerInstance(s)
 	if err != nil {
 		return err
@@ -163,7 +168,7 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 
 	if m.isServerAlreadyRunning(id) {
 		m.emitStatus(id, true)
-		return nil
+		return ErrServerAlreadyRunning
 	}
 
 	// Validate Ports
@@ -171,20 +176,28 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 		return err
 	}
 
-	m.startFastDLIfNeeded(s)
+	fastDLStarted := m.startFastDLIfNeeded(s)
+	cleanupFastDLOnError := func() {
+		if fastDLStarted {
+			m.stopFastDLForServer()
+		}
+	}
 
 	params, err := m.launcher.GetLaunchParameters(s)
 	if err != nil {
+		cleanupFastDLOnError()
 		return err
 	}
 
 	logFilePath, err := m.prepareServerDirectories(t, id)
 	if err != nil {
+		cleanupFastDLOnError()
 		return err
 	}
 
 	logFile, err := os.OpenFile(logFilePath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
+		cleanupFastDLOnError()
 		return fmt.Errorf("failed to open log file: %w", err)
 	}
 
@@ -194,7 +207,6 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 
 	m.logStartMessage(id, t, executable, params)
 
-	a3, _ := s.(*Arma3Server)
 	now := time.Now()
 	p := &Process{
 		serverID:   id,
@@ -209,19 +221,21 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 		stopCh:              make(chan struct{}),
 		port:                port,
 		queryPort:           queryPort,
-		fastDownloadEnabled: a3 != nil && a3.FastDownloadEnabled,
+		fastDownloadEnabled: fastDLStarted,
 	}
 
 	// Capture logs for broadcasting and writing to file
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		logFile.Close()
+		cleanupFastDLOnError()
 		return fmt.Errorf("failed to create stdout pipe: %w", err)
 	}
 
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
 		logFile.Close()
+		cleanupFastDLOnError()
 		return fmt.Errorf("failed to create stderr pipe: %w", err)
 	}
 
@@ -243,9 +257,11 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 		close(logsDone)
 	}()
 
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		<-logsDone
 		closeFiles(logFile, statsFile)
+		cleanupFastDLOnError()
 		return fmt.Errorf("failed to start process: %w", err)
 	}
 
@@ -266,13 +282,27 @@ func (m *ProcessManager) isServerAlreadyRunning(id int64) bool {
 	return false
 }
 
-func (m *ProcessManager) startFastDLIfNeeded(s any) {
+func (m *ProcessManager) startFastDLIfNeeded(s any) bool {
 	a3, isArma3 := s.(*Arma3Server)
 	if isArma3 && a3.FastDownloadEnabled {
 		if err := m.startFastDLForServer(); err != nil {
 			log.Printf("[ProcessManager] Warning: failed to start FastDL for server %d: %v", a3.ID, err)
+			return false
 		}
+		return true
 	}
+	return false
+}
+
+func (m *ProcessManager) cleanupFastDL(p *Process) {
+	if p == nil {
+		return
+	}
+	p.stopFastDLSync.Do(func() {
+		if p.fastDownloadEnabled {
+			m.stopFastDLForServer()
+		}
+	})
 }
 
 func (m *ProcessManager) prepareServerDirectories(t Type, id int64) (string, error) {
@@ -306,9 +336,13 @@ func (m *ProcessManager) logStartMessage(id int64, t Type, executable string, pa
 
 func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logFile, statsFile *os.File) {
 	go func() {
+		// Wait for pipe readers to hit EOF before cmd.Wait closes descriptors
+		<-logsDone
+
 		err := p.cmd.Wait()
 
-		<-logsDone
+		// Stop FastDL deterministically for this server if active
+		m.cleanupFastDL(p)
 
 		// Stop Headless Clients
 		m.stopHeadlessClients(p.serverID)
@@ -389,7 +423,7 @@ func (m *ProcessManager) checkPortConflict(id int64, port, queryPort int) error 
 			portConflict := otherProc.port == port || otherProc.queryPort == port ||
 				otherProc.port == queryPort || otherProc.queryPort == queryPort
 			if portConflict {
-				conflict = fmt.Errorf("port conflict: ports %d or %d are already in use by running server ID %d", port, queryPort, otherID)
+				conflict = fmt.Errorf("%w: ports %d or %d are already in use by running server ID %d", ErrPortConflict, port, queryPort, otherID)
 				return false
 			}
 		}
@@ -515,11 +549,11 @@ func (m *ProcessManager) stopHeadlessClients(id int64) {
 func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) error {
 	p, ok := m.processes.Load(s.ID)
 	if !ok {
-		return errors.New("server is not running")
+		return ErrServerNotRunning
 	}
 	proc, okProc := p.(*Process)
 	if !okProc || !proc.IsAlive() {
-		return errors.New("server is not running")
+		return ErrServerNotRunning
 	}
 
 	m.hcMu.Lock()
@@ -534,7 +568,43 @@ func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) er
 
 	nextID := len(hcs) + 1
 
-	hc := NewHeadlessClient(nextID, s, m.paths)
+	onExit := func(serverID int64, hcID int) {
+		m.hcMu.Lock()
+		defer m.hcMu.Unlock()
+
+		val, ok := m.headlessClients.Load(serverID)
+		if !ok {
+			return
+		}
+		currHCs, okHCs := val.([]*HeadlessClient)
+		if !okHCs {
+			return
+		}
+
+		remaining := make([]*HeadlessClient, 0, len(currHCs))
+		for _, client := range currHCs {
+			if client.ID != hcID && client.IsAlive() {
+				remaining = append(remaining, client)
+			}
+		}
+
+		if len(remaining) > 0 {
+			m.headlessClients.Store(serverID, remaining)
+		} else {
+			m.headlessClients.Delete(serverID)
+		}
+
+		if pVal, okPVal := m.processes.Load(serverID); okPVal {
+			if pInst, okP := pVal.(*Process); okP {
+				pInst.mu.Lock()
+				pInst.info.HeadlessClientsCount = len(remaining)
+				pInst.mu.Unlock()
+				m.emitStatus(serverID, true)
+			}
+		}
+	}
+
+	hc := NewHeadlessClient(nextID, s, m.paths, onExit)
 	if err := hc.Start(m.launcher.additionalMods); err != nil {
 		return err
 	}
@@ -603,9 +673,7 @@ func (m *ProcessManager) StopServer(ctx context.Context, id int64) error {
 	}
 
 	// FastDL Logic
-	if proc.fastDownloadEnabled {
-		m.stopFastDLForServer()
-	}
+	m.cleanupFastDL(proc)
 
 	// Try graceful shutdown
 	stopped, err := m.gracefulShutdown(proc, ctx)
@@ -672,7 +740,7 @@ func (m *ProcessManager) gracefulShutdown(proc *Process, ctx context.Context) (b
 }
 
 func (m *ProcessManager) killProcess(proc *Process) error {
-	if err := proc.cmd.Process.Kill(); err != nil {
+	if err := killProcessGroup(proc.cmd); err != nil {
 		proc.mu.Lock()
 		proc.stopping = false
 		proc.mu.Unlock()

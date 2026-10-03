@@ -213,7 +213,6 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 		SteamAuthService:    steamAuthService,
 		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
-		DiscordRepo:         discordRepo,
 		FileManagerService:  filemanager.NewService(cfg.StoragePath),
 		Config:              cfg,
 		Paths:               paths,

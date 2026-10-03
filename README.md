@@ -157,15 +157,20 @@ To enforce identity-aware authentication, you must protect the main panel domain
    * Under **Configure rules**, choose your preferred authentication criteria (for example, **Emails** and input allowed administrator email addresses, or **Emails ending in** to restrict access to a specific company/organization domain).
    * Click **Next** and save the application.
 
-3. **How It Works (Cryptographic Verification)**:
+3. **Copy the Application Audience (AUD) Tag (Recommended)**:
+   * In **Access** -> **Applications**, click on the newly created application or select **View**.
+   * Copy the **Application Audience (AUD) Tag** (a 64-character hexadecimal tag).
+   * In your `.env` file, set `CF_ACCESS_AUD` to this value. This ensures the backend validates that incoming JWTs were specifically issued for this application, preventing token substitution attacks from other apps in your Cloudflare account.
+
+4. **How It Works (Cryptographic Verification)**:
    * When an administrator attempts to access `panel.yourdomain.com`, Cloudflare intercepts the request and prompts them to authenticate via the configured Identity Providers (OTP, Google, GitHub, etc.).
    * Once authenticated, Cloudflare generates a cryptographically signed JSON Web Token (JWT) and injects it into the HTTP request headers as `Cf-Access-Jwt-Assertion`.
    * When the request is routed through the tunnel to `btcservermanager` (port 8080), the Go backend middleware intercepts all `/api` routes and automatically parses this header.
-   * The backend downloads Cloudflare's public keyset (JWKS) from `https://{CF_TEAM_DOMAIN}.cloudflareaccess.com/cdn-cgi/access/certs` and uses it to verify the signature, expiration, and issuer of the incoming token.
-   * If the JWT is missing, invalid, or signed by an incorrect authority, the backend immediately rejects the request with an `HTTP 401 Unauthorized` status, keeping the API completely secure.
+   * The backend downloads Cloudflare's public keyset (JWKS) from `https://{CF_TEAM_DOMAIN}.cloudflareaccess.com/cdn-cgi/access/certs` and uses it to verify the signature, expiration, issuer, and audience (`aud`) of the incoming token.
+   * If the JWT is missing, invalid, or signed by an incorrect authority/audience, the backend immediately rejects the request with an `HTTP 401 Unauthorized` status, keeping the API completely secure.
 
 > [!IMPORTANT]
-> To configure cryptographic validation in the backend, you must define the `CF_TEAM_DOMAIN` variable in your `.env` file (e.g., `CF_TEAM_DOMAIN=your-team-name.cloudflareaccess.com`). Without this, the backend will refuse incoming API requests for security.
+> To configure cryptographic validation in the backend, you must define the `CF_TEAM_DOMAIN` variable in your `.env` file (e.g., `CF_TEAM_DOMAIN=https://your-team-name.cloudflareaccess.com`). For strict application isolation, also configure `CF_ACCESS_AUD` with your Application Audience Tag. Without `CF_TEAM_DOMAIN`, the backend will refuse incoming API requests for security.
 
 #### Step 5: FastDL Public Accessibility Notice
 * Unlike the main dashboard (port 8080), the FastDL endpoint on port 8081 **must not** be protected by a Cloudflare Access authentication policy.
@@ -197,6 +202,7 @@ SECRET_KEY=use_a_secure_32_character_random_string
 # WARNING: In production, ALLOWED_ORIGIN must be the exact domain of the panel (e.g., https://panel.yourdomain.com)
 ALLOWED_ORIGIN=http://localhost:5173
 CF_TEAM_DOMAIN=
+CF_ACCESS_AUD=
 CF_ZONE_ID=
 CF_API_TOKEN=
 
@@ -230,6 +236,7 @@ PPROF_PORT=6060
 | `SECRET_KEY` | Encryption key used to securely hash sensitive data like Steam credentials. | 32+ char random string |
 | `ALLOWED_ORIGIN` | CORS allowed origin. In production, set this to your dashboard domain to block cross-site requests. | `http://localhost:5173` |
 | `CF_TEAM_DOMAIN` | Your Cloudflare Zero Trust team domain (e.g., `https://yourteam.cloudflareaccess.com`) to enable cryptographically signed JWT validation. | *(Blank by default)* |
+| `CF_ACCESS_AUD` | Cloudflare Access Application Audience Tag (AUD) to strictly validate token destination and prevent lateral movement. | *(Blank by default)* |
 | `CF_ZONE_ID` | Cloudflare Zone ID for the FastDL domain (used for cache purging on scenario deletion). | *(Blank by default)* |
 | `CF_API_TOKEN` | Cloudflare API Token with "Purge Cache" permissions. | *(Blank by default)* |
 | `TUNNEL_TOKEN` | Cloudflare Tunnel Token required if using the `cloudflared` service. | *(Blank by default)* |

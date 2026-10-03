@@ -39,12 +39,18 @@ const (
 )
 
 type Service struct {
-	session            *discordgo.Session
-	guildID            string
-	repo               *Repository
-	membersCache       []*discordgo.Member
-	membersCacheExpiry time.Time
-	membersCacheMu     sync.RWMutex
+	session             *discordgo.Session
+	guildID             string
+	repo                *Repository
+	membersCache        []*discordgo.Member
+	membersCacheExpiry  time.Time
+	membersCacheMu      sync.RWMutex
+	channelsCache       []Channel
+	channelsCacheExpiry time.Time
+	channelsCacheMu     sync.RWMutex
+	rolesCache          []DiscordRole
+	rolesCacheExpiry    time.Time
+	rolesCacheMu        sync.RWMutex
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -68,6 +74,12 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 	session.AddHandler(svc.handleUserUpdate)
 
 	return svc, nil
+}
+
+func NewUnconfigured(repo *Repository) *Service {
+	return &Service{
+		repo: repo,
+	}
 }
 
 func (s *Service) Open() error {
@@ -108,6 +120,21 @@ func (s *Service) GetChannels() ([]Channel, error) {
 		return nil, errors.New(errBotNotConfigured)
 	}
 
+	s.channelsCacheMu.RLock()
+	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+		channels := s.channelsCache
+		s.channelsCacheMu.RUnlock()
+		return channels, nil
+	}
+	s.channelsCacheMu.RUnlock()
+
+	s.channelsCacheMu.Lock()
+	defer s.channelsCacheMu.Unlock()
+
+	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+		return s.channelsCache, nil
+	}
+
 	discordChannels, err := s.session.GuildChannels(s.guildID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch channels: %w", err)
@@ -128,12 +155,30 @@ func (s *Service) GetChannels() ([]Channel, error) {
 		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
 	})
 
+	s.channelsCache = channels
+	s.channelsCacheExpiry = time.Now().Add(5 * time.Minute)
+
 	return channels, nil
 }
 
 func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	if s.session == nil {
 		return nil, errors.New(errBotNotConfigured)
+	}
+
+	s.rolesCacheMu.RLock()
+	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+		roles := s.rolesCache
+		s.rolesCacheMu.RUnlock()
+		return roles, nil
+	}
+	s.rolesCacheMu.RUnlock()
+
+	s.rolesCacheMu.Lock()
+	defer s.rolesCacheMu.Unlock()
+
+	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+		return s.rolesCache, nil
 	}
 
 	var roles []DiscordRole
@@ -153,6 +198,10 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 			})
 		}
 	}
+
+	s.rolesCache = roles
+	s.rolesCacheExpiry = time.Now().Add(5 * time.Minute)
+
 	return roles, nil
 }
 
@@ -275,7 +324,7 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 	}
 
 	if members, mErr := s.getCachedGuildMembers(); mErr == nil && len(members) > 0 {
-		s.syncMemberNicknamesToDatabase(ctx, members)
+		go s.syncMemberNicknamesToDatabase(context.Background(), members)
 	}
 
 	detail := &DiscordEventDetail{
@@ -1042,4 +1091,104 @@ func (s *Service) SyncRosterPreview(ctx context.Context, channelID, messageID, m
 		return "", err
 	}
 	return msg.ID, nil
+}
+
+// Data and Repository delegation methods
+
+func (s *Service) GetAllEvents(ctx context.Context) ([]Event, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAllEvents(ctx)
+}
+
+func (s *Service) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAttendanceStats(ctx)
+}
+
+func (s *Service) GetAllUsersForManagement(ctx context.Context) ([]DiscordUser, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAllUsersForManagement(ctx)
+}
+
+func (s *Service) SetUserActive(ctx context.Context, id, username string, active bool) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SetUserActive(ctx, id, username, active)
+}
+
+func (s *Service) GetEventRoster(ctx context.Context, eventID int64) (*EventRoster, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetEventRoster(ctx, eventID)
+}
+
+func (s *Service) SaveEventRoster(ctx context.Context, eventID int64, data string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveEventRoster(ctx, eventID, data)
+}
+
+func (s *Service) RecordPlayerRoleUsage(ctx context.Context, records []PlayerRoleRecord, gameType string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.RecordPlayerRoleUsage(ctx, records, gameType)
+}
+
+func (s *Service) GetRosterTemplates(ctx context.Context) ([]RosterTemplate, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetRosterTemplates(ctx)
+}
+
+func (s *Service) SaveRosterTemplate(ctx context.Context, name, gameType, structure string) (*RosterTemplate, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveRosterTemplate(ctx, name, gameType, structure)
+}
+
+func (s *Service) DeleteRosterTemplate(ctx context.Context, id int64) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.DeleteRosterTemplate(ctx, id)
+}
+
+func (s *Service) GetPlayerRoleStats(ctx context.Context, gameType string) ([]PlayerRoleStat, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetPlayerRoleStats(ctx, gameType)
+}
+
+func (s *Service) SaveMemberQualifications(ctx context.Context, userIDs []string, qualifications []MemberQualification) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveMemberQualifications(ctx, userIDs, qualifications)
+}
+
+func (s *Service) RenameQualification(ctx context.Context, oldName, newName string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.RenameQualification(ctx, oldName, newName)
+}
+
+func (s *Service) CleanupOrphanedQualifications(ctx context.Context, qualificationNames []string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.CleanupOrphanedQualifications(ctx, qualificationNames)
 }

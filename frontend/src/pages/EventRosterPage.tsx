@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import {
   ArrowLeft,
@@ -24,6 +24,11 @@ import {
   ArrowLeftRight,
   Edit3,
   Check,
+  Pin,
+  PinOff,
+  UserCheck,
+  ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -438,6 +443,51 @@ export function EventRosterPage() {
   const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false)
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const [activeMobileTab, setActiveMobileTab] = useState<'squads' | 'players'>('squads')
+
+  // Player Pool Sidebar Collapse / Pin State
+  const [isPoolPinned, setIsPoolPinned] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('roster_pool_pinned') === 'true'
+    } catch {
+      return false
+    }
+  })
+  const [isPoolHovered, setIsPoolHovered] = useState(false)
+  const poolHoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const togglePoolPin = () => {
+    setIsPoolPinned(prev => {
+      const next = !prev
+      try {
+        localStorage.setItem('roster_pool_pinned', String(next))
+      } catch (e) {
+        console.warn('Failed to save roster_pool_pinned', e)
+      }
+      return next
+    })
+  }
+
+  const handlePoolMouseEnter = () => {
+    if (poolHoverTimeoutRef.current) {
+      clearTimeout(poolHoverTimeoutRef.current)
+      poolHoverTimeoutRef.current = null
+    }
+    setIsPoolHovered(true)
+  }
+
+  const handlePoolMouseLeave = () => {
+    poolHoverTimeoutRef.current = setTimeout(() => {
+      setIsPoolHovered(false)
+    }, 250)
+  }
+
+  useEffect(() => {
+    return () => {
+      if (poolHoverTimeoutRef.current) {
+        clearTimeout(poolHoverTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Live Discord Preview State
   const [previewConfig, setPreviewConfig] = useState<RosterPreviewConfig>({
@@ -907,6 +957,250 @@ export function EventRosterPage() {
     showToast('Active part cleared', 'info')
   }
 
+  const renderPlayerPoolCard = () => (
+    <Card className="border-border bg-surface-elevated/70 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg w-full">
+      <CardHeader className="p-4 border-b border-border bg-surface/40 space-y-3 shrink-0">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Users className="w-4 h-4 text-primary" />
+            <CardTitle className="text-sm font-bold">Player Pool</CardTitle>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={handleRefreshRSVPs}
+              disabled={refreshingRSVPs}
+              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+              title="Refresh RSVPs from Discord"
+              aria-label="Refresh RSVPs from Discord"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${refreshingRSVPs ? 'animate-spin text-primary' : ''}`} />
+            </Button>
+            <Badge variant="outline" className="text-[10px] font-mono">
+              {unassignedCandidates.length} unassigned
+            </Badge>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={togglePoolPin}
+              className={`h-6 w-6 p-0 hidden lg:inline-flex transition-colors ${
+                isPoolPinned ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-foreground'
+              }`}
+              title={isPoolPinned ? 'Unpin sidebar (collapse on hover)' : 'Pin sidebar (keep static in layout)'}
+              aria-label="Toggle Pin Player Pool"
+            >
+              {isPoolPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+            </Button>
+            {!isPoolPinned && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsPoolHovered(false)
+                }}
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hidden lg:inline-flex"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </Button>
+            )}
+          </div>
+        </div>
+
+        {/* Search */}
+        <div className="relative">
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder="Filter players or qualifications..."
+            className="h-8 pl-8 text-xs bg-surface border-border"
+          />
+        </div>
+
+        {/* Status Filter Tabs */}
+        <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-md border border-border">
+          <button
+            type="button"
+            onClick={() => setFilterType('all')}
+            className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
+              filterType === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            All ({unassignedCandidates.length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('going')}
+            className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
+              filterType === 'going' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Going ({unassignedCandidates.filter(c => !c.isMaybe).length})
+          </button>
+          <button
+            type="button"
+            onClick={() => setFilterType('maybe')}
+            className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${
+              filterType === 'maybe' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            Maybe ({unassignedCandidates.filter(c => c.isMaybe).length})
+          </button>
+        </div>
+      </CardHeader>
+
+      <CardContent className="p-3 space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] flex-1">
+        {filteredUnassigned.length === 0 ? (
+          <div className="py-8 text-center text-muted-foreground">
+            <p className="text-xs italic">
+              {searchQuery ? 'No players matching filter.' : 'All available players have been assigned!'}
+            </p>
+          </div>
+        ) : (
+          filteredUnassigned.map(candidate => (
+            <div
+              key={candidate.id + candidate.name}
+              className={`p-2.5 rounded-lg border transition-all ${
+                candidate.isMaybe
+                  ? 'border-warning/30 bg-warning/5 hover:border-warning/50'
+                  : 'border-border bg-surface/40 hover:border-primary/40'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-foreground truncate">{candidate.name}</span>
+                {candidate.isMaybe ? (
+                  <Badge variant="warning" className="text-[8px] font-bold py-0 px-1 shrink-0">
+                    Maybe (?)
+                  </Badge>
+                ) : (
+                  <Badge variant="success" className="text-[8px] font-bold py-0 px-1 shrink-0">
+                    Going
+                  </Badge>
+                )}
+              </div>
+
+              {candidate.qualifications.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-1.5">
+                  {candidate.qualifications.map(q => (
+                    <span
+                      key={q}
+                      className="inline-flex items-center gap-0.5 text-[8px] font-medium text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded"
+                    >
+                      <Award className="w-2 h-2" />
+                      {q}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {parts.length > 1 && (
+                <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-border/40">
+                  {getPlayerRolesAcrossParts(candidate.name).map((pr, prIdx) => (
+                    <span
+                      key={prIdx}
+                      className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-muted-foreground bg-surface border border-border px-1.5 py-0.2 rounded"
+                    >
+                      <span className="text-[7px] uppercase font-semibold text-primary">{pr.partName}:</span>
+                      <span>{pr.role}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))
+        )}
+
+        {/* Add Guest Player */}
+        <div className="pt-3 border-t border-border mt-3">
+          <form onSubmit={handleAddGuestPlayer} className="space-y-1.5">
+            <label
+              htmlFor="sidebar-guest-name-input"
+              className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1"
+            >
+              <UserPlus className="w-3 h-3" />
+              Add Guest Player
+            </label>
+            <div className="flex gap-1.5">
+              <Input
+                id="sidebar-guest-name-input"
+                value={guestNameInput}
+                onChange={e => setGuestNameInput(e.target.value)}
+                placeholder="Player name..."
+                className="h-7 text-xs bg-surface border-border flex-1"
+              />
+              <Button type="submit" size="sm" variant="secondary" className="h-7 px-2 text-[10px] font-bold uppercase">
+                Add
+              </Button>
+            </div>
+          </form>
+        </div>
+
+        {/* Collapsible Assigned Players Section */}
+        <div className="pt-2 border-t border-border">
+          <button
+            type="button"
+            onClick={() => setShowAssigned(!showAssigned)}
+            className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground py-1"
+          >
+            <span>Assigned Players ({assignedNames.size})</span>
+            {showAssigned ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+
+          {showAssigned && (
+            <div className="mt-2 space-y-1.5">
+              {Array.from(assignedNames).map(name => {
+                let squadLocation = ''
+                let roleLocation = ''
+                let squadId = ''
+                let slotId = ''
+                for (const sq of squads) {
+                  for (const sl of sq.slots) {
+                    if (sl.assignedPlayerName?.toLowerCase().trim() === name) {
+                      squadLocation = sq.name
+                      roleLocation = sl.role
+                      squadId = sq.id
+                      slotId = sl.id
+                      break
+                    }
+                  }
+                }
+
+                return (
+                  <div
+                    key={name}
+                    className="flex items-center justify-between p-1.5 rounded bg-surface/30 border border-border text-xs"
+                  >
+                    <div className="truncate mr-2">
+                      <span className="font-medium text-foreground">{name}</span>
+                      <span className="text-[9px] text-muted-foreground ml-1.5">
+                        ({squadLocation}: {roleLocation})
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleUnassignSlot(squadId, slotId)}
+                      className="text-muted-foreground hover:text-destructive p-0.5"
+                      title="Unassign player"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  )
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[450px] gap-3">
@@ -1072,12 +1366,19 @@ export function EventRosterPage() {
             <span className="font-mono font-bold text-success">{assignedNames.size}</span>
           </div>
           <div className="h-3 w-px bg-border" />
-          <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => {
+              if (!isPoolPinned) setIsPoolHovered(prev => !prev)
+            }}
+            className={`flex items-center gap-2 transition-all ${!isPoolPinned ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
+            title={!isPoolPinned ? 'Toggle Player Pool sidebar' : undefined}
+          >
             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider">Unassigned:</span>
             <span className={`font-mono font-bold ${unassignedCandidates.length > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
               {unassignedCandidates.length}
             </span>
-          </div>
+          </button>
           <div className="h-3 w-px bg-border" />
           <div className="flex items-center gap-2">
             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider">Squads:</span>
@@ -1113,219 +1414,56 @@ export function EventRosterPage() {
       </div>
 
       {/* Main Workspace Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-        {/* Left Sidebar: Available Players Pool */}
-        <div className={`lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-4 ${activeMobileTab === 'players' ? 'block' : 'hidden lg:block'}`}>
-          <Card className="border-border bg-surface-elevated/50 backdrop-blur-sm overflow-hidden">
-            <CardHeader className="p-4 border-b border-border bg-surface/30 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
+      <div className="flex gap-4 sm:gap-6 items-start">
+        {/* Left Sidebar: Available Players Pool (Desktop in-flow dynamic collapsible sidebar) */}
+        <div
+          onMouseEnter={handlePoolMouseEnter}
+          onMouseLeave={handlePoolMouseLeave}
+          className={`hidden lg:flex flex-col shrink-0 lg:sticky lg:top-4 transition-all duration-300 ease-in-out ${
+            isPoolPinned || isPoolHovered ? 'w-80 xl:w-[340px]' : 'w-11'
+          }`}
+        >
+          {isPoolPinned || isPoolHovered ? (
+            <div className="w-80 xl:w-[340px]">
+              {renderPlayerPoolCard()}
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={togglePoolPin}
+              className="w-11 h-[560px] py-4 rounded-xl border border-border/80 bg-surface-elevated/40 hover:bg-surface-elevated hover:border-primary/40 flex flex-col items-center justify-between cursor-pointer transition-colors group select-none shadow-sm"
+              title="Player Pool (Hover to expand, click to pin)"
+              aria-label="Expand Player Pool"
+            >
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-surface group-hover:bg-primary/10 transition-colors">
                   <Users className="w-4 h-4 text-primary" />
-                  <CardTitle className="text-sm font-bold">Player Pool</CardTitle>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleRefreshRSVPs}
-                    disabled={refreshingRSVPs}
-                    className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                    title="Refresh RSVPs from Discord"
-                    aria-label="Refresh RSVPs from Discord"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${refreshingRSVPs ? 'animate-spin text-primary' : ''}`} />
-                  </Button>
-                  <Badge variant="outline" className="text-[10px] font-mono">
-                    {unassignedCandidates.length} unassigned
-                  </Badge>
-                </div>
+                <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-primary/10 text-primary border-primary/30">
+                  {unassignedCandidates.length}
+                </Badge>
               </div>
 
-              {/* Search */}
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  value={searchQuery}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder="Filter players or brevetti..."
-                  className="h-8 pl-8 text-xs bg-surface border-border"
-                />
+              {/* Vertical text label */}
+              <div className="rotate-180 [writing-mode:vertical-lr] text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors flex items-center gap-1.5 py-4">
+                <span>Player Pool</span>
+                <ChevronRight className="w-3 h-3 text-muted-foreground rotate-90" />
               </div>
 
-              {/* Status Filter Tabs */}
-              <div className="grid grid-cols-3 gap-1 bg-surface p-1 rounded-md border border-border">
-                <button
-                  type="button"
-                  onClick={() => setFilterType('all')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'all' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  All ({unassignedCandidates.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterType('going')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'going' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  Going ({unassignedCandidates.filter(c => !c.isMaybe).length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterType('maybe')}
-                  className={`text-[10px] font-bold uppercase tracking-wider py-1 rounded transition-colors ${filterType === 'maybe' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                >
-                  Maybe ({unassignedCandidates.filter(c => c.isMaybe).length})
-                </button>
+              <div className="p-1 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                <Pin className="w-3.5 h-3.5" />
               </div>
-            </CardHeader>
+            </button>
+          )}
+        </div>
 
-            <CardContent className="p-3 space-y-2 max-h-[550px] overflow-y-auto">
-              {filteredUnassigned.length === 0 ? (
-                <div className="py-8 text-center text-muted-foreground">
-                  <p className="text-xs italic">
-                    {searchQuery ? 'No players matching filter.' : 'All available players have been assigned!'}
-                  </p>
-                </div>
-              ) : (
-                filteredUnassigned.map(candidate => (
-                  <div
-                    key={candidate.id + candidate.name}
-                    className={`p-2.5 rounded-lg border transition-all ${candidate.isMaybe
-                        ? 'border-warning/30 bg-warning/5 hover:border-warning/50'
-                        : 'border-border bg-surface/40 hover:border-primary/40'
-                      }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-bold text-foreground truncate">{candidate.name}</span>
-                      {candidate.isMaybe ? (
-                        <Badge variant="warning" className="text-[8px] font-bold py-0 px-1 shrink-0">
-                          Maybe (?)
-                        </Badge>
-                      ) : (
-                        <Badge variant="success" className="text-[8px] font-bold py-0 px-1 shrink-0">
-                          Going
-                        </Badge>
-                      )}
-                    </div>
-
-                    {candidate.qualifications.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        {candidate.qualifications.map(q => (
-                          <span
-                            key={q}
-                            className="inline-flex items-center gap-0.5 text-[8px] font-medium text-primary bg-primary/10 border border-primary/20 px-1.5 py-0.2 rounded"
-                          >
-                            <Award className="w-2 h-2" />
-                            {q}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-
-                    {parts.length > 1 && (
-                      <div className="flex flex-wrap gap-1 mt-1.5 pt-1 border-t border-border/40">
-                        {getPlayerRolesAcrossParts(candidate.name).map((pr, prIdx) => (
-                          <span
-                            key={prIdx}
-                            className="inline-flex items-center gap-1 text-[8px] font-mono font-bold text-muted-foreground bg-surface border border-border px-1.5 py-0.2 rounded"
-                          >
-                            <span className="text-[7px] uppercase font-semibold text-primary">{pr.partName}:</span>
-                            <span>{pr.role}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ))
-              )}
-
-              {/* Add Guest Player */}
-              <div className="pt-3 border-t border-border mt-3">
-                <form onSubmit={handleAddGuestPlayer} className="space-y-1.5">
-                  <label htmlFor="sidebar-guest-name-input" className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1">
-                    <UserPlus className="w-3 h-3" />
-                    Add Guest Player
-                  </label>
-                  <div className="flex gap-1.5">
-                    <Input
-                      id="sidebar-guest-name-input"
-                      value={guestNameInput}
-                      onChange={e => setGuestNameInput(e.target.value)}
-                      placeholder="Player name..."
-                      className="h-7 text-xs bg-surface border-border flex-1"
-                    />
-                    <Button type="submit" size="sm" variant="secondary" className="h-7 px-2 text-[10px] font-bold uppercase">
-                      Add
-                    </Button>
-                  </div>
-                </form>
-              </div>
-
-              {/* Collapsible Assigned Players Section */}
-              <div className="pt-2 border-t border-border">
-                <button
-                  type="button"
-                  onClick={() => setShowAssigned(!showAssigned)}
-                  className="w-full flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-muted-foreground hover:text-foreground py-1"
-                >
-                  <span>Assigned Players ({assignedNames.size})</span>
-                  {showAssigned ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </button>
-
-                {showAssigned && (
-                  <div className="mt-2 space-y-1.5">
-                    {Array.from(assignedNames).map(name => {
-                      // Find which squad and slot
-                      let squadLocation = ''
-                      let roleLocation = ''
-                      let squadId = ''
-                      let slotId = ''
-                      for (const sq of squads) {
-                        for (const sl of sq.slots) {
-                          if (sl.assignedPlayerName?.toLowerCase().trim() === name) {
-                            squadLocation = sq.name
-                            roleLocation = sl.role
-                            squadId = sq.id
-                            slotId = sl.id
-                            break
-                          }
-                        }
-                      }
-
-                      return (
-                        <div
-                          key={name}
-                          className="flex items-center justify-between p-1.5 rounded bg-surface/30 border border-border text-xs"
-                        >
-                          <div className="truncate mr-2">
-                            <span className="font-medium text-foreground">{name}</span>
-                            <span className="text-[9px] text-muted-foreground ml-1.5">
-                              ({squadLocation}: {roleLocation})
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleUnassignSlot(squadId, slotId)}
-                            className="text-muted-foreground hover:text-destructive p-0.5"
-                            title="Unassign player"
-                          >
-                            <X className="w-3 h-3" />
-                          </button>
-                        </div>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+        {/* Mobile View for Player Pool */}
+        <div className={`lg:hidden space-y-4 w-full ${activeMobileTab === 'players' ? 'block' : 'hidden'}`}>
+          {renderPlayerPoolCard()}
         </div>
 
         {/* Right Main Board: Squads and Slots */}
-        <div className={`lg:col-span-8 xl:col-span-9 space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
+        <div className={`flex-1 min-w-0 space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
           {/* Mission Parts Tab Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-surface-elevated/70 border border-border rounded-xl">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1508,7 +1646,7 @@ export function EventRosterPage() {
 
                   <CardContent className="p-3 space-y-2 flex-1">
                     {squad.slots.map(slot => {
-                      const hasBrevetto = slot.assignedPlayerName
+                      const hasQualification = slot.assignedPlayerName
                         ? clanMembers
                           .find(cm => cm.displayName.toLowerCase() === slot.assignedPlayerName?.toLowerCase())
                           ?.qualifications.some(q => qualificationMatchesRole(q, slot.role))
@@ -1542,7 +1680,10 @@ export function EventRosterPage() {
                             {slot.assignedPlayerName ? (
                               <div className="flex items-center justify-between gap-1 px-2 py-1 rounded bg-surface border border-border">
                                 <div className="flex items-center gap-1.5 truncate">
-                                  <span className="text-xs font-semibold text-foreground truncate">
+                                  <span
+                                    className="text-xs font-semibold text-foreground truncate"
+                                    title={slot.assignedPlayerName}
+                                  >
                                     {slot.assignedPlayerName}
                                   </span>
                                   {slot.isMaybe && (
@@ -1550,13 +1691,13 @@ export function EventRosterPage() {
                                       (?)
                                     </span>
                                   )}
-                                  {hasBrevetto && (
+                                  {hasQualification && (
                                     <span title="Specialized">
                                       <Award className="w-3 h-3 text-success shrink-0" />
                                     </span>
                                   )}
                                 </div>
-                                <div className="flex items-center gap-1 shrink-0">
+                                <div className="flex items-center gap-0.5 shrink-0 opacity-70 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                                   <button
                                     type="button"
                                     onClick={() =>
@@ -1568,11 +1709,11 @@ export function EventRosterPage() {
                                         playerName: slot.assignedPlayerName!,
                                       })
                                     }
-                                    className="text-[10px] text-muted-foreground hover:text-primary px-1 font-medium flex items-center gap-0.5"
+                                    className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
                                     title="Swap player with another slot"
+                                    aria-label="Swap slot"
                                   >
-                                    <ArrowLeftRight className="w-2.5 h-2.5" />
-                                    Swap
+                                    <ArrowLeftRight className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     type="button"
@@ -1584,16 +1725,20 @@ export function EventRosterPage() {
                                         squadName: squad.name,
                                       })
                                     }
-                                    className="text-[10px] text-muted-foreground hover:text-primary px-1 font-medium"
+                                    className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
+                                    title="Change player"
+                                    aria-label="Change player"
                                   >
-                                    Change
+                                    <UserCheck className="w-3.5 h-3.5" />
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => handleUnassignSlot(squad.id, slot.id)}
-                                    className="text-muted-foreground hover:text-destructive p-0.5"
+                                    className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                    title="Remove player from slot"
+                                    aria-label="Remove player from slot"
                                   >
-                                    <X className="w-3 h-3" />
+                                    <X className="w-3.5 h-3.5" />
                                   </button>
                                 </div>
                               </div>

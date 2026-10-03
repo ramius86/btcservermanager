@@ -168,9 +168,13 @@ func (r *Repository) Save(ctx context.Context, si *ServerInstallation) error {
 	}
 
 	// Sync branches
-	_, _ = tx.ExecContext(ctx, "DELETE FROM available_branches WHERE type = ?", si.Type)
+	if _, err := tx.ExecContext(ctx, "DELETE FROM available_branches WHERE type = ?", si.Type); err != nil {
+		return err
+	}
 	for _, b := range si.AvailableBranches {
-		_, _ = tx.ExecContext(ctx, "INSERT INTO available_branches (type, branch) VALUES (?, ?)", si.Type, b)
+		if _, err := tx.ExecContext(ctx, "INSERT INTO available_branches (type, branch) VALUES (?, ?)", si.Type, b); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit()

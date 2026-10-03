@@ -11,6 +11,7 @@ interface WebSocketContextType {
   subscribe: (type: EventType, cb: (e: WSEvent) => void, serverId?: number) => () => void
   send: (msg: any) => void
   isConnected: boolean
+  onReconnect: (cb: () => void) => () => void
 }
 
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
@@ -22,6 +23,19 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
   const reconnectTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
   const reconnectDelay = useRef(1000)
   const messageQueue = useRef<any[]>([])
+  const reconnectCallbacks = useRef<Set<() => void>>(new Set())
+  const hasConnectedOnce = useRef(false)
+  const watchdogTimeout = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const resetWatchdog = () => {
+    if (watchdogTimeout.current) clearTimeout(watchdogTimeout.current)
+    watchdogTimeout.current = setTimeout(() => {
+      console.warn('WebSocket watchdog timed out (70s of inactivity), closing zombie connection')
+      if (ws.current) {
+        ws.current.close()
+      }
+    }, 70000)
+  }
 
   const connect = () => {
     if (ws.current) ws.current.close()
@@ -34,6 +48,11 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
       console.log('WebSocket connected')
       setIsConnected(true)
       reconnectDelay.current = 1000
+      resetWatchdog()
+
+      const isReconnect = hasConnectedOnce.current
+      hasConnectedOnce.current = true
+
       // Flush non-subscribe message queue (active listeners are registered below)
       messageQueue.current
         .filter(msg => msg.type !== 'subscribe')
@@ -54,9 +73,21 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
           },
         }))
       })
+
+      if (isReconnect) {
+        console.log('WebSocket reconnected, triggering registered resync callbacks')
+        reconnectCallbacks.current.forEach(cb => {
+          try {
+            cb()
+          } catch (err) {
+            console.error('Error executing onReconnect callback', err)
+          }
+        })
+      }
     }
 
     socket.onmessage = (e) => {
+      resetWatchdog()
       try {
         const event: WSEvent = JSON.parse(e.data)
         
@@ -78,6 +109,11 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
     }
 
     socket.onclose = () => {
+      if (watchdogTimeout.current) clearTimeout(watchdogTimeout.current)
+      if (ws.current !== socket) {
+        // Ignore close events from superseded sockets
+        return
+      }
       console.log('WebSocket disconnected')
       setIsConnected(false)
       scheduleReconnect()
@@ -102,6 +138,7 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
   useEffect(() => {
     connect()
     return () => {
+      if (watchdogTimeout.current) clearTimeout(watchdogTimeout.current)
       if (ws.current) ws.current.close()
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current)
     }
@@ -112,6 +149,13 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
       ws.current.send(JSON.stringify(msg))
     } else {
       messageQueue.current.push(msg)
+    }
+  }, [])
+
+  const onReconnect = React.useCallback((cb: () => void) => {
+    reconnectCallbacks.current.add(cb)
+    return () => {
+      reconnectCallbacks.current.delete(cb)
     }
   }, [])
 
@@ -151,7 +195,7 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
     }
   }, [send])
 
-  const value = React.useMemo(() => ({ subscribe, send, isConnected }), [subscribe, send, isConnected])
+  const value = React.useMemo(() => ({ subscribe, send, isConnected, onReconnect }), [subscribe, send, isConnected, onReconnect])
 
   return (
     <WebSocketContext.Provider value={value}>

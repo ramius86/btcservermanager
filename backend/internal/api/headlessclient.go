@@ -1,6 +1,8 @@
 package api
 
 import (
+	"btcservermanager/internal/domain/server"
+	"errors"
 	"net/http"
 	"strconv"
 
@@ -15,6 +17,14 @@ func (r *Router) handleAddHeadlessClient(w http.ResponseWriter, req *http.Reques
 		return
 	}
 	if err := r.serverService.AddHeadlessClient(ctx, id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrServerNotRunning) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -30,6 +40,14 @@ func (r *Router) handleRemoveHeadlessClient(w http.ResponseWriter, req *http.Req
 		return
 	}
 	if err := r.serverService.RemoveHeadlessClient(ctx, id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrServerNotRunning) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

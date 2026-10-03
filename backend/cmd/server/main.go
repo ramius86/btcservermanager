@@ -279,7 +279,6 @@ func run() error {
 		SteamAuthService:    steamauthService,
 		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
-		DiscordRepo:         discordRepo,
 		FileManagerService:  fileManagerService,
 		Scheduler:           scheduler,
 		Config:              cfg,
@@ -333,18 +332,18 @@ func run() error {
 func setupDiscordBot(cfg *config.Config, discordRepo *discordbot.Repository) *discordbot.Service {
 	if cfg.DiscordBotToken == "" || cfg.DiscordGuildID == "" {
 		log.Println("ℹ️  Discord bot not configured (DISCORD_BOT_TOKEN / DISCORD_GUILD_ID missing)")
-		return nil
+		return discordbot.NewUnconfigured(discordRepo)
 	}
 
 	discordService, err := discordbot.New(cfg.DiscordBotToken, cfg.DiscordGuildID, discordRepo)
 	if err != nil {
 		log.Printf("⚠️  Discord bot failed to initialize: %v", err)
-		return nil
+		return discordbot.NewUnconfigured(discordRepo)
 	}
 
 	if err := discordService.Open(); err != nil {
 		log.Printf("⚠️  Discord bot failed to connect: %v", err)
-		return nil
+		return discordService
 	}
 
 	log.Println("✅ Discord bot connected successfully")

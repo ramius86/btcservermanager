@@ -4,6 +4,7 @@ import (
 	"btcservermanager/internal/domain/server"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -74,7 +75,11 @@ func (r *Router) handleGetServer(w http.ResponseWriter, req *http.Request) {
 
 	srv, err := r.serverService.GetServer(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
@@ -165,6 +170,14 @@ func (r *Router) handleUpdateServer(w http.ResponseWriter, req *http.Request) {
 
 	updated, err := r.serverService.UpdateServer(ctx, srv)
 	if err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrCannotModifyRunning) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -186,6 +199,14 @@ func (r *Router) handleDeleteServer(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := r.serverService.DeleteServer(ctx, id); err != nil {
+		if errors.Is(err, server.ErrServerNotFound) {
+			http.Error(w, err.Error(), http.StatusNotFound)
+			return
+		}
+		if errors.Is(err, server.ErrCannotDeleteRunning) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

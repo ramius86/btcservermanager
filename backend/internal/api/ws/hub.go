@@ -258,6 +258,8 @@ func (h *Hub) match(sub Subscription, event Event) bool {
 		domain = "reforger_scenarios_updated"
 	case EvtModMetadataUpdated:
 		domain = "mod_metadata_updated"
+	case EvtModDeleted:
+		domain = "mod_deleted"
 	}
 
 	if sub.Domain != domain {
@@ -327,13 +329,26 @@ func toInt64(v any) int64 {
 }
 
 func (h *Hub) Broadcast(eventType string, payload any) {
+	evt := Event{
+		Type:    EventType(eventType),
+		Payload: payload,
+	}
+
+	if isHighFrequencyEvent(evt.Type) {
+		select {
+		case <-h.stop:
+			// hub is stopped, discard
+		case h.broadcast <- evt:
+		default:
+			// High-frequency event dropped when channel is full to prevent backpressure
+		}
+		return
+	}
+
 	select {
 	case <-h.stop:
 		// hub is stopped, discard
-	case h.broadcast <- Event{
-		Type:    EventType(eventType),
-		Payload: payload,
-	}:
+	case h.broadcast <- evt:
 	}
 }
 

@@ -18,13 +18,15 @@ type HeadlessClient struct {
 	StopCh  chan struct{}
 	mu      sync.RWMutex
 	alive   bool
+	onExit  func(serverID int64, hcID int)
 }
 
-func NewHeadlessClient(id int, server *Arma3Server, paths PathProvider) *HeadlessClient {
+func NewHeadlessClient(id int, server *Arma3Server, paths PathProvider, onExit func(serverID int64, hcID int)) *HeadlessClient {
 	return &HeadlessClient{
 		ID:     id,
 		Server: server,
 		Paths:  paths,
+		onExit: onExit,
 	}
 }
 
@@ -46,6 +48,7 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 	cmd.Stdout = f
 	cmd.Stderr = f
 
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		f.Close()
 		return fmt.Errorf("failed to start HC process: %w", err)
@@ -66,6 +69,10 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 
 		f.Close()
 		close(hc.StopCh)
+
+		if hc.onExit != nil {
+			hc.onExit(hc.Server.ID, hc.ID)
+		}
 	}()
 
 	return nil
@@ -76,7 +83,7 @@ func (hc *HeadlessClient) Stop() error {
 	defer hc.mu.Unlock()
 
 	if hc.alive && hc.Process != nil && hc.Process.Process != nil {
-		return hc.Process.Process.Kill()
+		return killProcessGroup(hc.Process)
 	}
 
 	return nil

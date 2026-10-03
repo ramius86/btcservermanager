@@ -107,21 +107,21 @@ export function EventsPage() {
       } else {
         setIsRefreshing(true)
       }
-      const status = await DiscordService.getStatus()
+      const [status, chans, evts, fetchedRoles, appSettings] = await Promise.all([
+        DiscordService.getStatus().catch(() => ({ configured: false, connected: false })),
+        DiscordService.getChannels().catch(() => []),
+        DiscordService.getEvents().catch(() => []),
+        DiscordService.getRoles().catch(() => []),
+        SettingsService.getSettings().catch(() => null),
+      ])
+
       setConfigured(status.configured)
       
-      if (status.configured) {
-        const [chans, evts, fetchedRoles, appSettings] = await Promise.all([
-          DiscordService.getChannels(),
-          DiscordService.getEvents(),
-          DiscordService.getRoles(),
-          SettingsService.getSettings().catch(() => null),
-        ])
-        
-        if (appSettings && typeof appSettings.eventRosterEnabled === 'boolean') {
-          setRosterEnabled(appSettings.eventRosterEnabled)
-        }
+      if (appSettings && typeof appSettings.eventRosterEnabled === 'boolean') {
+        setRosterEnabled(appSettings.eventRosterEnabled)
+      }
 
+      if (status.configured) {
         setChannels(chans || [])
         setRoles(fetchedRoles || [])
         
@@ -134,6 +134,10 @@ export function EventsPage() {
         } else {
           setEvents([])
         }
+      } else {
+        setChannels([])
+        setRoles([])
+        setEvents([])
       }
     } catch (err: any) {
       console.error(err)
@@ -509,14 +513,16 @@ export function EventsPage() {
                       : 'bg-surface-elevated/50'
                   }`}
                 >
-                  <div>
-                    <h3 className={`font-bold text-lg ${isPast ? 'text-muted-foreground' : 'text-foreground'}`}>{event.title}</h3>
-                    <div className="flex gap-3 text-sm text-muted-foreground mt-1">
+                  <div className="min-w-0 flex-1">
+                    <h3 className={`font-bold text-lg leading-snug break-words ${isPast ? 'text-muted-foreground' : 'text-foreground'}`}>{event.title}</h3>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground mt-1">
                       <span className={`font-medium ${isPast ? 'text-muted-foreground/80' : 'text-foreground'}`}>{event.dateTime}</span>
                       <span>•</span>
                       <span className={isPast ? 'text-muted-foreground/80' : 'text-primary'}>{event.gameType}</span>
                       <span>•</span>
-                      <span>#{channels.find(c => c.id === event.channelId)?.name || 'unknown-channel'}</span>
+                      <span className="truncate max-w-[200px]" title={channels.find(c => c.id === event.channelId)?.name}>
+                        #{channels.find(c => c.id === event.channelId)?.name || 'unknown-channel'}
+                      </span>
                       {isPast && (
                         <>
                           <span>•</span>
@@ -526,27 +532,27 @@ export function EventsPage() {
                     </div>
                   </div>
 
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 border-t sm:border-t-0 sm:border-l border-border pt-4 sm:pt-0 pl-0 sm:pl-6 w-full sm:w-auto">
-                  <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full sm:w-auto text-center">
-                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-6 border-t sm:border-t-0 sm:border-l border-border pt-4 sm:pt-0 pl-0 sm:pl-6 w-full sm:w-auto shrink-0">
+                  <div className="grid grid-cols-4 gap-2 sm:gap-4 w-full sm:w-auto text-center shrink-0">
+                    <div className="flex flex-col items-center min-w-[48px] p-1.5 rounded-lg bg-surface sm:bg-transparent shrink-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-success mb-0.5 whitespace-nowrap">Going</span>
                       <span className="text-base sm:text-lg font-mono font-black">{event.going?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                    <div className="flex flex-col items-center min-w-[48px] p-1.5 rounded-lg bg-surface sm:bg-transparent shrink-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-destructive mb-0.5 whitespace-nowrap">Not</span>
                       <span className="text-base sm:text-lg font-mono font-black">{event.notGoing?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                    <div className="flex flex-col items-center min-w-[48px] p-1.5 rounded-lg bg-surface sm:bg-transparent shrink-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-primary mb-0.5 whitespace-nowrap">Maybe</span>
                       <span className="text-base sm:text-lg font-mono font-black">{event.maybe?.length || 0}</span>
                     </div>
-                    <div className="flex flex-col items-center p-1.5 rounded-lg bg-surface sm:bg-transparent">
+                    <div className="flex flex-col items-center min-w-[48px] p-1.5 rounded-lg bg-surface sm:bg-transparent shrink-0">
                       <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-0.5 whitespace-nowrap">No Resp.</span>
                       <span className="text-base sm:text-lg font-mono font-black">{event.noResponse?.length || 0}</span>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0">
+                  <div className="flex items-center gap-1.5 w-full sm:w-auto justify-end border-t sm:border-t-0 border-border/50 pt-2 sm:pt-0 shrink-0">
                     {rosterEnabled && (
                       <Link to={`/events/${event.id}/roster`} className="mr-auto sm:mr-0 sm:ml-auto">
                         <Button 

@@ -180,7 +180,7 @@ export function qualificationMatchesRole(qualName: string, role: string): boolea
 export interface AffinityResult {
   candidate: RosterCandidate
   score: number // 0 - 100+
-  hasBrevetto: boolean
+  hasQualification: boolean
   matchedQualification?: string
   playCount: number
   isHighAffinity: boolean
@@ -188,7 +188,7 @@ export interface AffinityResult {
 
 /**
  * Calculates how well a player candidate fits a given role based on:
- * 1. Clan qualification (Brevetto)
+ * 1. Clan qualification
  * 2. Historical play frequency from past rosters
  * 3. RSVP status (Going vs Maybe)
  */
@@ -199,13 +199,13 @@ export function calculateCandidateAffinity(
   gameType?: string
 ): AffinityResult {
   let score = 0
-  let hasBrevetto = false
+  let hasQualification = false
   let matchedQual: string | undefined
 
   // 1. Check qualification
   for (const q of candidate.qualifications) {
     if (qualificationMatchesRole(q, role)) {
-      hasBrevetto = true
+      hasQualification = true
       matchedQual = q
       score += 60 // heavy baseline weight for official qualification
       break
@@ -232,12 +232,12 @@ export function calculateCandidateAffinity(
     score = Math.max(0, score - 10)
   }
 
-  const isHighAffinity = hasBrevetto || playCount > 0
+  const isHighAffinity = hasQualification || playCount > 0
 
   return {
     candidate,
     score,
-    hasBrevetto,
+    hasQualification,
     matchedQualification: matchedQual,
     playCount,
     isHighAffinity,

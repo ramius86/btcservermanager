@@ -141,6 +141,9 @@ func (r *Repository) GetServerByID(ctx context.Context, id int64) (any, error) {
 
 	err := r.db.QueryRowContext(ctx, "SELECT type FROM server WHERE id = ?", id).Scan(&t)
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrServerNotFound
+		}
 		return nil, err
 	}
 

@@ -27,7 +27,6 @@ export interface InstallProgress {
 
 export interface ServerStatusContextType {
   statuses: Record<number, ServerStatus>
-  installations: Record<string, InstallProgress>
   startingServers: Record<number, boolean>
   stoppingServers: Record<number, boolean>
   setServerStarting: (id: number, starting: boolean) => void
@@ -38,9 +37,8 @@ export interface ServerStatusContextType {
 const ServerStatusContext = createContext<ServerStatusContextType | undefined>(undefined)
 
 export function ServerStatusProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { subscribe } = useWebSocket()
+  const { subscribe, onReconnect } = useWebSocket()
   const [statuses, setStatuses] = useState<Record<number, ServerStatus>>({})
-  const [installations, setInstallations] = useState<Record<string, InstallProgress>>({})
   const [startingServers, setStartingServers] = useState<Record<number, boolean>>({})
   const [stoppingServers, setStoppingServers] = useState<Record<number, boolean>>({})
 
@@ -92,6 +90,13 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
   }, [refreshStatuses])
 
   useEffect(() => {
+    const unsubReconnect = onReconnect(() => {
+      refreshStatuses()
+    })
+    return () => unsubReconnect()
+  }, [onReconnect, refreshStatuses])
+
+  useEffect(() => {
     const unsubStatus = subscribe('server_status', (e) => {
       const s = e.payload as ServerStatus
       if (!s || s.server_id === 0) return
@@ -114,18 +119,6 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
       }
     })
 
-    const unsubInstall = subscribe('install_progress', (e) => {
-      const i = e.payload as InstallProgress
-      setInstallations((prev) => {
-        if (i.status === 'FINISHED' || i.status === 'SUCCESS') {
-          const next = { ...prev }
-          delete next[i.itemId]
-          return next
-        }
-        return { ...prev, [i.itemId]: i }
-      })
-    })
-
     const unsubServerUpdated = subscribe('server_updated', (e) => {
       if (e.payload?.type === 'reordered') return
       refreshStatuses()
@@ -133,14 +126,12 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
 
     return () => {
       unsubStatus()
-      unsubInstall()
       unsubServerUpdated()
     }
   }, [subscribe, refreshStatuses])
 
   const value = useMemo(() => ({
     statuses,
-    installations,
     startingServers,
     stoppingServers,
     setServerStarting,
@@ -148,7 +139,6 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
     refreshStatuses
   }), [
     statuses,
-    installations,
     startingServers,
     stoppingServers,
     setServerStarting,
