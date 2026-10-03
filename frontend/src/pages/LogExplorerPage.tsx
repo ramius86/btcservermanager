@@ -20,6 +20,7 @@ import { LogSidebar } from '../components/LogSidebar'
 import { LogViewerHeader } from '../components/LogViewerHeader'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 import { useServerStatus } from '../contexts/ServerStatusContext'
+import { useInstallProgress } from '../contexts/InstallProgressContext'
 
 const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | null, sortedFiles: string[]): string | null => {
   if (sortedFiles.length === 0) return null;
@@ -33,6 +34,7 @@ const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | n
   }
   return null;
 }
+
 
 const serverIdRegex = /^([A-Z0-9]+)_(\d+)_/
 const prefixRegex = /^([A-Z0-9]+_\d+(?:_HC\d+)?_)/
@@ -57,7 +59,8 @@ export const LogExplorerPage: React.FC = () => {
   const view = searchParams.get('view') || 'logs'
   const { subscribe } = useWebSocket()
   const { sidebarWidth, containerRef, startResizing } = useResizableSidebar(380)
-  const { statuses, installations } = useServerStatus()
+  const { statuses } = useServerStatus()
+  const { installations } = useInstallProgress()
 
   const liveFiles = React.useMemo(() => {
     const live = new Set<string>()

@@ -11,6 +11,7 @@ import { Progress } from '../components/ui/Progress'
 import { useToast } from '../components/ui/Toast'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { useServerStatus } from '../contexts/ServerStatusContext'
+import { useInstallProgress } from '../contexts/InstallProgressContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
 import { AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
@@ -145,8 +146,8 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const { systemInfo: sysInfo } = useSystemInfo()
+  const { installations: wsInstallations } = useInstallProgress()
   const { 
-    installations: wsInstallations, 
     statuses: wsStatuses, 
     startingServers, 
     stoppingServers, 
@@ -155,7 +156,7 @@ export function DashboardPage() {
   
   const { servers, fetchServers } = useServersStatusSync(wsStatuses, startingServers, stoppingServers, refreshStatuses)
   const { installations, fetchInstallations } = useInstallationsSync(wsInstallations)
-  const { subscribe } = useWebSocket()
+  const { subscribe, onReconnect } = useWebSocket()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [uninstallTarget, setUninstallTarget] = useState<string | null>(null)
 
@@ -168,8 +169,16 @@ export function DashboardPage() {
       fetchInstallations()
     })
 
-    return () => unsubscribe()
-  }, [subscribe, fetchServers, fetchInstallations])
+    const unsubReconnect = onReconnect(() => {
+      fetchServers()
+      fetchInstallations()
+    })
+
+    return () => {
+      unsubscribe()
+      unsubReconnect()
+    }
+  }, [subscribe, onReconnect, fetchServers, fetchInstallations])
 
   const handleRefreshAll = async () => {
     if (isRefreshing) return
