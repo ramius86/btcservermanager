@@ -35,6 +35,15 @@ const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | n
   return null;
 }
 
+const MAX_LOG_STREAM_LINES = 5000
+
+const appendWithFifoLimit = (prev: string[], newLines: string[]): string[] => {
+  const combined = [...prev, ...newLines]
+  if (combined.length > MAX_LOG_STREAM_LINES) {
+    return combined.slice(-MAX_LOG_STREAM_LINES)
+  }
+  return combined
+}
 
 const serverIdRegex = /^([A-Z0-9]+)_(\d+)_/
 const prefixRegex = /^([A-Z0-9]+_\d+(?:_HC\d+)?_)/
@@ -168,7 +177,7 @@ export const LogExplorerPage: React.FC = () => {
     if (logType === 'steamcmd') {
       if (selectedFile.startsWith('steamcmd_') && selectedFile.endsWith('.log')) {
         return subscribe('steamcmd_log', (e) => {
-          setLines(prev => [...prev, ...e.payload.message.split('\n')])
+          setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
         })
       }
     } else {
@@ -177,7 +186,7 @@ export const LogExplorerPage: React.FC = () => {
         const serverId = Number.parseInt(match[2], 10)
         if (!Number.isNaN(serverId)) {
           return subscribe('server_log', (e) => {
-            setLines(prev => [...prev, ...e.payload.message.split('\n')])
+            setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
           }, serverId)
         }
       }
