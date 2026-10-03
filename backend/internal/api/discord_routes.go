@@ -10,10 +10,10 @@ import (
 )
 
 const (
-	errDiscordNotConfigured      = "Discord bot not configured"
-	errDiscordRepoNotInitialized = "Discord repository not initialized"
-	eventIDRoute                 = "/events/{id}"
-	errInvalidEventID            = "Invalid event ID"
+	errDiscordNotConfigured         = "Discord bot not configured"
+	errDiscordServiceNotInitialized = "Discord service not initialized"
+	eventIDRoute                    = "/events/{id}"
+	errInvalidEventID               = "Invalid event ID"
 )
 
 func (r *Router) discordRoutes() chi.Router {
@@ -121,12 +121,12 @@ func (r *Router) handleCreateDiscordEvent(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleGetDiscordEvents(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
-	events, err := r.discordRepo.GetAllEvents(req.Context())
+	events, err := r.discordService.GetAllEvents(req.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -195,7 +195,7 @@ func (r *Router) handleUpdateDiscordEvent(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleDeleteDiscordEvent(w http.ResponseWriter, req *http.Request) {
-	if r.discordService == nil || r.discordRepo == nil {
+	if r.discordService == nil {
 		http.Error(w, errDiscordNotConfigured, http.StatusServiceUnavailable)
 		return
 	}
@@ -216,12 +216,12 @@ func (r *Router) handleDeleteDiscordEvent(w http.ResponseWriter, req *http.Reque
 }
 
 func (r *Router) handleGetDiscordEventStats(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
-	stats, err := r.discordRepo.GetAttendanceStats(req.Context())
+	stats, err := r.discordService.GetAttendanceStats(req.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -235,12 +235,12 @@ func (r *Router) handleGetDiscordEventStats(w http.ResponseWriter, req *http.Req
 }
 
 func (r *Router) handleGetDiscordUsers(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
-	users, err := r.discordRepo.GetAllUsersForManagement(req.Context())
+	users, err := r.discordService.GetAllUsersForManagement(req.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -254,8 +254,8 @@ func (r *Router) handleGetDiscordUsers(w http.ResponseWriter, req *http.Request)
 }
 
 func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -274,7 +274,7 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 		return
 	}
 
-	if err := r.discordRepo.SetUserActive(req.Context(), id, payload.Username, payload.Active); err != nil {
+	if err := r.discordService.SetUserActive(req.Context(), id, payload.Username, payload.Active); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -308,8 +308,8 @@ type MergeDiscordUsersRequest struct {
 }
 
 func (r *Router) handleMergeDiscordUsers(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -328,16 +328,9 @@ func (r *Router) handleMergeDiscordUsers(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if r.discordService != nil {
-		if err := r.discordService.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-	} else {
-		if err := r.discordRepo.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID, ""); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	if err := r.discordService.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
 
 	r.json(w, map[string]bool{"success": true})
