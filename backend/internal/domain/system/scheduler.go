@@ -211,7 +211,7 @@ func getServerRestartConfig(srv any) (int64, bool, *string) {
 	}
 }
 
-func (s *Scheduler) autoRestartSingleServer(bgCtx context.Context, srv any, now string, lastRestart map[int64]string) {
+func (s *Scheduler) autoRestartSingleServer(_ context.Context, srv any, now string, lastRestart map[int64]string) {
 	id, autoRestart, restartTime := getServerRestartConfig(srv)
 	if id == 0 {
 		return
@@ -221,9 +221,13 @@ func (s *Scheduler) autoRestartSingleServer(bgCtx context.Context, srv any, now 
 	if shouldRestart {
 		lastRestart[id] = now
 		log.Printf("Auto-restarting server %d...", id)
-		if err := s.serverService.RestartServer(bgCtx, id); err != nil {
-			log.Printf("Auto-restart failed for server %d: %v", id, err)
-		}
+		go func(serverID int64) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := s.serverService.RestartServer(ctx, serverID); err != nil {
+				log.Printf("Auto-restart failed for server %d: %v", serverID, err)
+			}
+		}(id)
 	}
 }
 

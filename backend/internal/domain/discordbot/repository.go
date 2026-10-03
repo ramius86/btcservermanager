@@ -855,11 +855,14 @@ func (r *Repository) MergeUsers(ctx context.Context, sourceUserID, targetUserID,
 	}
 
 	// 5. Update roster JSON data in discord_event_rosters
+	// Only replace exact quoted JSON string representation of the user ID (e.g. "123456789") to avoid partial substring matching
+	sourceJSONID := fmt.Sprintf(`"%s"`, sourceUserID)
+	targetJSONID := fmt.Sprintf(`"%s"`, targetUserID)
 	_, err = tx.ExecContext(ctx, `
 		UPDATE discord_event_rosters
 		SET data = replace(data, ?, ?)
 		WHERE data LIKE '%' || ? || '%'
-	`, sourceUserID, targetUserID, sourceUserID)
+	`, sourceJSONID, targetJSONID, sourceJSONID)
 	if err != nil {
 		return fmt.Errorf("failed to update event rosters: %w", err)
 	}

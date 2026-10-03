@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
+import { useToast } from '../components/ui/Toast'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,6 +34,7 @@ type SortOrder = 'asc' | 'desc'
 type ViewMode = 'all_time' | 'yearly' | 'monthly'
 
 export function EventsStatsPage() {
+  const { showToast } = useToast()
   const [attendances, setAttendances] = useState<DiscordRawAttendance[]>([])
   const [users, setUsers] = useState<DiscordUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -303,8 +305,9 @@ export function EventsStatsPage() {
       
       const freshStats = await DiscordService.getAttendanceStats()
       setAttendances(freshStats || [])
+      showToast(`User marked as ${!currentActive ? 'active' : 'inactive'}`, 'success')
     } catch (err: any) {
-      alert(err.message || 'Failed to update user status')
+      showToast(err.message || 'Failed to update user status', 'error')
     }
   }
 
