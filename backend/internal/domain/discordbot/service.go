@@ -39,12 +39,18 @@ const (
 )
 
 type Service struct {
-	session            *discordgo.Session
-	guildID            string
-	repo               *Repository
-	membersCache       []*discordgo.Member
-	membersCacheExpiry time.Time
-	membersCacheMu     sync.RWMutex
+	session             *discordgo.Session
+	guildID             string
+	repo                *Repository
+	membersCache        []*discordgo.Member
+	membersCacheExpiry  time.Time
+	membersCacheMu      sync.RWMutex
+	channelsCache       []Channel
+	channelsCacheExpiry time.Time
+	channelsCacheMu     sync.RWMutex
+	rolesCache          []DiscordRole
+	rolesCacheExpiry    time.Time
+	rolesCacheMu        sync.RWMutex
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -114,6 +120,21 @@ func (s *Service) GetChannels() ([]Channel, error) {
 		return nil, errors.New(errBotNotConfigured)
 	}
 
+	s.channelsCacheMu.RLock()
+	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+		channels := s.channelsCache
+		s.channelsCacheMu.RUnlock()
+		return channels, nil
+	}
+	s.channelsCacheMu.RUnlock()
+
+	s.channelsCacheMu.Lock()
+	defer s.channelsCacheMu.Unlock()
+
+	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+		return s.channelsCache, nil
+	}
+
 	discordChannels, err := s.session.GuildChannels(s.guildID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to fetch channels: %w", err)
@@ -134,12 +155,30 @@ func (s *Service) GetChannels() ([]Channel, error) {
 		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
 	})
 
+	s.channelsCache = channels
+	s.channelsCacheExpiry = time.Now().Add(5 * time.Minute)
+
 	return channels, nil
 }
 
 func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	if s.session == nil {
 		return nil, errors.New(errBotNotConfigured)
+	}
+
+	s.rolesCacheMu.RLock()
+	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+		roles := s.rolesCache
+		s.rolesCacheMu.RUnlock()
+		return roles, nil
+	}
+	s.rolesCacheMu.RUnlock()
+
+	s.rolesCacheMu.Lock()
+	defer s.rolesCacheMu.Unlock()
+
+	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+		return s.rolesCache, nil
 	}
 
 	var roles []DiscordRole
@@ -159,6 +198,10 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 			})
 		}
 	}
+
+	s.rolesCache = roles
+	s.rolesCacheExpiry = time.Now().Add(5 * time.Minute)
+
 	return roles, nil
 }
 
@@ -281,7 +324,7 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 	}
 
 	if members, mErr := s.getCachedGuildMembers(); mErr == nil && len(members) > 0 {
-		s.syncMemberNicknamesToDatabase(ctx, members)
+		go s.syncMemberNicknamesToDatabase(context.Background(), members)
 	}
 
 	detail := &DiscordEventDetail{

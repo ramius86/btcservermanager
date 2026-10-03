@@ -107,21 +107,21 @@ export function EventsPage() {
       } else {
         setIsRefreshing(true)
       }
-      const status = await DiscordService.getStatus()
+      const [status, chans, evts, fetchedRoles, appSettings] = await Promise.all([
+        DiscordService.getStatus().catch(() => ({ configured: false, connected: false })),
+        DiscordService.getChannels().catch(() => []),
+        DiscordService.getEvents().catch(() => []),
+        DiscordService.getRoles().catch(() => []),
+        SettingsService.getSettings().catch(() => null),
+      ])
+
       setConfigured(status.configured)
       
-      if (status.configured) {
-        const [chans, evts, fetchedRoles, appSettings] = await Promise.all([
-          DiscordService.getChannels(),
-          DiscordService.getEvents(),
-          DiscordService.getRoles(),
-          SettingsService.getSettings().catch(() => null),
-        ])
-        
-        if (appSettings && typeof appSettings.eventRosterEnabled === 'boolean') {
-          setRosterEnabled(appSettings.eventRosterEnabled)
-        }
+      if (appSettings && typeof appSettings.eventRosterEnabled === 'boolean') {
+        setRosterEnabled(appSettings.eventRosterEnabled)
+      }
 
+      if (status.configured) {
         setChannels(chans || [])
         setRoles(fetchedRoles || [])
         
@@ -134,6 +134,10 @@ export function EventsPage() {
         } else {
           setEvents([])
         }
+      } else {
+        setChannels([])
+        setRoles([])
+        setEvents([])
       }
     } catch (err: any) {
       console.error(err)

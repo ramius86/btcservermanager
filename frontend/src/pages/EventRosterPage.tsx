@@ -1019,7 +1019,7 @@ export function EventRosterPage() {
           <Input
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            placeholder="Filter players or brevetti..."
+            placeholder="Filter players or qualifications..."
             className="h-8 pl-8 text-xs bg-surface border-border"
           />
         </div>
@@ -1646,7 +1646,7 @@ export function EventRosterPage() {
 
                   <CardContent className="p-3 space-y-2 flex-1">
                     {squad.slots.map(slot => {
-                      const hasBrevetto = slot.assignedPlayerName
+                      const hasQualification = slot.assignedPlayerName
                         ? clanMembers
                           .find(cm => cm.displayName.toLowerCase() === slot.assignedPlayerName?.toLowerCase())
                           ?.qualifications.some(q => qualificationMatchesRole(q, slot.role))
@@ -1691,7 +1691,7 @@ export function EventRosterPage() {
                                       (?)
                                     </span>
                                   )}
-                                  {hasBrevetto && (
+                                  {hasQualification && (
                                     <span title="Specialized">
                                       <Award className="w-3 h-3 text-success shrink-0" />
                                     </span>
