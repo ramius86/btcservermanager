@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type Repository struct {
@@ -234,10 +235,14 @@ func (r *Repository) GetEventByMessageID(ctx context.Context, messageID string) 
 func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
 	query := `
 		SELECT u.id, u.username, COALESCE(p.status, 'no_response') as status, e.date_time, e.game_type
-		FROM discord_users u
+		FROM (SELECT id, username FROM discord_users WHERE is_active = 1) u
 		CROSS JOIN discord_events e
 		LEFT JOIN discord_event_participations p ON p.user_id = u.id AND p.event_id = e.id
-		WHERE u.is_active = 1 OR p.status IS NOT NULL
+		UNION ALL
+		SELECT u.id, u.username, p.status, e.date_time, e.game_type
+		FROM discord_event_participations p
+		JOIN discord_users u ON u.id = p.user_id AND u.is_active = 0
+		JOIN discord_events e ON e.id = p.event_id
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -446,8 +451,15 @@ func (r *Repository) GetMemberQualifications(ctx context.Context, userIDs []stri
 		return result, nil
 	}
 
-	query := `SELECT user_id, qualification_name FROM member_qualifications`
-	rows, err := r.db.QueryContext(ctx, query)
+	placeholders := make([]string, len(userIDs))
+	args := make([]any, len(userIDs))
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`SELECT user_id, qualification_name FROM member_qualifications WHERE user_id IN (%s)`, strings.Join(placeholders, ","))
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
