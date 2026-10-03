@@ -19,10 +19,33 @@ const navItems = [
   { icon: Settings, label: 'Settings', href: '/config' },
 ]
 
+function SidebarClock({ timezone }: { timezone?: string }) {
+  const [time, setTime] = useState(() => new Date())
+  useEffect(() => {
+    const timer = setInterval(() => setTime(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
+
+  return (
+    <div className="flex items-center gap-2 mb-3">
+      <Clock className="w-3.5 h-3.5 text-primary animate-pulse shrink-0" />
+      <div className="flex flex-col min-w-0">
+        <span className="text-sm font-black text-foreground tabular-nums tracking-wider leading-none">
+          {time.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </span>
+        {timezone && (
+          <span className="text-[8px] font-mono font-black text-primary/70 tracking-widest uppercase mt-1">
+            {timezone}
+          </span>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function Sidebar() {
   const { theme, toggleTheme } = useTheme()
   const { systemInfo } = useSystemInfo()
-  const [time, setTime] = useState(new Date())
   const { subscribe } = useWebSocket()
   const [hasModUpdates, setHasModUpdates] = useState(false)
 
@@ -33,11 +56,6 @@ export function Sidebar() {
       globalThis.dispatchEvent(new CustomEvent('trigger-fox-tactical'))
     }
   }
-
-  useEffect(() => {
-    const timer = setInterval(() => setTime(new Date()), 1000)
-    return () => clearInterval(timer)
-  }, [])
 
   useEffect(() => {
     const checkUpdates = () => {
@@ -159,19 +177,7 @@ export function Sidebar() {
         </nav>
 
         <div className="px-4 py-4 border-t border-border/50 bg-surface-elevated/10">
-          <div className="flex items-center gap-2 mb-3">
-            <Clock className="w-3.5 h-3.5 text-primary animate-pulse shrink-0" />
-            <div className="flex flex-col min-w-0">
-              <span className="text-sm font-black text-foreground tabular-nums tracking-wider leading-none">
-                {time.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-              </span>
-              {systemInfo?.timezone && (
-                <span className="text-[8px] font-mono font-black text-primary/70 tracking-widest uppercase mt-1">
-                  {systemInfo.timezone}
-                </span>
-              )}
-            </div>
-          </div>
+          <SidebarClock timezone={systemInfo?.timezone} />
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
               <span className="text-[8px] font-bold text-muted-foreground uppercase tracking-[0.2em]">Ver.</span>
