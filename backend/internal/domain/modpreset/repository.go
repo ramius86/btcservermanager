@@ -5,6 +5,9 @@ import (
 	"btcservermanager/internal/domain/workshop"
 	"context"
 	"database/sql"
+	"fmt"
+	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -19,6 +22,38 @@ func NewRepository(db *sql.DB, workshopRepo *workshop.Repository) *Repository {
 	}
 }
 
+func (r *Repository) fetchBiKeysBatch(ctx context.Context, modIDs []int64) (map[int64][]string, error) {
+	result := make(map[int64][]string)
+	if len(modIDs) == 0 {
+		return result, nil
+	}
+
+	placeholders := make([]string, len(modIDs))
+	args := make([]any, len(modIDs))
+	for i, id := range modIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf("SELECT workshop_mod_id, bikey FROM workshop_mod_bikey WHERE workshop_mod_id IN (%s)", strings.Join(placeholders, ","))
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var modID int64
+		var bikey string
+		if err := rows.Scan(&modID, &bikey); err != nil {
+			return nil, err
+		}
+		result[modID] = append(result[modID], bikey)
+	}
+
+	return result, rows.Err()
+}
+
 func (r *Repository) GetAllPresets(ctx context.Context) ([]*ModPreset, error) {
 	query := `SELECT id, name, type FROM mod_preset`
 
@@ -28,34 +63,124 @@ func (r *Repository) GetAllPresets(ctx context.Context) ([]*ModPreset, error) {
 	}
 	defer rows.Close()
 
-	// Collect base preset data first, close the cursor, then load mods.
-	// Keeping rows open while calling getPresetMods would deadlock on a
-	// single-connection pool (MaxOpenConns=1).
 	presets := []*ModPreset{}
+	presetMap := make(map[int64]*ModPreset)
 	for rows.Next() {
 		var p ModPreset
 		if err := rows.Scan(&p.ID, &p.Name, &p.Type); err != nil {
-			rows.Close()
 			return nil, err
 		}
+		p.Mods = []workshop.WorkshopMod{}
+		p.ReforgerMods = []server.ReforgerMod{}
 		presets = append(presets, &p)
+		presetMap[p.ID] = &p
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return nil, err
 	}
 	rows.Close()
 
-	// Now hydrate each preset's mods with the connection free.
-	for _, p := range presets {
-		if p.Type == server.TypeReforger {
-			p.ReforgerMods, err = r.getReforgerPresetMods(ctx, p.ID)
-		} else {
-			p.Mods, err = r.getPresetMods(ctx, p.ID)
-		}
-		if err != nil {
+	if len(presets) == 0 {
+		return presets, nil
+	}
+
+	// 1. Batch load all Arma 3 / DayZ preset mods in a single JOIN query
+	armQuery := `
+		SELECT pm.preset_id, wm.id, wm.name, wm.thumbnail, wm.last_updated, wm.installed_at,
+		       wm.file_size, wm.server_only, wm.installation_status, wm.error_status, wm.server_type, wm.needs_update
+		FROM preset_mod pm
+		JOIN workshop_mod wm ON pm.mod_id = wm.id
+		ORDER BY pm.preset_id
+	`
+	armRows, err := r.db.QueryContext(ctx, armQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer armRows.Close()
+
+	type presetModItem struct {
+		presetID int64
+		mod      workshop.WorkshopMod
+	}
+	var modItems []presetModItem
+	var allModIDs []int64
+
+	for armRows.Next() {
+		var presetID int64
+		var m workshop.WorkshopMod
+		var lastUpdated sql.NullString
+		var installedAt sql.NullString
+		var errorStatus sql.NullString
+		var thumbnail sql.NullString
+
+		if err := armRows.Scan(&presetID, &m.ID, &m.Name, &thumbnail, &lastUpdated, &installedAt, &m.FileSize, &m.ServerOnly, &m.InstallationStatus, &errorStatus, &m.ServerType, &m.NeedsUpdate); err != nil {
 			return nil, err
 		}
+		m.Thumbnail = thumbnail.String
+		if lastUpdated.Valid {
+			if t, err := time.Parse(time.RFC3339, lastUpdated.String); err == nil {
+				m.LastUpdated = &t
+			}
+		}
+		if installedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, installedAt.String); err == nil {
+				m.InstalledAt = &t
+			}
+		}
+		if errorStatus.Valid {
+			es := workshop.ErrorStatus(errorStatus.String)
+			m.ErrorStatus = &es
+		}
+		modItems = append(modItems, presetModItem{presetID: presetID, mod: m})
+		allModIDs = append(allModIDs, m.ID)
+	}
+	if err := armRows.Err(); err != nil {
+		return nil, err
+	}
+	armRows.Close()
+
+	// Batch load bikeys for all retrieved mods
+	if len(allModIDs) > 0 {
+		bikeysMap, err := r.fetchBiKeysBatch(ctx, allModIDs)
+		if err == nil {
+			for i := range modItems {
+				if keys, ok := bikeysMap[modItems[i].mod.ID]; ok {
+					modItems[i].mod.BiKeys = keys
+				}
+			}
+		}
+	}
+
+	for _, item := range modItems {
+		if p, ok := presetMap[item.presetID]; ok {
+			p.Mods = append(p.Mods, item.mod)
+		}
+	}
+
+	// 2. Batch load all Reforger preset mods in a single query
+	refQuery := `SELECT preset_id, mod_id, name, thumbnail FROM reforger_preset_mod ORDER BY preset_id`
+	refRows, err := r.db.QueryContext(ctx, refQuery)
+	if err != nil {
+		return nil, err
+	}
+	defer refRows.Close()
+
+	for refRows.Next() {
+		var presetID int64
+		var rm server.ReforgerMod
+		var thumbnail sql.NullString
+		if err := refRows.Scan(&presetID, &rm.ID, &rm.Name, &thumbnail); err != nil {
+			return nil, err
+		}
+		if thumbnail.Valid {
+			rm.Thumbnail = thumbnail.String
+		}
+		if p, ok := presetMap[presetID]; ok {
+			p.ReforgerMods = append(p.ReforgerMods, rm)
+		}
+	}
+	if err := refRows.Err(); err != nil {
+		return nil, err
 	}
 
 	return presets, nil
@@ -90,7 +215,13 @@ func (r *Repository) scanPreset(ctx context.Context, scanner interface {
 }
 
 func (r *Repository) getPresetMods(ctx context.Context, presetID int64) ([]workshop.WorkshopMod, error) {
-	query := `SELECT mod_id FROM preset_mod WHERE preset_id = ?`
+	query := `
+		SELECT wm.id, wm.name, wm.thumbnail, wm.last_updated, wm.installed_at,
+		       wm.file_size, wm.server_only, wm.installation_status, wm.error_status, wm.server_type, wm.needs_update
+		FROM preset_mod pm
+		JOIN workshop_mod wm ON pm.mod_id = wm.id
+		WHERE pm.preset_id = ?
+	`
 
 	rows, err := r.db.QueryContext(ctx, query, presetID)
 	if err != nil {
@@ -98,30 +229,49 @@ func (r *Repository) getPresetMods(ctx context.Context, presetID int64) ([]works
 	}
 	defer rows.Close()
 
-	// Collect all mod IDs first, then close rows before issuing further queries.
-	// Keeping rows open while calling workshopRepo.GetModByID would deadlock on
-	// a single-connection pool (MaxOpenConns=1) since the connection is still
-	// held by the open cursor.
-	modIDs := []int64{}
+	mods := []workshop.WorkshopMod{}
+	var modIDs []int64
 	for rows.Next() {
-		var modID int64
-		if err := rows.Scan(&modID); err != nil {
-			rows.Close()
+		var m workshop.WorkshopMod
+		var lastUpdated sql.NullString
+		var installedAt sql.NullString
+		var errorStatus sql.NullString
+		var thumbnail sql.NullString
+
+		if err := rows.Scan(&m.ID, &m.Name, &thumbnail, &lastUpdated, &installedAt, &m.FileSize, &m.ServerOnly, &m.InstallationStatus, &errorStatus, &m.ServerType, &m.NeedsUpdate); err != nil {
 			return nil, err
 		}
-		modIDs = append(modIDs, modID)
+		m.Thumbnail = thumbnail.String
+		if lastUpdated.Valid {
+			if t, err := time.Parse(time.RFC3339, lastUpdated.String); err == nil {
+				m.LastUpdated = &t
+			}
+		}
+		if installedAt.Valid {
+			if t, err := time.Parse(time.RFC3339, installedAt.String); err == nil {
+				m.InstalledAt = &t
+			}
+		}
+		if errorStatus.Valid {
+			es := workshop.ErrorStatus(errorStatus.String)
+			m.ErrorStatus = &es
+		}
+		mods = append(mods, m)
+		modIDs = append(modIDs, m.ID)
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
 		return nil, err
 	}
 	rows.Close()
 
-	mods := []workshop.WorkshopMod{}
-	for _, modID := range modIDs {
-		m, err := r.workshopRepo.GetModByID(ctx, modID)
+	if len(modIDs) > 0 {
+		bikeysMap, err := r.fetchBiKeysBatch(ctx, modIDs)
 		if err == nil {
-			mods = append(mods, *m)
+			for i := range mods {
+				if keys, ok := bikeysMap[mods[i].ID]; ok {
+					mods[i].BiKeys = keys
+				}
+			}
 		}
 	}
 
