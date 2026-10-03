@@ -28,6 +28,7 @@ import {
   PinOff,
   UserCheck,
   ChevronRight,
+  ChevronLeft,
 } from 'lucide-react'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
@@ -956,8 +957,8 @@ export function EventRosterPage() {
     showToast('Active part cleared', 'info')
   }
 
-  const renderPlayerPoolCard = (isDrawer = false) => (
-    <Card className={`border-border bg-surface-elevated/95 backdrop-blur-md overflow-hidden flex flex-col ${isDrawer ? 'h-full shadow-2xl border-l-0 rounded-l-none' : ''}`}>
+  const renderPlayerPoolCard = () => (
+    <Card className="border-border bg-surface-elevated/70 backdrop-blur-sm overflow-hidden flex flex-col shadow-lg w-full">
       <CardHeader className="p-4 border-b border-border bg-surface/40 space-y-3 shrink-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -988,22 +989,25 @@ export function EventRosterPage() {
               className={`h-6 w-6 p-0 hidden lg:inline-flex transition-colors ${
                 isPoolPinned ? 'text-primary hover:text-primary/80' : 'text-muted-foreground hover:text-foreground'
               }`}
-              title={isPoolPinned ? 'Sblocca barra laterale (rendi a comparsa su hover)' : 'Blocca barra laterale (fissa al layout)'}
+              title={isPoolPinned ? 'Unpin sidebar (collapse on hover)' : 'Pin sidebar (keep static in layout)'}
               aria-label="Toggle Pin Player Pool"
             >
               {isPoolPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
             </Button>
-            {isDrawer && !isPoolPinned && (
+            {!isPoolPinned && (
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => setIsPoolHovered(false)}
-                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground inline-flex"
-                title="Chiudi Player Pool"
-                aria-label="Chiudi Player Pool"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setIsPoolHovered(false)
+                }}
+                className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground hidden lg:inline-flex"
+                title="Collapse sidebar"
+                aria-label="Collapse sidebar"
               >
-                <X className="w-3.5 h-3.5" />
+                <ChevronLeft className="w-3.5 h-3.5" />
               </Button>
             )}
           </div>
@@ -1052,7 +1056,7 @@ export function EventRosterPage() {
         </div>
       </CardHeader>
 
-      <CardContent className={`p-3 space-y-2 overflow-y-auto ${isDrawer ? 'flex-1 max-h-[calc(100vh-140px)]' : 'max-h-[550px]'}`}>
+      <CardContent className="p-3 space-y-2 overflow-y-auto max-h-[calc(100vh-200px)] flex-1">
         {filteredUnassigned.length === 0 ? (
           <div className="py-8 text-center text-muted-foreground">
             <p className="text-xs italic">
@@ -1117,7 +1121,7 @@ export function EventRosterPage() {
         <div className="pt-3 border-t border-border mt-3">
           <form onSubmit={handleAddGuestPlayer} className="space-y-1.5">
             <label
-              htmlFor={`sidebar-guest-name-input-${isDrawer ? 'drawer' : 'static'}`}
+              htmlFor="sidebar-guest-name-input"
               className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1"
             >
               <UserPlus className="w-3 h-3" />
@@ -1125,7 +1129,7 @@ export function EventRosterPage() {
             </label>
             <div className="flex gap-1.5">
               <Input
-                id={`sidebar-guest-name-input-${isDrawer ? 'drawer' : 'static'}`}
+                id="sidebar-guest-name-input"
                 value={guestNameInput}
                 onChange={e => setGuestNameInput(e.target.value)}
                 placeholder="Player name..."
@@ -1368,7 +1372,7 @@ export function EventRosterPage() {
               if (!isPoolPinned) setIsPoolHovered(prev => !prev)
             }}
             className={`flex items-center gap-2 transition-all ${!isPoolPinned ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}
-            title={!isPoolPinned ? 'Toggle Player Pool drawer' : undefined}
+            title={!isPoolPinned ? 'Toggle Player Pool sidebar' : undefined}
           >
             <span className="text-muted-foreground uppercase font-bold text-[10px] tracking-wider">Unassigned:</span>
             <span className={`font-mono font-bold ${unassignedCandidates.length > 0 ? 'text-primary' : 'text-muted-foreground'}`}>
@@ -1410,66 +1414,56 @@ export function EventRosterPage() {
       </div>
 
       {/* Main Workspace Layout */}
-      <div className={`relative ${isPoolPinned ? 'grid grid-cols-1 lg:grid-cols-12 gap-6 items-start' : 'space-y-4'}`}>
-        {/* Left Sidebar: Available Players Pool */}
-        {isPoolPinned ? (
-          <div className={`lg:col-span-4 xl:col-span-3 space-y-4 lg:sticky lg:top-4 ${activeMobileTab === 'players' ? 'block' : 'hidden lg:block'}`}>
-            {renderPlayerPoolCard(false)}
-          </div>
-        ) : (
-          <>
-            {/* Mobile Tab View for Player Pool */}
-            <div className={`lg:hidden space-y-4 ${activeMobileTab === 'players' ? 'block' : 'hidden'}`}>
-              {renderPlayerPoolCard(false)}
+      <div className="flex gap-4 sm:gap-6 items-start">
+        {/* Left Sidebar: Available Players Pool (Desktop in-flow dynamic collapsible sidebar) */}
+        <div
+          onMouseEnter={handlePoolMouseEnter}
+          onMouseLeave={handlePoolMouseLeave}
+          className={`hidden lg:flex flex-col shrink-0 lg:sticky lg:top-4 transition-all duration-300 ease-in-out ${
+            isPoolPinned || isPoolHovered ? 'w-80 xl:w-[340px]' : 'w-11'
+          }`}
+        >
+          {isPoolPinned || isPoolHovered ? (
+            <div className="w-80 xl:w-[340px]">
+              {renderPlayerPoolCard()}
             </div>
-
-            {/* Desktop Floating Hover Trigger & Drawer */}
-            <div
-              className="hidden lg:block"
-              onMouseEnter={handlePoolMouseEnter}
-              onMouseLeave={handlePoolMouseLeave}
+          ) : (
+            <button
+              type="button"
+              onClick={togglePoolPin}
+              className="w-11 h-[560px] py-4 rounded-xl border border-border/80 bg-surface-elevated/40 hover:bg-surface-elevated hover:border-primary/40 flex flex-col items-center justify-between cursor-pointer transition-colors group select-none shadow-sm"
+              title="Player Pool (Hover to expand, click to pin)"
+              aria-label="Expand Player Pool"
             >
-              {/* Backdrop overlay when drawer is open */}
-              {isPoolHovered && (
-                <div
-                  className="fixed inset-0 bg-background/50 backdrop-blur-[1px] z-40 transition-opacity"
-                  onClick={() => setIsPoolHovered(false)}
-                />
-              )}
-
-              {/* Left Edge Floating Tab */}
-              <div className="fixed left-0 md:left-[180px] top-28 z-40">
-                <button
-                  type="button"
-                  onClick={() => setIsPoolHovered(prev => !prev)}
-                  className="flex items-center gap-2 px-3 py-2 bg-surface-elevated/95 hover:bg-surface border border-l-0 border-border rounded-r-xl shadow-xl backdrop-blur-md cursor-pointer transition-all group"
-                  title="Player Pool (Passa il mouse o clicca per aprire)"
-                >
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-surface group-hover:bg-primary/10 transition-colors">
                   <Users className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold text-foreground">Player Pool</span>
-                  <Badge variant="outline" className="text-[10px] font-mono bg-primary/10 text-primary border-primary/30">
-                    {unassignedCandidates.length}
-                  </Badge>
-                  <ChevronRight className={`w-3.5 h-3.5 text-muted-foreground group-hover:translate-x-0.5 transition-transform ${isPoolHovered ? 'rotate-180' : ''}`} />
-                </button>
+                </div>
+                <Badge variant="outline" className="text-[10px] font-mono px-1 py-0 bg-primary/10 text-primary border-primary/30">
+                  {unassignedCandidates.length}
+                </Badge>
               </div>
 
-              {/* Slide-out Flyout Drawer */}
-              <div
-                className={`fixed left-0 md:left-[180px] top-16 bottom-6 w-88 md:w-96 z-50 transition-all duration-300 ease-out transform shadow-2xl flex flex-col ${
-                  isPoolHovered
-                    ? 'translate-x-0 opacity-100 pointer-events-auto'
-                    : '-translate-x-full opacity-0 pointer-events-none'
-                }`}
-              >
-                {renderPlayerPoolCard(true)}
+              {/* Vertical text label */}
+              <div className="rotate-180 [writing-mode:vertical-lr] text-[10px] font-bold uppercase tracking-widest text-muted-foreground group-hover:text-foreground transition-colors flex items-center gap-1.5 py-4">
+                <span>Player Pool</span>
+                <ChevronRight className="w-3 h-3 text-muted-foreground rotate-90" />
               </div>
-            </div>
-          </>
-        )}
+
+              <div className="p-1 text-muted-foreground/50 group-hover:text-primary transition-colors">
+                <Pin className="w-3.5 h-3.5" />
+              </div>
+            </button>
+          )}
+        </div>
+
+        {/* Mobile View for Player Pool */}
+        <div className={`lg:hidden space-y-4 w-full ${activeMobileTab === 'players' ? 'block' : 'hidden'}`}>
+          {renderPlayerPoolCard()}
+        </div>
 
         {/* Right Main Board: Squads and Slots */}
-        <div className={`${isPoolPinned ? 'lg:col-span-8 xl:col-span-9' : 'w-full'} space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
+        <div className={`flex-1 min-w-0 space-y-4 ${activeMobileTab === 'squads' ? 'block' : 'hidden lg:block'}`}>
           {/* Mission Parts Tab Bar */}
           <div className="flex flex-wrap items-center justify-between gap-3 p-2.5 bg-surface-elevated/70 border border-border rounded-xl">
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1716,8 +1710,8 @@ export function EventRosterPage() {
                                       })
                                     }
                                     className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
-                                    title="Scambia slot con un altro giocatore (Swap)"
-                                    aria-label="Scambia slot"
+                                    title="Swap player with another slot"
+                                    aria-label="Swap slot"
                                   >
                                     <ArrowLeftRight className="w-3.5 h-3.5" />
                                   </button>
@@ -1732,8 +1726,8 @@ export function EventRosterPage() {
                                       })
                                     }
                                     className="p-1 rounded text-muted-foreground hover:text-primary hover:bg-surface-elevated transition-colors"
-                                    title="Cambia giocatore (Change)"
-                                    aria-label="Cambia giocatore"
+                                    title="Change player"
+                                    aria-label="Change player"
                                   >
                                     <UserCheck className="w-3.5 h-3.5" />
                                   </button>
@@ -1741,8 +1735,8 @@ export function EventRosterPage() {
                                     type="button"
                                     onClick={() => handleUnassignSlot(squad.id, slot.id)}
                                     className="p-1 rounded text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                    title="Rimuovi giocatore da questo slot"
-                                    aria-label="Rimuovi giocatore da questo slot"
+                                    title="Remove player from slot"
+                                    aria-label="Remove player from slot"
                                   >
                                     <X className="w-3.5 h-3.5" />
                                   </button>
