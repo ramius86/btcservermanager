@@ -29,7 +29,9 @@ import {
   UserCheck,
   ChevronRight,
   ChevronLeft,
+  GripVertical,
 } from 'lucide-react'
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -60,6 +62,8 @@ import {
   swapPlayerSlots,
   reconcileSquadsWithCandidates,
   cleanPlayerName,
+  type RosterLanguage,
+  ROSTER_HEADER_LANG_KEY,
 } from '../components/roster/rosterUtils'
 import { SlotPickerModal } from '../components/roster/SlotPickerModal'
 import { RosterTemplateModal } from '../components/roster/RosterTemplateModal'
@@ -550,7 +554,8 @@ export function EventRosterPage() {
       setClanMembers(members || [])
       setLearningStats(stats || [])
 
-      const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType)
+      const savedLang = (localStorage.getItem(ROSTER_HEADER_LANG_KEY) as RosterLanguage) || 'ENG'
+      const defaultHeader = buildDefaultRosterHeader(detail?.dateTime, detail?.gameType, savedLang)
       const initial = parseInitialRosterState(savedRoster, defaultHeader)
       const loadedGuests = initial.guests.length > 0 ? initial.guests : []
       const initialCandidates = extractCandidates(detail, members || [], loadedGuests)
@@ -667,6 +672,18 @@ export function EventRosterPage() {
 
   const handleUpdateSquadName = (squadId: string, name: string) => {
     setSquads(prev => prev.map(s => (s.id === squadId ? { ...s, name } : s)))
+  }
+
+  const handleDragEndSquad = (result: DropResult) => {
+    if (!result.destination) return
+    if (result.destination.index === result.source.index) return
+
+    setSquads(prev => {
+      const items = Array.from(prev)
+      const [moved] = items.splice(result.source.index, 1)
+      items.splice(result.destination!.index, 0, moved)
+      return items
+    })
   }
 
   // Slot Actions
@@ -1603,19 +1620,43 @@ export function EventRosterPage() {
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {squads.map(squad => (
-                <Card
-                  key={squad.id}
-                  className="border-border bg-surface-elevated/60 backdrop-blur-sm overflow-hidden flex flex-col justify-between hover:border-border/80 transition-all"
-                >
-                  <CardHeader className="p-3.5 border-b border-border bg-surface/50 flex flex-row items-center justify-between gap-2 space-y-0">
-                    <Input
-                      value={squad.name}
-                      onChange={e => handleUpdateSquadName(squad.id, e.target.value)}
-                      placeholder="Squad Callsign (e.g. ALPHA 1)"
-                      className="h-7 text-xs font-black tracking-wide uppercase bg-transparent border-transparent hover:border-border focus:bg-surface focus:border-primary/50 px-1.5"
-                    />
+            <DragDropContext onDragEnd={handleDragEndSquad}>
+              <Droppable droppableId="roster-squads-droppable" direction="horizontal">
+                {provided => (
+                  <div
+                    ref={provided.innerRef}
+                    {...provided.droppableProps}
+                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
+                  >
+                    {squads.map((squad, index) => (
+                      <Draggable key={squad.id} draggableId={squad.id} index={index}>
+                        {(provided, snapshot) => (
+                          <Card
+                            ref={provided.innerRef}
+                            {...provided.draggableProps}
+                            style={provided.draggableProps.style}
+                            className={`border-border bg-surface-elevated/60 backdrop-blur-sm overflow-hidden flex flex-col justify-between hover:border-border/80 ${
+                              snapshot.isDragging
+                                ? 'z-50 border-primary/60 shadow-2xl scale-[1.01] ring-1 ring-primary/40 bg-surface-elevated !transition-none'
+                                : 'transition-[border-color,background-color,box-shadow] duration-200'
+                            }`}
+                          >
+                            <CardHeader className="p-3.5 border-b border-border bg-surface/50 flex flex-row items-center justify-between gap-1.5 space-y-0">
+                              <div
+                                {...provided.dragHandleProps}
+                                className="p-1 -ml-1 text-muted-foreground/30 hover:text-foreground cursor-grab active:cursor-grabbing transition-colors rounded hover:bg-surface shrink-0"
+                                title="Drag to reorder squad"
+                                aria-label="Drag to reorder squad"
+                              >
+                                <GripVertical className="w-4 h-4" />
+                              </div>
+
+                              <Input
+                                value={squad.name}
+                                onChange={e => handleUpdateSquadName(squad.id, e.target.value)}
+                                placeholder="Squad Callsign (e.g. ALPHA 1)"
+                                className="h-7 text-xs font-black tracking-wide uppercase bg-transparent border-transparent hover:border-border focus:bg-surface focus:border-primary/50 px-1.5 flex-1 min-w-0"
+                              />
 
                     <div className="flex items-center gap-1 shrink-0">
                       {/* Clone Squad Button */}
@@ -1786,9 +1827,15 @@ export function EventRosterPage() {
                     </Button>
                   </CardContent>
                 </Card>
-              ))}
-            </div>
-          )}
+              )}
+            </Draggable>
+          ))}
+          {provided.placeholder}
+        </div>
+      )}
+    </Droppable>
+  </DragDropContext>
+)}
         </div>
       </div>
 

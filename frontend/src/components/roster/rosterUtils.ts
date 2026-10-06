@@ -531,6 +531,9 @@ export function formatRosterForDiscord(headerText: string, squads: RosterSquad[]
   return lines.join('\n').trim()
 }
 
+export type RosterLanguage = 'ENG' | 'ITA'
+export const ROSTER_HEADER_LANG_KEY = 'roster_header_lang'
+
 const EN_DAYS = [
   'Sunday',
   'Monday',
@@ -556,11 +559,37 @@ const EN_MONTHS = [
   'December',
 ] as const
 
+const IT_DAYS = [
+  'Domenica',
+  'Lunedì',
+  'Martedì',
+  'Mercoledì',
+  'Giovedì',
+  'Venerdì',
+  'Sabato',
+] as const
+
+const IT_MONTHS = [
+  'gennaio',
+  'febbraio',
+  'marzo',
+  'aprile',
+  'maggio',
+  'giugno',
+  'luglio',
+  'agosto',
+  'settembre',
+  'ottobre',
+  'novembre',
+  'dicembre',
+] as const
+
 /**
- * Formats an event date string (e.g. "2026-09-23T20:30") into English localized text:
- * e.g. "Wednesday, September 23"
+ * Formats an event date string (e.g. "2026-09-23T20:30") into localized text:
+ * ENG: e.g. "Wednesday, September 23"
+ * ITA: e.g. "Mercoledì 23 settembre"
  */
-export function formatEnglishEventDate(dateTimeStr?: string): string {
+export function formatLocalizedEventDate(dateTimeStr?: string, lang: RosterLanguage = 'ENG'): string {
   if (!dateTimeStr) return ''
 
   const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(dateTimeStr.trim())
@@ -582,11 +611,22 @@ export function formatEnglishEventDate(dateTimeStr?: string): string {
     return ''
   }
 
+  if (lang === 'ITA') {
+    const dayOfWeek = IT_DAYS[dateObj.getDay()]
+    const dayOfMonth = dateObj.getDate()
+    const monthName = IT_MONTHS[dateObj.getMonth()]
+    return `${dayOfWeek} ${dayOfMonth} ${monthName}`
+  }
+
   const dayOfWeek = EN_DAYS[dateObj.getDay()]
   const dayOfMonth = dateObj.getDate()
   const monthName = EN_MONTHS[dateObj.getMonth()]
 
   return `${dayOfWeek}, ${monthName} ${dayOfMonth}`
+}
+
+export function formatEnglishEventDate(dateTimeStr?: string): string {
+  return formatLocalizedEventDate(dateTimeStr, 'ENG')
 }
 
 /**
@@ -606,17 +646,29 @@ export function formatRosterGameName(gameType?: string): string {
 }
 
 /**
- * Constructs the default Discord roster header message based on date and game:
- * e.g. "@here Slotlist for tonight's event, Wednesday, September 23 on ArmA III"
+ * Constructs the default Discord roster header message based on date, game and language:
+ * ENG: "@here Slotlist for the event of Wednesday, October 7 on ArmA III"
+ * ITA: "@here Slotlist per l'evento di Mercoledì 7 ottobre su ArmA III"
  */
-export function buildDefaultRosterHeader(dateTimeStr?: string, gameType?: string): string {
-  const formattedDate = formatEnglishEventDate(dateTimeStr)
+export function buildDefaultRosterHeader(
+  dateTimeStr?: string,
+  gameType?: string,
+  lang: RosterLanguage = 'ENG'
+): string {
+  const formattedDate = formatLocalizedEventDate(dateTimeStr, lang)
   const formattedGame = formatRosterGameName(gameType)
 
-  if (formattedDate) {
-    return `@here Slotlist for tonight's event, ${formattedDate} on ${formattedGame}`
+  if (lang === 'ITA') {
+    if (formattedDate) {
+      return `@here Slotlist per l'evento di ${formattedDate} su ${formattedGame}`
+    }
+    return `@here Slotlist per l'evento su ${formattedGame}`
   }
-  return `@here Slotlist for tonight's event on ${formattedGame}`
+
+  if (formattedDate) {
+    return `@here Slotlist for the event of ${formattedDate} on ${formattedGame}`
+  }
+  return `@here Slotlist for the event on ${formattedGame}`
 }
 
 /**
