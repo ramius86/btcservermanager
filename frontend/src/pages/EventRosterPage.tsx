@@ -31,7 +31,6 @@ import {
   ChevronLeft,
   GripVertical,
 } from 'lucide-react'
-import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd'
 import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/Card'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
@@ -71,6 +70,7 @@ import { RosterExportModal } from '../components/roster/RosterExportModal'
 import { RosterLivePreviewModal } from '../components/roster/RosterLivePreviewModal'
 import { AddPartModal } from '../components/roster/AddPartModal'
 import { SwapSlotModal } from '../components/roster/SwapSlotModal'
+import { ReorderSquadsModal } from '../components/roster/ReorderSquadsModal'
 
 function parseSavedRosterData(
   rawData: string,
@@ -419,6 +419,9 @@ export function EventRosterPage() {
   } | null>(null)
   const [isEditingPartName, setIsEditingPartName] = useState(false)
   const [partNameInput, setPartNameInput] = useState('')
+  const [isReorderModalOpen, setIsReorderModalOpen] = useState(false)
+  const [draggedSquadIndex, setDraggedSquadIndex] = useState<number | null>(null)
+  const [dragOverSquadIndex, setDragOverSquadIndex] = useState<number | null>(null)
 
   // Active part and squads computation
   const currentActiveIdx = Math.min(activePartIndex, Math.max(0, parts.length - 1))
@@ -674,16 +677,54 @@ export function EventRosterPage() {
     setSquads(prev => prev.map(s => (s.id === squadId ? { ...s, name } : s)))
   }
 
-  const handleDragEndSquad = (result: DropResult) => {
-    if (!result.destination) return
-    if (result.destination.index === result.source.index) return
-
+  const handleMoveSquad = (fromIndex: number, toIndex: number) => {
+    if (toIndex < 0 || toIndex >= squads.length || fromIndex === toIndex) return
     setSquads(prev => {
-      const items = Array.from(prev)
-      const [moved] = items.splice(result.source.index, 1)
-      items.splice(result.destination!.index, 0, moved)
+      const items = [...prev]
+      const [moved] = items.splice(fromIndex, 1)
+      items.splice(toIndex, 0, moved)
       return items
     })
+  }
+
+  const handleDragStartSquad = (e: React.DragEvent, index: number) => {
+    setDraggedSquadIndex(index)
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', String(index))
+    const cardEl = (e.currentTarget as HTMLElement).closest('.roster-squad-card') as HTMLElement | null
+    if (cardEl && e.dataTransfer.setDragImage) {
+      e.dataTransfer.setDragImage(cardEl, 20, 20)
+    }
+  }
+
+  const handleDragOverSquad = (e: React.DragEvent, index: number) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    if (draggedSquadIndex !== null && draggedSquadIndex !== index && dragOverSquadIndex !== index) {
+      setDragOverSquadIndex(index)
+    }
+  }
+
+  const handleDragLeaveSquad = (e: React.DragEvent, index: number) => {
+    if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+      if (dragOverSquadIndex === index) {
+        setDragOverSquadIndex(null)
+      }
+    }
+  }
+
+  const handleDropSquad = (e: React.DragEvent, targetIndex: number) => {
+    e.preventDefault()
+    if (draggedSquadIndex !== null && draggedSquadIndex !== targetIndex) {
+      handleMoveSquad(draggedSquadIndex, targetIndex)
+    }
+    setDraggedSquadIndex(null)
+    setDragOverSquadIndex(null)
+  }
+
+  const handleDragEndSquad = () => {
+    setDraggedSquadIndex(null)
+    setDragOverSquadIndex(null)
   }
 
   // Slot Actions
@@ -1588,15 +1629,30 @@ export function EventRosterPage() {
               <span className="text-xs font-normal text-muted-foreground">({squads.length} squads)</span>
             </h2>
 
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleAddSquad}
-              className="h-8 text-xs font-semibold gap-1.5 shadow-md shadow-primary/10"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Add Squad
-            </Button>
+            <div className="flex items-center gap-2">
+              {squads.length > 1 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setIsReorderModalOpen(true)}
+                  className="h-8 text-xs font-semibold gap-1.5 border-border bg-surface hover:bg-surface-elevated text-muted-foreground hover:text-foreground"
+                  title="Open squad list reorder dialog"
+                >
+                  <ListOrdered className="w-3.5 h-3.5 text-primary" />
+                  Reorder Squads
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                onClick={handleAddSquad}
+                className="h-8 text-xs font-semibold gap-1.5 shadow-md shadow-primary/10"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Add Squad
+              </Button>
+            </div>
           </div>
 
           {squads.length === 0 ? (
@@ -1620,43 +1676,75 @@ export function EventRosterPage() {
               </div>
             </div>
           ) : (
-            <DragDropContext onDragEnd={handleDragEndSquad}>
-              <Droppable droppableId="roster-squads-droppable" direction="horizontal">
-                {provided => (
-                  <div
-                    ref={provided.innerRef}
-                    {...provided.droppableProps}
-                    className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4"
-                  >
-                    {squads.map((squad, index) => (
-                      <Draggable key={squad.id} draggableId={squad.id} index={index}>
-                        {(provided, snapshot) => (
-                          <Card
-                            ref={provided.innerRef}
-                            {...provided.draggableProps}
-                            style={provided.draggableProps.style}
-                            className={`border-border bg-surface-elevated/60 backdrop-blur-sm overflow-hidden flex flex-col justify-between hover:border-border/80 ${
-                              snapshot.isDragging
-                                ? 'z-50 border-primary/60 shadow-2xl scale-[1.01] ring-1 ring-primary/40 bg-surface-elevated !transition-none'
-                                : 'transition-[border-color,background-color,box-shadow] duration-200'
-                            }`}
-                          >
-                            <CardHeader className="p-3.5 border-b border-border bg-surface/50 flex flex-row items-center justify-between gap-1.5 space-y-0">
-                              <div
-                                {...provided.dragHandleProps}
-                                className="p-1 -ml-1 text-muted-foreground/30 hover:text-foreground cursor-grab active:cursor-grabbing transition-colors rounded hover:bg-surface shrink-0"
-                                title="Drag to reorder squad"
-                                aria-label="Drag to reorder squad"
-                              >
-                                <GripVertical className="w-4 h-4" />
-                              </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+              {squads.map((squad, index) => {
+                const isDragging = draggedSquadIndex === index
+                const isDragOver = dragOverSquadIndex === index
 
-                              <Input
-                                value={squad.name}
-                                onChange={e => handleUpdateSquadName(squad.id, e.target.value)}
-                                placeholder="Squad Callsign (e.g. ALPHA 1)"
-                                className="h-7 text-xs font-black tracking-wide uppercase bg-transparent border-transparent hover:border-border focus:bg-surface focus:border-primary/50 px-1.5 flex-1 min-w-0"
-                              />
+                return (
+                  <Card
+                    key={squad.id}
+                    onDragOver={e => handleDragOverSquad(e, index)}
+                    onDragLeave={e => handleDragLeaveSquad(e, index)}
+                    onDrop={e => handleDropSquad(e, index)}
+                    onDragEnd={handleDragEndSquad}
+                    className={`roster-squad-card border-border bg-surface-elevated/60 backdrop-blur-sm overflow-hidden flex flex-col justify-between transition-all duration-150 ${
+                      isDragging
+                        ? 'opacity-30 border-dashed border-primary/50 scale-[0.98]'
+                        : isDragOver
+                        ? 'border-primary ring-2 ring-primary/60 bg-primary/5 scale-[1.01] shadow-xl'
+                        : 'hover:border-border/80'
+                    }`}
+                  >
+                    <CardHeader className="p-3 border-b border-border bg-surface/50 flex flex-row items-center justify-between gap-1.5 space-y-0">
+                      <div className="flex items-center gap-1 shrink-0">
+                        <div
+                          draggable
+                          onDragStart={e => handleDragStartSquad(e, index)}
+                          className="p-1 -ml-1 text-muted-foreground/30 hover:text-foreground cursor-grab active:cursor-grabbing transition-colors rounded hover:bg-surface shrink-0"
+                          title="Drag to reorder squad"
+                          aria-label="Drag to reorder squad"
+                        >
+                          <GripVertical className="w-4 h-4" />
+                        </div>
+
+                        <span
+                          className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-surface border border-border text-primary shrink-0 select-none"
+                          title={`Order position: #${index + 1}`}
+                        >
+                          #{index + 1}
+                        </span>
+
+                        <div className="flex items-center">
+                          <button
+                            type="button"
+                            disabled={index === 0}
+                            onClick={() => handleMoveSquad(index, index - 1)}
+                            className="h-6 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                            title="Move squad left / earlier"
+                            aria-label="Move squad earlier"
+                          >
+                            <ChevronLeft className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={index === squads.length - 1}
+                            onClick={() => handleMoveSquad(index, index + 1)}
+                            className="h-6 w-5 inline-flex items-center justify-center rounded text-muted-foreground hover:text-foreground hover:bg-surface disabled:opacity-20 disabled:pointer-events-none transition-colors"
+                            title="Move squad right / later"
+                            aria-label="Move squad later"
+                          >
+                            <ChevronRight className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <Input
+                        value={squad.name}
+                        onChange={e => handleUpdateSquadName(squad.id, e.target.value)}
+                        placeholder="Squad Callsign (e.g. ALPHA 1)"
+                        className="h-7 text-xs font-black tracking-wide uppercase bg-transparent border-transparent hover:border-border focus:bg-surface focus:border-primary/50 px-1.5 flex-1 min-w-0"
+                      />
 
                     <div className="flex items-center gap-1 shrink-0">
                       {/* Clone Squad Button */}
@@ -1684,6 +1772,12 @@ export function EventRosterPage() {
                       </Button>
                     </div>
                   </CardHeader>
+
+                  {isDragOver && (
+                    <div className="bg-primary/20 text-primary text-[10px] font-bold text-center py-1.5 uppercase tracking-wider border-b border-primary/30 animate-pulse">
+                      Drop to place at position #{index + 1}
+                    </div>
+                  )}
 
                   <CardContent className="p-3 space-y-2 flex-1">
                     {squad.slots.map(slot => {
@@ -1827,15 +1921,10 @@ export function EventRosterPage() {
                     </Button>
                   </CardContent>
                 </Card>
-              )}
-            </Draggable>
-          ))}
-          {provided.placeholder}
-        </div>
-      )}
-    </Droppable>
-  </DragDropContext>
-)}
+              )
+            })}
+          </div>
+        )}
         </div>
       </div>
 
@@ -1884,6 +1973,15 @@ export function EventRosterPage() {
         onLoadTemplate={loadedSquads => {
           setSquads(loadedSquads)
         }}
+      />
+
+      {/* Reorder Squads Modal */}
+      <ReorderSquadsModal
+        isOpen={isReorderModalOpen}
+        onClose={() => setIsReorderModalOpen(false)}
+        squads={squads}
+        partName={activePart.name}
+        onReorder={setSquads}
       />
 
       {/* Discord Export Preview Modal */}
