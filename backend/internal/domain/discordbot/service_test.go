@@ -609,3 +609,131 @@ func TestService_ManualParticipationAutoEnableGame(t *testing.T) {
 		}
 	}
 }
+
+func TestRepository_NewUserNoHistoricalNoResponse(t *testing.T) {
+	repo := setupTestDB(t)
+	ctx := t.Context()
+
+	// 1. Create 5 historical events from months ago
+	for i := 1; i <= 5; i++ {
+		ev := &Event{
+			ChannelID: "chan",
+			MessageID: fmt.Sprintf("msg%d", i),
+			Title:     fmt.Sprintf("Past Mission %d", i),
+			DateTime:  fmt.Sprintf("2026-0%d-15T20:00", i), // Months 1 to 5
+			GameType:  "ArmA III",
+		}
+		if _, err := repo.SaveEvent(ctx, ev); err != nil {
+			t.Fatalf("failed to save past event: %v", err)
+		}
+	}
+
+	// 2. Veteran user Alice has been here since month 1
+	if err := repo.UpsertUser(ctx, "u_alice", "Alice"); err != nil {
+		t.Fatalf("failed to upsert user alice: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, 1, "u_alice", "going"); err != nil {
+		t.Fatalf("failed to record alice participation: %v", err)
+	}
+
+	// 3. Newcomer Davide joins in month 6 and plays event 6 and event 7
+	ev6 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg6",
+		Title:     "Recent Mission 6",
+		DateTime:  "2026-06-01T20:00",
+		GameType:  "ArmA III",
+	}
+	ev6ID, err := repo.SaveEvent(ctx, ev6)
+	if err != nil {
+		t.Fatalf("failed to save event 6: %v", err)
+	}
+
+	ev7 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg7",
+		Title:     "Recent Mission 7",
+		DateTime:  "2026-06-05T20:00",
+		GameType:  "ArmA III",
+	}
+	ev7ID, err := repo.SaveEvent(ctx, ev7)
+	if err != nil {
+		t.Fatalf("failed to save event 7: %v", err)
+	}
+
+	if err := repo.UpsertUser(ctx, "u_davide", "Davide"); err != nil {
+		t.Fatalf("failed to upsert user davide: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, ev6ID, "u_davide", "going"); err != nil {
+		t.Fatalf("failed to record davide event 6: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, ev7ID, "u_davide", "going"); err != nil {
+		t.Fatalf("failed to record davide event 7: %v", err)
+	}
+
+	// 4. Retrieve Attendance Stats
+	stats, err := repo.GetAttendanceStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get attendance stats: %v", err)
+	}
+
+	davideNoResponseCount := 0
+	davideGoingCount := 0
+	aliceNoResponseCount := 0
+
+	for _, s := range stats {
+		if s.UserID == "u_davide" {
+			if s.Status == "no_response" {
+				davideNoResponseCount++
+			} else if s.Status == "going" {
+				davideGoingCount++
+			}
+		}
+		if s.UserID == "u_alice" {
+			if s.Status == "no_response" {
+				aliceNoResponseCount++
+			}
+		}
+	}
+
+	// Davide should have ZERO no_response for past events 1..5!
+	if davideNoResponseCount != 0 {
+		t.Errorf("expected davide to have 0 no_response for past events, got %d", davideNoResponseCount)
+	}
+	if davideGoingCount != 2 {
+		t.Errorf("expected davide to have 2 going, got %d", davideGoingCount)
+	}
+
+	// Alice missed events 2..7, so she should have 6 no_response
+	if aliceNoResponseCount != 6 {
+		t.Errorf("expected alice to have 6 no_response, got %d", aliceNoResponseCount)
+	}
+
+	// 5. If event 8 happens AFTER Davide joined, and Davide does not respond, he DOES get 1 no_response
+	ev8 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg8",
+		Title:     "Future Mission 8",
+		DateTime:  "2026-06-10T20:00",
+		GameType:  "ArmA III",
+	}
+	if _, err := repo.SaveEvent(ctx, ev8); err != nil {
+		t.Fatalf("failed to save event 8: %v", err)
+	}
+
+	statsAfterEv8, err := repo.GetAttendanceStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get attendance stats after ev8: %v", err)
+	}
+
+	davideNoRespAfterEv8 := 0
+	for _, s := range statsAfterEv8 {
+		if s.UserID == "u_davide" && s.Status == "no_response" {
+			davideNoRespAfterEv8++
+		}
+	}
+
+	if davideNoRespAfterEv8 != 1 {
+		t.Errorf("expected davide to have exactly 1 no_response for event 8 after he joined, got %d", davideNoRespAfterEv8)
+	}
+}

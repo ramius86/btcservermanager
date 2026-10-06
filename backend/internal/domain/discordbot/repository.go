@@ -235,15 +235,29 @@ func (r *Repository) GetEventByMessageID(ctx context.Context, messageID string) 
 func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
 	query := `
 		SELECT u.id, u.username, COALESCE(p.status, 'no_response') as status, e.date_time, e.game_type
-		FROM (SELECT id, username, plays_arma3, plays_reforger FROM discord_users WHERE is_active = 1) u
+		FROM (
+			SELECT id, username, plays_arma3, plays_reforger,
+			       COALESCE(
+			           (SELECT MIN(substr(e_sub.date_time, 1, 10))
+			            FROM discord_event_participations p_sub
+			            JOIN discord_events e_sub ON e_sub.id = p_sub.event_id
+			            WHERE p_sub.user_id = discord_users.id),
+			           substr(updated_at, 1, 10)
+			       ) as first_active_date
+			FROM discord_users 
+			WHERE is_active = 1
+		) u
 		CROSS JOIN discord_events e
 		LEFT JOIN discord_event_participations p ON p.user_id = u.id AND p.event_id = e.id
 		WHERE (
 			p.status IS NOT NULL
 			OR (
-				(LOWER(e.game_type) LIKE '%reforger%' AND u.plays_reforger = 1)
-				OR
-				(NOT (LOWER(e.game_type) LIKE '%reforger%') AND u.plays_arma3 = 1)
+				substr(e.date_time, 1, 10) >= u.first_active_date
+				AND (
+					(LOWER(e.game_type) LIKE '%reforger%' AND u.plays_reforger = 1)
+					OR
+					(NOT (LOWER(e.game_type) LIKE '%reforger%') AND u.plays_arma3 = 1)
+				)
 			)
 		)
 		UNION ALL
