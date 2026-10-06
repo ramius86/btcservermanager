@@ -18,6 +18,9 @@ import (
 const (
 	embedColor       = 16048263 // Giallo paglierino
 	maxFieldLength   = 1024
+	statusGoing      = "going"
+	statusNotGoing   = "not_going"
+	statusMaybe      = "maybe"
 	goingCustomID    = "rsvp_going"
 	notGoingCustomID = "rsvp_notgoing"
 	maybeCustomID    = "rsvp_maybe"
@@ -220,7 +223,9 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 	allUsers, _ := s.repo.GetAllUsers(ctx)
 	var noRespNames []string
 	for _, u := range allUsers {
-		noRespNames = append(noRespNames, u.Username)
+		if UserPlaysGame(u, gameType) {
+			noRespNames = append(noRespNames, u.Username)
+		}
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -343,11 +348,11 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 		for _, p := range parts {
 			respondedMap[p.UserID] = true
 			switch p.Status {
-			case "going":
+			case statusGoing:
 				detail.Going = append(detail.Going, p.Username)
-			case "not_going":
+			case statusNotGoing:
 				detail.NotGoing = append(detail.NotGoing, p.Username)
-			case "maybe":
+			case statusMaybe:
 				detail.Maybe = append(detail.Maybe, p.Username)
 			}
 		}
@@ -355,7 +360,9 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 
 	for _, u := range allUsers {
 		if !respondedMap[u.ID] {
-			detail.NoResponse = append(detail.NoResponse, u.Username)
+			if UserPlaysGame(u, event.GameType) {
+				detail.NoResponse = append(detail.NoResponse, u.Username)
+			}
 		}
 	}
 
@@ -471,11 +478,11 @@ func getInteractionUserID(i *discordgo.InteractionCreate) string {
 func statusFromCustomID(customID string) string {
 	switch customID {
 	case goingCustomID:
-		return "going"
+		return statusGoing
 	case notGoingCustomID:
-		return "not_going"
+		return statusNotGoing
 	case maybeCustomID:
-		return "maybe"
+		return statusMaybe
 	}
 	return ""
 }
@@ -483,11 +490,11 @@ func statusFromCustomID(customID string) string {
 func groupParticipants(parts []Participation) (going, notGoing, maybe []string) {
 	for _, p := range parts {
 		switch p.Status {
-		case "going":
+		case statusGoing:
 			going = append(going, p.Username)
-		case "not_going":
+		case statusNotGoing:
 			notGoing = append(notGoing, p.Username)
-		case "maybe":
+		case statusMaybe:
 			maybe = append(maybe, p.Username)
 		}
 	}
@@ -540,6 +547,12 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		log.Printf("⚠️  Failed to upsert discord user: %v", err)
 	}
 
+	if status == statusGoing {
+		if err := s.repo.EnsureUserPlaysGame(ctx, userID, event.GameType); err != nil {
+			log.Printf("⚠️  Failed to ensure user plays game: %v", err)
+		}
+	}
+
 	if err := s.repo.UpsertParticipation(ctx, event.ID, userID, status); err != nil {
 		log.Printf("⚠️  Failed to upsert participation: %v", err)
 	}
@@ -569,6 +582,12 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 
 	going, notGoing, maybe := groupParticipants(parts)
 
+	event, _ := s.repo.GetEventByID(ctx, eventID)
+	gameType := ""
+	if event != nil {
+		gameType = event.GameType
+	}
+
 	allUsers, _ := s.repo.GetAllUsers(ctx)
 	respondedMap := make(map[string]bool)
 	for _, p := range parts {
@@ -577,7 +596,9 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 	var noResponse []string
 	for _, u := range allUsers {
 		if !respondedMap[u.ID] {
-			noResponse = append(noResponse, u.Username)
+			if gameType == "" || UserPlaysGame(u, gameType) {
+				noResponse = append(noResponse, u.Username)
+			}
 		}
 	}
 
@@ -599,6 +620,9 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 }
 
 func (s *Service) updateEventMessageEmbed(ctx context.Context, event *Event) error {
+	if s.session == nil {
+		return nil
+	}
 	msg, err := s.session.ChannelMessage(event.ChannelID, event.MessageID)
 	if err != nil {
 		return err
@@ -675,6 +699,9 @@ func (s *Service) UpdateManualParticipation(ctx context.Context, eventID int64, 
 	} else {
 		if err := s.repo.UpsertUser(ctx, userID, username); err != nil {
 			return err
+		}
+		if status == statusGoing {
+			_ = s.repo.EnsureUserPlaysGame(ctx, userID, event.GameType)
 		}
 		if err := s.repo.UpsertParticipation(ctx, eventID, userID, status); err != nil {
 			return err
@@ -1191,4 +1218,22 @@ func (s *Service) CleanupOrphanedQualifications(ctx context.Context, qualificati
 		return errors.New("discord repository not initialized")
 	}
 	return s.repo.CleanupOrphanedQualifications(ctx, qualificationNames)
+}
+
+func (s *Service) SetUserGames(ctx context.Context, id string, playsArma3, playsReforger bool) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SetUserGames(ctx, id, playsArma3, playsReforger)
+}
+
+func IsReforgerGame(gameType string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(gameType)), "reforger")
+}
+
+func UserPlaysGame(u DiscordUser, gameType string) bool {
+	if IsReforgerGame(gameType) {
+		return u.PlaysReforger
+	}
+	return u.PlaysArma3
 }

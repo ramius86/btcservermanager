@@ -272,6 +272,8 @@ export interface DiscordUser {
 	id: string
 	username: string
 	isActive: boolean
+	playsArma3: boolean
+	playsReforger: boolean
 	updatedAt: string
 }
 
@@ -368,6 +370,7 @@ export const DiscordService = {
 	deleteEvent: (id: number): Promise<void> => fetchApi(`/discord/events/${id}`, { method: 'DELETE' }),
 	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
 	setUserActive: (id: string, active: boolean, username?: string): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, username }) }),
+	setUserGames: (id: string, games: { playsArma3: boolean, playsReforger: boolean }): Promise<void> => fetchApi(`/discord/users/${id}/games`, { method: 'PATCH', body: JSON.stringify(games) }),
 	deleteUser: (id: string): Promise<void> => fetchApi(`/discord/users/${id}`, { method: 'DELETE' }),
 	mergeUsers: (data: { sourceUserId: string, targetUserId: string }): Promise<{ success: boolean }> => fetchApi('/discord/users/merge', { method: 'POST', body: JSON.stringify(data) }),
 	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),

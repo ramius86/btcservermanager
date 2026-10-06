@@ -744,6 +744,30 @@ func TestRouterEndpoints(t *testing.T) {
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code)
 		}
+
+		// Update User Games
+		{
+			_ = deps.DiscordService.SetUserActive(t.Context(), "user_patch_games", "Dave", true)
+			body := strings.NewReader(`{"playsArma3": false, "playsReforger": true}`)
+			req := httptest.NewRequest(http.MethodPatch, "/api/discord/users/user_patch_games/games", body)
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			assert.Equal(t, http.StatusOK, rr.Code)
+
+			users, err := deps.DiscordService.GetAllUsersForManagement(t.Context())
+			assert.NoError(t, err)
+			var dave *discordbot.DiscordUser
+			for i := range users {
+				if users[i].ID == "user_patch_games" {
+					dave = &users[i]
+					break
+				}
+			}
+			assert.NotNil(t, dave)
+			assert.False(t, dave.PlaysArma3)
+			assert.True(t, dave.PlaysReforger)
+		}
 	})
 
 	// 6. REFORGER WORKSHOP & GENERAL MODS TESTS

@@ -30,6 +30,7 @@ func (r *Router) discordRoutes() chi.Router {
 	mux.Delete(eventIDRoute, r.handleDeleteDiscordEvent)
 	mux.Get("/users", r.handleGetDiscordUsers)
 	mux.Patch("/users/{id}/active", r.handleUpdateDiscordUserActive)
+	mux.Patch("/users/{id}/games", r.handleUpdateDiscordUserGames)
 	mux.Delete("/users/{id}", r.handleDeleteDiscordUser)
 	mux.Post("/users/merge", r.handleMergeDiscordUsers)
 	mux.Get("/members", r.handleGetDiscordGuildMembers)
@@ -275,6 +276,35 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 	}
 
 	if err := r.discordService.SetUserActive(req.Context(), id, payload.Username, payload.Active); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+}
+
+func (r *Router) handleUpdateDiscordUserGames(w http.ResponseWriter, req *http.Request) {
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
+		return
+	}
+
+	id := chi.URLParam(req, "id")
+	if id == "" {
+		http.Error(w, "User ID is required", http.StatusBadRequest)
+		return
+	}
+
+	var payload struct {
+		PlaysArma3    bool `json:"playsArma3"`
+		PlaysReforger bool `json:"playsReforger"`
+	}
+	if err := json.NewDecoder(req.Body).Decode(&payload); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if err := r.discordService.SetUserGames(req.Context(), id, payload.PlaysArma3, payload.PlaysReforger); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
