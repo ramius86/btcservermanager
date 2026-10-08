@@ -146,6 +146,41 @@ func TestRepository_UserAndParticipationOperations(t *testing.T) {
 	if len(stats) != 1 || stats[0].UserID != "user1" || stats[0].Username != "AliceUpdated" || stats[0].Status != "going" {
 		t.Errorf("unexpected attendance stats: %+v", stats)
 	}
+
+	// 5. Test DeleteUserAndParticipations cascades qualifications and role history
+	_ = repo.SaveMemberQualifications(ctx, []string{"user1"}, []MemberQualification{{UserID: "user1", QualificationName: "Medic"}})
+	_ = repo.RecordPlayerRoleUsage(ctx, []PlayerRoleRecord{{UserID: "user1", PlayerName: "AliceUpdated", Role: "Rifleman"}}, "arma3")
+
+	err = repo.DeleteUserAndParticipations(ctx, "user1")
+	if err != nil {
+		t.Fatalf("failed to delete user and participations: %v", err)
+	}
+
+	quals, err := repo.GetMemberQualifications(ctx, []string{"user1"})
+	if err != nil {
+		t.Fatalf("failed to get member qualifications: %v", err)
+	}
+	if len(quals["user1"]) != 0 {
+		t.Errorf("expected 0 qualifications for deleted user, got %v", quals["user1"])
+	}
+
+	roles, err := repo.GetPlayerRoleStats(ctx, "all")
+	if err != nil {
+		t.Fatalf("failed to get role history: %v", err)
+	}
+	for _, r := range roles {
+		if r.UserID == "user1" {
+			t.Errorf("expected 0 role stats for deleted user1, found: %+v", r)
+		}
+	}
+
+	partsAfter, err := repo.GetEventParticipations(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to get participations after delete: %v", err)
+	}
+	if len(partsAfter) != 0 {
+		t.Errorf("expected 0 participations after delete, got %v", partsAfter)
+	}
 }
 
 func TestService_NotConfigured(t *testing.T) {

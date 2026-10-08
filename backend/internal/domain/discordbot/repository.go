@@ -492,6 +492,14 @@ func (r *Repository) DeleteUserAndParticipations(ctx context.Context, userID str
 		return err
 	}
 
+	if _, err := tx.ExecContext(ctx, `DELETE FROM member_qualifications WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_player_role_history WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_users WHERE id = ?`, userID); err != nil {
 		return err
 	}
