@@ -44,6 +44,11 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	defer func() {
+		if req.MultipartForm != nil {
+			_ = req.MultipartForm.RemoveAll()
+		}
+	}()
 
 	files := req.MultipartForm.File["file"]
 	if len(files) == 0 {

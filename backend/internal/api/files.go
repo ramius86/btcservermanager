@@ -192,6 +192,11 @@ func (r *Router) handleUploadFiles(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to parse multipart form: %v", err), http.StatusBadRequest)
 		return
 	}
+	defer func() {
+		if req.MultipartForm != nil {
+			_ = req.MultipartForm.RemoveAll()
+		}
+	}()
 
 	targetDir := req.FormValue("destination")
 	files := req.MultipartForm.File["files"]
