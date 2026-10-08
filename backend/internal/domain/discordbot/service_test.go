@@ -772,3 +772,176 @@ func TestRepository_NewUserNoHistoricalNoResponse(t *testing.T) {
 		t.Errorf("expected davide to have exactly 1 no_response for event 8 after he joined, got %d", davideNoRespAfterEv8)
 	}
 }
+
+type testDiscordBroadcaster struct {
+	events   []string
+	payloads []any
+}
+
+func (b *testDiscordBroadcaster) Broadcast(eventType string, payload any) {
+	b.events = append(b.events, eventType)
+	b.payloads = append(b.payloads, payload)
+}
+
+func TestService_MemberCacheEventHandling(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	// 1. Initial cached members
+	svc.membersCache = []*discordgo.Member{
+		{
+			User: &discordgo.User{ID: "user1", Username: "User One"},
+			Nick: "OldNick",
+		},
+	}
+
+	// 2. handleGuildMemberAdd with a new member
+	svc.handleGuildMemberAdd(nil, &discordgo.GuildMemberAdd{
+		Member: &discordgo.Member{
+			GuildID: "guild123",
+			User:    &discordgo.User{ID: "user2", Username: "User Two"},
+			Nick:    "NickTwo",
+		},
+	})
+
+	if len(svc.membersCache) != 2 {
+		t.Fatalf("expected 2 cached members after add, got %d", len(svc.membersCache))
+	}
+	if svc.membersCache[1].User.ID != "user2" {
+		t.Errorf("expected user2 to be appended, got %s", svc.membersCache[1].User.ID)
+	}
+
+	// 3. handleUserUpdate for user1
+	svc.handleUserUpdate(nil, &discordgo.UserUpdate{
+		User: &discordgo.User{ID: "user1", Username: "User One Updated", GlobalName: "GlobalName1"},
+	})
+
+	if svc.membersCache == nil {
+		t.Fatal("expected membersCache to remain valid, but was nil")
+	}
+	if svc.membersCache[0].User.Username != "User One Updated" {
+		t.Errorf("expected user1 username to be updated in-place, got %s", svc.membersCache[0].User.Username)
+	}
+
+	// 4. handleGuildMemberRemove for user1
+	svc.handleGuildMemberRemove(nil, &discordgo.GuildMemberRemove{
+		Member: &discordgo.Member{
+			GuildID: "guild123",
+			User:    &discordgo.User{ID: "user1"},
+		},
+	})
+
+	if len(svc.membersCache) != 1 {
+		t.Fatalf("expected 1 cached member after remove, got %d", len(svc.membersCache))
+	}
+	if svc.membersCache[0].User.ID != "user2" {
+		t.Errorf("expected remaining member to be user2, got %s", svc.membersCache[0].User.ID)
+	}
+}
+
+func TestService_ChannelAndRoleEventHandling(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	svc.channelsCache = []Channel{{ID: "c1", Name: "general"}}
+	svc.handleChannelCreate(nil, &discordgo.ChannelCreate{
+		Channel: &discordgo.Channel{GuildID: "guild123", ID: "c2", Name: "announcements"},
+	})
+	if svc.channelsCache != nil {
+		t.Error("expected channelsCache to be invalidated on ChannelCreate")
+	}
+
+	svc.channelsCache = []Channel{{ID: "c1", Name: "general"}}
+	svc.handleChannelDelete(nil, &discordgo.ChannelDelete{
+		Channel: &discordgo.Channel{GuildID: "guild123", ID: "c1"},
+	})
+	if svc.channelsCache != nil {
+		t.Error("expected channelsCache to be invalidated on ChannelDelete")
+	}
+
+	svc.rolesCache = []DiscordRole{{ID: "r1", Name: "@Admin"}}
+	svc.handleGuildRoleCreate(nil, &discordgo.GuildRoleCreate{
+		GuildRole: &discordgo.GuildRole{GuildID: "guild123", Role: &discordgo.Role{ID: "r2", Name: "Member"}},
+	})
+	if svc.rolesCache != nil {
+		t.Error("expected rolesCache to be invalidated on GuildRoleCreate")
+	}
+
+	svc.rolesCache = []DiscordRole{{ID: "r1", Name: "@Admin"}}
+	svc.handleGuildRoleDelete(nil, &discordgo.GuildRoleDelete{
+		GuildID: "guild123", RoleID: "r1",
+	})
+	if svc.rolesCache != nil {
+		t.Error("expected rolesCache to be invalidated on GuildRoleDelete")
+	}
+}
+
+func TestService_GetGuildMembers_Cached(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	// Set session so IsConfigured / check passes
+	session, err := discordgo.New("Bot dummy_token")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	svc.session = session
+
+	svc.membersCache = []*discordgo.Member{
+		{
+			User: &discordgo.User{ID: "m1", Username: "Member1", Bot: false},
+			Nick: "MemberOneNick",
+		},
+		{
+			User: &discordgo.User{ID: "bot1", Username: "BotUser", Bot: true},
+		},
+	}
+
+	ctx := t.Context()
+	members, err := svc.GetGuildMembers(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error getting guild members: %v", err)
+	}
+
+	if len(members) != 1 {
+		t.Fatalf("expected exactly 1 non-bot member, got %d", len(members))
+	}
+	if members[0].ID != "m1" || members[0].DisplayName != "MemberOneNick" {
+		t.Errorf("unexpected member data: %+v", members[0])
+	}
+}
+
+func TestService_RSVP_Broadcast(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+
+	broadcaster := &testDiscordBroadcaster{}
+	svc.SetBroadcaster(broadcaster)
+
+	event := &Event{
+		ChannelID: "chan1",
+		MessageID: "msg1",
+		Title:     "Operation Test",
+		DateTime:  "2026-10-10T20:00",
+		GameType:  "ArmA III",
+	}
+	ctx := t.Context()
+	eventID, err := repo.SaveEvent(ctx, event)
+	if err != nil {
+		t.Fatalf("failed to save event: %v", err)
+	}
+
+	_ = svc.UpdateManualParticipation(ctx, eventID, "user_rsvp", "UserRsvp", "going")
+	// updateEventMessageEmbed will fail because session is nil, but participation and broadcast should be verified or skipped gracefully
+	// Note: since session is nil, updateEventMessageEmbed returns errBotNotConfigured or original message error
+	// Let's verify broadcaster got the event
+	if len(broadcaster.events) == 0 {
+		t.Fatal("expected at least 1 broadcast event for RSVP")
+	}
+	if broadcaster.events[0] != "discord_event_rsvp_updated" {
+		t.Errorf("expected discord_event_rsvp_updated, got %s", broadcaster.events[0])
+	}
+}

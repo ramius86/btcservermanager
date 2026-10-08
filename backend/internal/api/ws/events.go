@@ -13,6 +13,8 @@ const (
 	EvtReforgerScenariosUpdated EventType = "reforger_scenarios_updated"
 	EvtModMetadataUpdated       EventType = "mod_metadata_updated"
 	EvtModDeleted               EventType = "mod_deleted"
+	EvtDiscordEventRsvpUpdated  EventType = "discord_event_rsvp_updated"
+	EvtDiscordEventUpdated      EventType = "discord_event_updated"
 	EvtHeartbeat                EventType = "heartbeat"
 )
 

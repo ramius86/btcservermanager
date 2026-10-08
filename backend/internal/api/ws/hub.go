@@ -260,6 +260,10 @@ func (h *Hub) match(sub Subscription, event Event) bool {
 		domain = "mod_metadata_updated"
 	case EvtModDeleted:
 		domain = "mod_deleted"
+	case EvtDiscordEventRsvpUpdated:
+		domain = "discord_event_rsvp_updated"
+	case EvtDiscordEventUpdated:
+		domain = "discord_event_updated"
 	}
 
 	if sub.Domain != domain {

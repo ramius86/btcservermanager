@@ -214,6 +214,7 @@ func run() error {
 	discordService := setupDiscordBot(cfg, discordRepo)
 	if discordService != nil {
 		defer discordService.Close()
+		discordService.SetBroadcaster(hub)
 	}
 	scheduler.SetDiscordService(discordService)
 

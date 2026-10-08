@@ -42,20 +42,27 @@ const (
 	dateTimeFormat      = "2006-01-02T15:04"
 )
 
+type Broadcaster interface {
+	Broadcast(eventType string, payload any)
+}
+
 type Service struct {
-	session             *discordgo.Session
-	guildID             string
-	repo                *Repository
-	membersCache        []*discordgo.Member
-	membersCacheExpiry  time.Time
-	membersCacheMu      sync.RWMutex
-	channelsCache       []Channel
-	channelsCacheExpiry time.Time
-	channelsCacheMu     sync.RWMutex
-	rolesCache          []DiscordRole
-	rolesCacheExpiry    time.Time
-	rolesCacheMu        sync.RWMutex
-	isSyncingNicknames  int32
+	session            *discordgo.Session
+	guildID            string
+	repo               *Repository
+	broadcaster        Broadcaster
+	membersCache       []*discordgo.Member
+	membersCacheMu     sync.RWMutex
+	channelsCache      []Channel
+	channelsCacheMu    sync.RWMutex
+	rolesCache         []DiscordRole
+	rolesCacheMu       sync.RWMutex
+	isSyncingNicknames int32
+	stopTicker         chan struct{}
+}
+
+func (s *Service) SetBroadcaster(b Broadcaster) {
+	s.broadcaster = b
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -75,8 +82,16 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 	}
 
 	session.AddHandler(svc.handleInteraction)
+	session.AddHandler(svc.handleGuildMemberAdd)
+	session.AddHandler(svc.handleGuildMemberRemove)
 	session.AddHandler(svc.handleGuildMemberUpdate)
 	session.AddHandler(svc.handleUserUpdate)
+	session.AddHandler(svc.handleChannelCreate)
+	session.AddHandler(svc.handleChannelDelete)
+	session.AddHandler(svc.handleChannelUpdate)
+	session.AddHandler(svc.handleGuildRoleCreate)
+	session.AddHandler(svc.handleGuildRoleDelete)
+	session.AddHandler(svc.handleGuildRoleUpdate)
 
 	return svc, nil
 }
@@ -99,11 +114,36 @@ func (s *Service) Open() error {
 		return err
 	}
 
+	s.stopTicker = make(chan struct{})
+
+	// Warm caches in background at startup
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if err := s.SyncMemberNicknames(ctx); err != nil {
 			log.Printf("⚠️  Failed initial member nickname sync: %v", err)
+		}
+		if _, err := s.GetChannels(); err != nil {
+			log.Printf("⚠️  Failed initial channels warm up: %v", err)
+		}
+		if _, err := s.GetRoles(ctx); err != nil {
+			log.Printf("⚠️  Failed initial roles warm up: %v", err)
+		}
+	}()
+
+	// Periodic self-healing background reconciliation ticker (every 30 min)
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				_ = s.SyncMemberNicknames(ctx)
+				cancel()
+			case <-s.stopTicker:
+				return
+			}
 		}
 	}()
 
@@ -111,6 +151,13 @@ func (s *Service) Open() error {
 }
 
 func (s *Service) Close() {
+	if s.stopTicker != nil {
+		select {
+		case <-s.stopTicker:
+		default:
+			close(s.stopTicker)
+		}
+	}
 	if s.session != nil {
 		s.session.Close()
 	}
@@ -126,7 +173,7 @@ func (s *Service) GetChannels() ([]Channel, error) {
 	}
 
 	s.channelsCacheMu.RLock()
-	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+	if s.channelsCache != nil {
 		channels := s.channelsCache
 		s.channelsCacheMu.RUnlock()
 		return channels, nil
@@ -136,7 +183,7 @@ func (s *Service) GetChannels() ([]Channel, error) {
 	s.channelsCacheMu.Lock()
 	defer s.channelsCacheMu.Unlock()
 
-	if s.channelsCache != nil && time.Now().Before(s.channelsCacheExpiry) {
+	if s.channelsCache != nil {
 		return s.channelsCache, nil
 	}
 
@@ -161,8 +208,6 @@ func (s *Service) GetChannels() ([]Channel, error) {
 	})
 
 	s.channelsCache = channels
-	s.channelsCacheExpiry = time.Now().Add(5 * time.Minute)
-
 	return channels, nil
 }
 
@@ -172,7 +217,7 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	}
 
 	s.rolesCacheMu.RLock()
-	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+	if s.rolesCache != nil {
 		roles := s.rolesCache
 		s.rolesCacheMu.RUnlock()
 		return roles, nil
@@ -182,7 +227,7 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	s.rolesCacheMu.Lock()
 	defer s.rolesCacheMu.Unlock()
 
-	if s.rolesCache != nil && time.Now().Before(s.rolesCacheExpiry) {
+	if s.rolesCache != nil {
 		return s.rolesCache, nil
 	}
 
@@ -205,8 +250,6 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	}
 
 	s.rolesCache = roles
-	s.rolesCacheExpiry = time.Now().Add(5 * time.Minute)
-
 	return roles, nil
 }
 
@@ -321,6 +364,9 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 	}
 
 	event.ID = id
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
 	return event, nil
 }
 
@@ -381,7 +427,13 @@ func (s *Service) DeleteEvent(ctx context.Context, id int64) error {
 		}
 	}
 
-	return s.repo.DeleteEvent(ctx, id)
+	if err := s.repo.DeleteEvent(ctx, id); err != nil {
+		return err
+	}
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
+	return nil
 }
 
 func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datetime, gameType string) (*Event, error) {
@@ -439,6 +491,10 @@ func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datet
 	event.Title = title
 	event.DateTime = datetime
 	event.GameType = gameType
+
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
 
 	return event, nil
 }
@@ -553,6 +609,13 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 
 	if err := s.repo.UpsertParticipation(ctx, event.ID, userID, status); err != nil {
 		log.Printf("⚠️  Failed to upsert participation: %v", err)
+	} else if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_rsvp_updated", map[string]any{
+			"event_id": event.ID,
+			"user_id":  userID,
+			"username": username,
+			"status":   status,
+		})
 	}
 
 	if err := s.buildEmbedFields(ctx, event.ID, embed); err != nil {
@@ -650,21 +713,9 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 		return nil, errors.New(errBotNotConfigured)
 	}
 
-	var allMembers []*discordgo.Member
-	var after string
-	for {
-		members, err := s.session.GuildMembers(s.guildID, after, 1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch guild members: %w", err)
-		}
-		if len(members) == 0 {
-			break
-		}
-		allMembers = append(allMembers, members...)
-		if len(members) < 1000 {
-			break
-		}
-		after = members[len(members)-1].User.ID
+	allMembers, err := s.getCachedGuildMembers()
+	if err != nil {
+		return nil, err
 	}
 
 	var result []GuildMember
@@ -702,6 +753,15 @@ func (s *Service) UpdateManualParticipation(ctx context.Context, eventID int64, 
 		if err := s.repo.UpsertParticipation(ctx, eventID, userID, status); err != nil {
 			return err
 		}
+	}
+
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_rsvp_updated", map[string]any{
+			"event_id": eventID,
+			"user_id":  userID,
+			"username": username,
+			"status":   status,
+		})
 	}
 
 	return s.updateEventMessageEmbed(ctx, event)
@@ -790,7 +850,7 @@ func (s *Service) fetchAllGuildMembers() ([]*discordgo.Member, error) {
 
 func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 	s.membersCacheMu.RLock()
-	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+	if s.membersCache != nil {
 		members := s.membersCache
 		s.membersCacheMu.RUnlock()
 		return members, nil
@@ -800,7 +860,7 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 	s.membersCacheMu.Lock()
 	defer s.membersCacheMu.Unlock()
 
-	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+	if s.membersCache != nil {
 		return s.membersCache, nil
 	}
 
@@ -809,7 +869,6 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 		return nil, err
 	}
 	s.membersCache = allMembers
-	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
 
 	s.tryAsyncSyncMemberNicknames(allMembers)
 	return allMembers, nil
@@ -834,6 +893,44 @@ func getMemberDisplayName(m *discordgo.Member) string {
 	return m.User.Username
 }
 
+func (s *Service) handleGuildMemberAdd(_ *discordgo.Session, m *discordgo.GuildMemberAdd) {
+	if m == nil || m.Member == nil || m.GuildID != s.guildID {
+		return
+	}
+	s.membersCacheMu.Lock()
+	if s.membersCache != nil {
+		exists := false
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == m.User.ID {
+				s.membersCache[i] = m.Member
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			s.membersCache = append(s.membersCache, m.Member)
+		}
+	}
+	s.membersCacheMu.Unlock()
+	s.onMemberUpdated(m.Member)
+}
+
+func (s *Service) handleGuildMemberRemove(_ *discordgo.Session, m *discordgo.GuildMemberRemove) {
+	if m == nil || m.Member == nil || m.GuildID != s.guildID {
+		return
+	}
+	s.membersCacheMu.Lock()
+	if s.membersCache != nil {
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == m.User.ID {
+				s.membersCache = append(s.membersCache[:i], s.membersCache[i+1:]...)
+				break
+			}
+		}
+	}
+	s.membersCacheMu.Unlock()
+}
+
 func (s *Service) handleGuildMemberUpdate(_ *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m == nil || m.Member == nil || m.GuildID != s.guildID {
 		return
@@ -846,9 +943,69 @@ func (s *Service) handleUserUpdate(_ *discordgo.Session, u *discordgo.UserUpdate
 		return
 	}
 	s.membersCacheMu.Lock()
-	s.membersCache = nil
-	s.membersCacheExpiry = time.Time{}
+	if s.membersCache != nil {
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == u.ID {
+				s.membersCache[i].User = u.User
+				break
+			}
+		}
+	}
 	s.membersCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelCreate(_ *discordgo.Session, c *discordgo.ChannelCreate) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelDelete(_ *discordgo.Session, c *discordgo.ChannelDelete) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelUpdate(_ *discordgo.Session, c *discordgo.ChannelUpdate) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleCreate(_ *discordgo.Session, r *discordgo.GuildRoleCreate) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleDelete(_ *discordgo.Session, r *discordgo.GuildRoleDelete) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleUpdate(_ *discordgo.Session, r *discordgo.GuildRoleUpdate) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
 }
 
 func (s *Service) onMemberUpdated(m *discordgo.Member) {
@@ -913,7 +1070,6 @@ func (s *Service) SyncMemberNicknames(ctx context.Context) error {
 
 	s.membersCacheMu.Lock()
 	s.membersCache = allMembers
-	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
 	s.membersCacheMu.Unlock()
 
 	s.syncMemberNicknamesToDatabase(ctx, allMembers)
