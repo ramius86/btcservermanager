@@ -282,18 +282,12 @@ func (e *Executor) handleResult(output string, job *Job) {
 
 	// For non-mod jobs (server installs, updates), keep existing coarse-grained logic
 	cleanOut := stripANSI(output)
-	isSuccess := strings.Contains(cleanOut, "Success!") || strings.Contains(cleanOut, "up to date") ||
-		strings.Contains(cleanOut, "fully installed") || strings.Contains(cleanOut, "already up to date")
-	isAuthOk := strings.Contains(cleanOut, "Waiting for user info...") && strings.Contains(cleanOut, "OK")
-
-	if isSuccess || isAuthOk {
-		return
-	}
 
 	hasErrorMarker := strings.Contains(cleanOut, "Error") || strings.Contains(cleanOut, "FAILED") || strings.Contains(cleanOut, "timed out")
 	if hasErrorMarker {
 		errStatus := parseJobErrorCode(cleanOut)
 		job.ErrorStatus = &errStatus
+		return
 	}
 }
 
