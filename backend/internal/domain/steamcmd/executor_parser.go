@@ -44,6 +44,8 @@ func (e *Executor) processOutput(r io.Reader, job *Job, logPath string) string {
 	var fullOutput strings.Builder
 
 	scanner := bufio.NewScanner(r)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
 
 	for scanner.Scan() {
 		rawLine := scanner.Text()
