@@ -167,6 +167,7 @@ func run() error {
 		AppRepo:     appSettingsRepo,
 		SteamAuth:   steamauthService,
 		SteamAPIKey: cfg.SteamAPIKey,
+		StoragePath: cfg.StoragePath,
 	})
 	hub.SetSystemInfoProvider(func() any {
 		info, _ := systemService.GetSystemInfo(context.Background())

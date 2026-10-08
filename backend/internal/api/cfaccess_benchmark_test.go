@@ -23,7 +23,7 @@ func BenchmarkCFAccessMiddleware(b *testing.B) {
 	// Create a signed token
 	tok := jwt.NewWithClaims(jwt.SigningMethodRS256, jwt.MapClaims{
 		"sub": "benchmark-user",
-		"iss": "cloudflare-access",
+		"iss": "https://test.cloudflareaccess.com",
 		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(time.Hour).Unix(),
 	})

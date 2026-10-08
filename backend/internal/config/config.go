@@ -61,7 +61,7 @@ func LoadConfig() *Config {
 		DatabaseURL:       getEnv("DATABASE_URL", filepath.Join(storagePath, "data", "btc.db")),
 		LogRetentionDays:  getEnvInt("LOG_RETENTION_DAYS", 30),
 		MaxScenarioSize:   getEnvInt64("MAX_SCENARIO_SIZE", 100*1024*1024), // 100MB default
-		AllowedOrigin:     strings.TrimSuffix(getEnv("ALLOWED_ORIGIN", ""), "/"),
+		AllowedOrigin:     strings.TrimRight(strings.TrimSpace(getEnv("ALLOWED_ORIGIN", "")), "/"),
 		CFTeamDomain:      getEnv("CF_TEAM_DOMAIN", ""),
 		CFAccessAud:       getEnv("CF_ACCESS_AUD", ""),
 		CFZoneID:          getEnv("CF_ZONE_ID", ""),

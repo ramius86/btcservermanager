@@ -33,8 +33,24 @@ export async function fetchApi(path: string, options: RequestInit = {}) {
     throw new Error(`API Error: ${res.status} ${res.statusText} ${errorBody}`)
   }
   if (res.status === 204) return null
+
+  const contentType = res.headers.get('content-type') || ''
   const text = await res.text()
-  return text ? JSON.parse(text) : null
+
+  // Handle Cloudflare Access authentication redirects or HTML responses
+  if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.reload()
+    }
+    return null
+  }
+
+  try {
+    return text ? JSON.parse(text) : null
+  } catch (err) {
+    console.error('Failed to parse API response as JSON:', text, err)
+    throw new Error(`Invalid JSON response: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 export const ServerService = {

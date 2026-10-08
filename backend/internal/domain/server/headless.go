@@ -98,7 +98,8 @@ func (hc *HeadlessClient) IsAlive() bool {
 func (hc *HeadlessClient) prepareParameters(additionalMods []string) []string {
 	params := []string{
 		"-client",
-		"-connect=127.0.0.1:" + strconv.Itoa(hc.Server.Port),
+		"-connect=127.0.0.1",
+		"-port=" + strconv.Itoa(hc.Server.Port),
 	}
 	if hc.Server.Password != "" {
 		params = append(params, "-password="+hc.Server.Password)

@@ -113,10 +113,12 @@ func (r *Router) refreshInstallationDetails(inst *installation.ServerInstallatio
 	// This works even on Linux where steam.inf is missing, provided the server is running.
 	shouldQueryA2S := (inst.Version == "" || inst.Version == "Unknown") && typeToQueryPort[inst.Type] != 0
 	if shouldQueryA2S {
-		addr := fmt.Sprintf("127.0.0.1:%d", typeToQueryPort[inst.Type])
-		if info, err := system.QueryServerInfo(addr); err == nil && info.Version != "" {
-			inst.Version = info.Version
-			_ = r.installationService.UpdateVersion(context.Background(), inst.Type, info.Version)
+		if running, _ := r.hasRunningServerOfType(context.Background(), inst.Type); running {
+			addr := fmt.Sprintf("127.0.0.1:%d", typeToQueryPort[inst.Type])
+			if info, err := system.QueryServerInfo(addr); err == nil && info.Version != "" {
+				inst.Version = info.Version
+				_ = r.installationService.UpdateVersion(context.Background(), inst.Type, info.Version)
+			}
 		}
 	}
 }
