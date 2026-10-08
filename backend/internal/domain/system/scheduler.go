@@ -189,10 +189,11 @@ func (s *Scheduler) runAutoRestartCheck() {
 				continue
 			}
 
-			now := time.Now().Format("15:04")
+			nowTime := time.Now().Format("15:04")
+			nowFull := time.Now().Format("2006-01-02 15:04")
 
 			for _, srv := range servers {
-				s.autoRestartSingleServer(bgCtx, srv, now, lastRestart)
+				s.autoRestartSingleServer(bgCtx, srv, nowTime, nowFull, lastRestart)
 			}
 		}
 	}
@@ -211,15 +212,15 @@ func getServerRestartConfig(srv any) (int64, bool, *string) {
 	}
 }
 
-func (s *Scheduler) autoRestartSingleServer(_ context.Context, srv any, now string, lastRestart map[int64]string) {
+func (s *Scheduler) autoRestartSingleServer(_ context.Context, srv any, nowTime, nowFull string, lastRestart map[int64]string) {
 	id, autoRestart, restartTime := getServerRestartConfig(srv)
 	if id == 0 {
 		return
 	}
 
-	shouldRestart := autoRestart && restartTime != nil && *restartTime == now && lastRestart[id] != now
+	shouldRestart := autoRestart && restartTime != nil && *restartTime == nowTime && lastRestart[id] != nowFull
 	if shouldRestart {
-		lastRestart[id] = now
+		lastRestart[id] = nowFull
 		log.Printf("Auto-restarting server %d...", id)
 		go func(serverID int64) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
