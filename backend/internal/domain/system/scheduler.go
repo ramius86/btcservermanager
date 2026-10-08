@@ -20,6 +20,7 @@ type Scheduler struct {
 	discordService     *discordbot.Service
 	broadcaster        Broadcaster
 	stopCh             chan struct{}
+	stopOnce           sync.Once
 	workshopIntervalMu sync.RWMutex
 	workshopInterval   time.Duration
 	workshopResetCh    chan time.Duration
@@ -72,7 +73,9 @@ func (s *Scheduler) UpdateWorkshopInterval(minutes int) {
 }
 
 func (s *Scheduler) Stop() {
-	close(s.stopCh)
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 }
 
 func (s *Scheduler) Start() {

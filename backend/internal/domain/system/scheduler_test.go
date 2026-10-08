@@ -120,3 +120,17 @@ func TestScheduler_PeriodicTasks(t *testing.T) {
 	assert.Equal(t, 5*time.Minute, scheduler.workshopInterval)
 	scheduler.workshopIntervalMu.RUnlock()
 }
+
+func TestScheduler_StopIdempotent(t *testing.T) {
+	scheduler := NewScheduler(SchedulerDeps{})
+
+	// Calling Stop multiple times concurrently should not panic
+	for i := 0; i < 10; i++ {
+		go scheduler.Stop()
+	}
+
+	assert.NotPanics(t, func() {
+		scheduler.Stop()
+		scheduler.Stop()
+	})
+}
