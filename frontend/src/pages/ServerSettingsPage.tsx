@@ -9,7 +9,7 @@
  */
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { Save, ArrowLeft } from 'lucide-react'
+import { Save, ArrowLeft, Loader2 } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { ServerService, ScenarioService } from '../services/api'
 import { useToast } from '../components/ui/Toast'
@@ -27,6 +27,7 @@ export function ServerSettingsPage() {
   
   const [server, setServer] = useState<any>(getInitialState(urlType || 'ARMA3'))
   const [loading, setLoading] = useState(!!id)
+  const [isSaving, setIsSaving] = useState(false)
   const isNew = !id
 
   const [isInstalled, setIsInstalled] = useState(false)
@@ -115,11 +116,14 @@ export function ServerSettingsPage() {
   const handleSave = async (e: React.SyntheticEvent<HTMLFormElement> | React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault()
 
+    if (isSaving) return;
+
     if (!server.name || server.name.trim() === '') {
       showToast('Instance Name is strictly required.', 'error')
       return
     }
 
+    setIsSaving(true);
     try {
       const payload = structuredClone(server)
       
@@ -136,6 +140,8 @@ export function ServerSettingsPage() {
       navigate('/servers')
     } catch (err: any) {
       showToast(err?.message || 'Failed to save server', 'error')
+    } finally {
+      setIsSaving(false);
     }
   }
 
@@ -188,9 +194,10 @@ export function ServerSettingsPage() {
             type="button" 
             size="sm"
             onClick={handleSave} 
+            disabled={isSaving || loading}
             className="h-9 px-3.5 shadow-md shadow-primary/20 font-bold uppercase tracking-wider text-xs"
           >
-            <Save className="w-3.5 h-3.5 mr-1.5" />
+            {isSaving ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
             Save
           </Button>
         </div>
@@ -201,12 +208,13 @@ export function ServerSettingsPage() {
             type="button" 
             variant="outline" 
             onClick={() => navigate('/servers')}
+            disabled={isSaving || loading}
             className="h-10 px-6 border-border bg-surface-elevated/50 hover:bg-surface text-muted-foreground hover:text-foreground font-bold uppercase tracking-widest text-[10px]"
            >
              Cancel
            </Button>
-           <Button type="submit" onClick={handleSave} className="h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
-             <Save className="w-4 h-4 mr-2" />
+           <Button type="button" onClick={handleSave} disabled={isSaving || loading} className="h-10 px-8 shadow-lg shadow-primary/20 font-bold uppercase tracking-widest text-[10px]">
+             {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
              {isNew ? 'Deploy Instance' : 'Save Data'}
            </Button>
         </div>
@@ -221,15 +229,17 @@ export function ServerSettingsPage() {
             type="button" 
             variant="outline" 
             onClick={() => navigate('/servers')}
+            disabled={isSaving || loading}
             className="flex-1 h-11 border-border bg-surface-elevated/80 text-muted-foreground font-bold uppercase tracking-wider text-xs"
           >
             Cancel
           </Button>
           <Button 
             type="submit" 
+            disabled={isSaving || loading}
             className="flex-[2] h-11 shadow-lg shadow-primary/20 font-bold uppercase tracking-wider text-xs"
           >
-            <Save className="w-4 h-4 mr-2" />
+            {isSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
             {isNew ? 'Deploy Instance' : 'Save Data'}
           </Button>
         </div>
