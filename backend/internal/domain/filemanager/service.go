@@ -86,15 +86,21 @@ func (s *Service) ResolvePath(relPath string) (absPath, cleanRel string, isReadO
 	}
 
 	// Symlink resolution verification to prevent bypass via intermediate symlinks
-	resolvedTarget, err := filepath.EvalSymlinks(absPath)
-	if err != nil && os.IsNotExist(err) {
-		resolvedTarget, err = filepath.EvalSymlinks(filepath.Dir(absPath))
-	}
-	if err == nil {
-		relTarget, err := filepath.Rel(s.storageRoot, resolvedTarget)
-		if err != nil || strings.HasPrefix(relTarget, "..") || relTarget == ".." {
-			return "", "", false, ErrPathTraversal
+	current := absPath
+	for {
+		resolvedTarget, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			relTarget, err := filepath.Rel(s.storageRoot, resolvedTarget)
+			if err != nil || strings.HasPrefix(relTarget, "..") || relTarget == ".." {
+				return "", "", false, ErrPathTraversal
+			}
+			break
 		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
 	}
 
 	cleanRel = filepath.ToSlash(rel)

@@ -89,12 +89,14 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 	// 5.1 Prevent unauthorized file disclosure via external symlinks
 	resolvedPath, err := filepath.EvalSymlinks(fullPath)
-	if err == nil {
-		rel, err := filepath.Rel(s.vaultPath, resolvedPath)
-		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
-			http.Error(w, "Forbidden", http.StatusForbidden)
-			return
-		}
+	if err != nil {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
+	}
+	rel, err := filepath.Rel(s.vaultPath, resolvedPath)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+		http.Error(w, "Forbidden", http.StatusForbidden)
+		return
 	}
 
 	if info.IsDir() {
