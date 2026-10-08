@@ -169,6 +169,21 @@ func TestProcessManager_UpdateQueryInfo(t *testing.T) {
 	assert.Equal(t, 1, broadcaster.getCount())
 	assert.Equal(t, 5, p.info.Players)
 	assert.Equal(t, "Coop2", p.info.Mission)
+
+	// Update when stopping - should not broadcast or change
+	p.stopping = true
+	pm.UpdateQueryInfo(1, 10, "Altis", "Coop3")
+	assert.Equal(t, 1, broadcaster.getCount())
+	assert.Equal(t, 5, p.info.Players)
+	assert.Equal(t, "Coop2", p.info.Mission)
+
+	// Update when exited - should not broadcast or change
+	p.stopping = false
+	p.exited = true
+	pm.UpdateQueryInfo(1, 15, "Altis", "Coop4")
+	assert.Equal(t, 1, broadcaster.getCount())
+	assert.Equal(t, 5, p.info.Players)
+	assert.Equal(t, "Coop2", p.info.Mission)
 }
 
 func TestProcessManager_StartStopServer(t *testing.T) {

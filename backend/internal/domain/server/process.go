@@ -143,6 +143,11 @@ func (m *ProcessManager) UpdateQueryInfo(id int64, players int, mapName, mission
 		}
 		p.mu.Lock()
 
+		if p.exited || p.stopping {
+			p.mu.Unlock()
+			return
+		}
+
 		changed := p.info.Players != players || p.info.Map != mapName || p.info.Mission != mission
 
 		if changed {
