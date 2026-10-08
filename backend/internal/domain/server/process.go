@@ -676,25 +676,28 @@ func (m *ProcessManager) StopServer(ctx context.Context, id int64) error {
 	m.cleanupFastDL(proc)
 
 	// Try graceful shutdown
-	stopped, err := m.gracefulShutdown(proc, ctx)
-	if err != nil {
-		return err
-	}
-	if stopped {
-		return nil
-	}
-
-	// Fallback to Kill
-	if err := m.killProcess(proc); err != nil {
-		return err
+	stopped, gracefulErr := m.gracefulShutdown(proc, ctx)
+	if !stopped {
+		// If graceful shutdown didn't stop the process (timed out, failed, or caller ctx expired),
+		// escalate to killProcess to guarantee the process group is terminated and not left in limbo.
+		if killErr := m.killProcess(proc); killErr != nil {
+			log.Printf("[ProcessManager] killProcess failed for server ID %d: %v", id, killErr)
+			return killErr
+		}
 	}
 
-	// Always wait for the cleanup goroutine to finish before returning
+	// Wait for the cleanup goroutine to finish and close stopCh.
 	select {
 	case <-proc.stopCh:
 		return nil
-	case <-ctx.Done():
-		return ctx.Err()
+	case <-time.After(5 * time.Second):
+		if gracefulErr != nil {
+			return gracefulErr
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		return errors.New("timed out waiting for process cleanup")
 	}
 }
 
@@ -722,6 +725,9 @@ func (m *ProcessManager) trySetStopping(proc *Process, ctx context.Context) (boo
 }
 
 func (m *ProcessManager) gracefulShutdown(proc *Process, ctx context.Context) (bool, error) {
+	if proc.cmd == nil || proc.cmd.Process == nil {
+		return true, nil
+	}
 	// Try graceful shutdown (SIGINT/Interrupt)
 	if err := proc.cmd.Process.Signal(os.Interrupt); err != nil {
 		return false, err
@@ -740,9 +746,14 @@ func (m *ProcessManager) gracefulShutdown(proc *Process, ctx context.Context) (b
 }
 
 func (m *ProcessManager) killProcess(proc *Process) error {
+	if proc.cmd == nil || proc.cmd.Process == nil {
+		return nil
+	}
 	if err := killProcessGroup(proc.cmd); err != nil {
 		proc.mu.Lock()
-		proc.stopping = false
+		if !proc.exited {
+			proc.stopping = false
+		}
 		proc.mu.Unlock()
 		return err
 	}

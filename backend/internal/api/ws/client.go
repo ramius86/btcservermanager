@@ -19,8 +19,8 @@ const (
 	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
 
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	// Send pings and application heartbeats to peer with this period. Must be less than pongWait.
+	pingPeriod = pongWait / 2
 )
 
 type Client struct {
@@ -106,6 +106,9 @@ func (c *Client) writePump(ctx context.Context, cancel context.CancelFunc) {
 			}
 		case <-ticker.C:
 			pingCtx, cancelPing := context.WithTimeout(ctx, writeWait)
+			_ = wsjson.Write(pingCtx, c.conn, Event{
+				Type: EvtHeartbeat,
+			})
 			err := c.conn.Ping(pingCtx)
 
 			cancelPing()

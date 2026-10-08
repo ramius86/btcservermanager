@@ -59,7 +59,12 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 
 		filename := filepath.Base(fileHeader.Filename)
 		if strings.HasSuffix(strings.ToLower(filename), ".pbo") {
-			r.scenarioService.PreCacheScenario(filename)
+			go func(name string) {
+				if err := r.scenarioService.PurgeCloudflareCache(name); err != nil {
+					log.Printf("[Cloudflare] Error purging cache for uploaded scenario %s: %v", name, err)
+				}
+				r.scenarioService.PreCacheScenario(name)
+			}(filename)
 		}
 	}
 

@@ -259,3 +259,31 @@ func TestProcessManager_ExitListener(t *testing.T) {
 		t.Fatal("timed out waiting for exit listener to be called")
 	}
 }
+
+func TestProcessManager_StopServer_CanceledContext(t *testing.T) {
+	tempDir := t.TempDir()
+	paths := &dummyPathProvider{tempDir: tempDir}
+	launcher := NewLauncher(paths, []string{})
+	pm := NewProcessManager(paths, launcher, false)
+
+	stopCh := make(chan struct{})
+	proc := &Process{
+		serverID:   123,
+		serverName: "Test Canceled Server",
+		serverType: TypeArma3,
+		stopCh:     stopCh,
+		exited:     false,
+	}
+	pm.processes.Store(int64(123), proc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		close(stopCh)
+	}()
+
+	err := pm.StopServer(ctx, 123)
+	assert.NoError(t, err)
+}

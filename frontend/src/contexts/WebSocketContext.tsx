@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 
-export type EventType = 'server_status' | 'install_progress' | 'system_info' | 'steamcmd_log' | 'reforger_stats' | 'server_log' | 'server_updated' | 'mod_metadata_updated' | 'reforger_scenarios_updated' | 'mod_deleted'
+export type EventType = 'server_status' | 'install_progress' | 'system_info' | 'steamcmd_log' | 'reforger_stats' | 'server_log' | 'server_updated' | 'mod_metadata_updated' | 'reforger_scenarios_updated' | 'mod_deleted' | 'heartbeat'
 
 export interface WSEvent {
   type: EventType
@@ -91,6 +91,11 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
       try {
         const event: WSEvent = JSON.parse(e.data)
         
+        // Heartbeat events keep the connection alive; no listener dispatch needed
+        if (event.type === 'heartbeat') {
+          return
+        }
+
         // Extract server_id if present in payload to match listener key
         const serverId = event.payload?.server_id || event.payload?.itemId
         const specificKey = `${event.type}:${serverId || 0}`
