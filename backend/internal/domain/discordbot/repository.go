@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -157,13 +158,14 @@ func (r *Repository) SyncUserNicknames(ctx context.Context, memberNames map[stri
 }
 
 func (r *Repository) GetActiveEventsForUser(ctx context.Context, userID string) ([]Event, error) {
+	cutoff := time.Now().Add(-2 * time.Hour).Format("2006-01-02T15:04:05")
 	query := `
 		SELECT e.id, e.channel_id, e.message_id, e.title, e.date_time, e.game_type, e.created_at, e.reminder_sent
 		FROM discord_events e
 		JOIN discord_event_participations p ON e.id = p.event_id
-		WHERE p.user_id = ? AND e.date_time >= datetime('now', '-2 hours')
+		WHERE p.user_id = ? AND datetime(e.date_time) >= datetime(?)
 	`
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID, cutoff)
 	if err != nil {
 		return nil, err
 	}
@@ -287,14 +289,16 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 }
 
 func (r *Repository) GetPendingReminderEvents(ctx context.Context, hours int) ([]Event, error) {
+	now := time.Now().Format("2006-01-02T15:04:05")
+	maxFuture := time.Now().Add(time.Duration(hours) * time.Hour).Format("2006-01-02T15:04:05")
 	query := `
 		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
 		FROM discord_events
 		WHERE reminder_sent = 0
-		  AND datetime(date_time) > datetime('now', 'localtime')
-		  AND datetime(date_time) <= datetime('now', 'localtime', '+' || ? || ' hours')
+		  AND datetime(date_time) > datetime(?)
+		  AND datetime(date_time) <= datetime(?)
 	`
-	rows, err := r.db.QueryContext(ctx, query, hours)
+	rows, err := r.db.QueryContext(ctx, query, now, maxFuture)
 	if err != nil {
 		return nil, err
 	}
