@@ -1,6 +1,8 @@
 package server
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -32,4 +34,31 @@ func TestHeadlessClient_PrepareParameters(t *testing.T) {
 	assert.NotContains(t, params, "-connect=127.0.0.1:2304")
 	assert.Contains(t, params, "-password=mypassword")
 	assert.Contains(t, params, "-mod=@CUP_Units;contact;@CustomMod")
+}
+
+type testHCPathProvider struct {
+	*mockPathProvider
+	logFile string
+}
+
+func (t *testHCPathProvider) GetHeadlessClientLogFile(sid int64, hid int) string {
+	return t.logFile
+}
+
+func TestHeadlessClient_LogDirCreation(t *testing.T) {
+	tempDir := t.TempDir()
+	nestedLogDir := filepath.Join(tempDir, "nested", "logs")
+	logFile := filepath.Join(nestedLogDir, "hc.log")
+
+	paths := &testHCPathProvider{
+		mockPathProvider: &mockPathProvider{baseDir: tempDir},
+		logFile:          logFile,
+	}
+
+	hc := NewHeadlessClient(1, &Arma3Server{Server: Server{ID: 1}}, paths, nil)
+	_ = hc.Start(nil)
+
+	info, err := os.Stat(nestedLogDir)
+	assert.NoError(t, err)
+	assert.True(t, info.IsDir())
 }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -39,6 +40,10 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 
 	cmd := exec.Command(executable, params...)
 	cmd.Dir = hc.Paths.GetServerPath(TypeArma3)
+
+	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
+		return fmt.Errorf("failed to create HC log directory: %w", err)
+	}
 
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
