@@ -161,7 +161,6 @@ func run() error {
 
 	steamauthRepo := steamauth.NewRepository(database)
 	steamauthService := steamauth.NewAuthService(steamauthRepo)
-	steamQRService := steamauth.NewQRAuthService(steamauthRepo)
 
 	systemService := system.NewService(system.ServiceDeps{
 		AppRepo:     appSettingsRepo,
@@ -278,7 +277,6 @@ func run() error {
 		SystemService:       systemService,
 		SteamCmdService:     steamCmdService,
 		SteamAuthService:    steamauthService,
-		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
 		FileManagerService:  fileManagerService,
 		Scheduler:           scheduler,

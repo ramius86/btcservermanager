@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Save, ShieldCheck, Info, Terminal, Loader2, Wrench, KeyRound, QrCode } from 'lucide-react'
+import { Save, ShieldCheck, Info, Terminal, Loader2, Wrench } from 'lucide-react'
 import { Button } from '../components/ui/Button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/Card'
 import { Input } from '../components/ui/Input'
@@ -10,7 +10,6 @@ import { LogRetentionForm } from '../components/appConfig/LogRetentionForm'
 import { AlertsSettingsForm } from '../components/appConfig/AlertsSettingsForm'
 import { EventsSettingsForm } from '../components/appConfig/EventsSettingsForm'
 import { MembersSettingsForm } from '../components/appConfig/MembersSettingsForm'
-import { SteamQRAuthView } from '../components/settings/SteamQRAuthView'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { Badge } from '../components/ui/Badge'
@@ -149,93 +148,72 @@ export function AppConfigPage() {
                 </div>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <Tabs defaultValue="qr" className="w-full">
-                <div className="px-4 md:px-6 pt-4">
-                  <TabsList className="grid w-full grid-cols-2 bg-surface border border-border/50 p-1 rounded-lg h-10 min-w-0">
-                    <TabsTrigger value="qr" className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                      <QrCode className="w-3 h-3" />
-                      QR Code
-                    </TabsTrigger>
-                    <TabsTrigger value="manual" className="text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                      <KeyRound className="w-3 h-3" />
-                      Manual
-                    </TabsTrigger>
-                  </TabsList>
+            <CardContent className="p-4 md:p-6">
+              <form onSubmit={handleSaveAuth} className="space-y-6">
+                <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <label htmlFor="steam-username" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Username</label>
+                    <Input 
+                      id="steam-username"
+                      value={auth.username} 
+                      onChange={e => setAuth({...auth, username: e.target.value})}
+                      placeholder="Steam username"
+                      className="bg-surface border-border focus:border-primary/50 h-9 text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label htmlFor="steam-password" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Password</label>
+                    <Input 
+                      id="steam-password"
+                      type="password"
+                      value={auth.password} 
+                      onChange={e => setAuth({...auth, password: e.target.value})}
+                      placeholder="••••••••••••"
+                      className="bg-surface border-border focus:border-primary/50 h-9 text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <label htmlFor="steam-guardToken" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Steam Guard Token (Optional)</label>
+                    <Input 
+                      id="steam-guardToken"
+                      value={auth.steamGuardToken} 
+                      onChange={e => setAuth({...auth, steamGuardToken: e.target.value})}
+                      placeholder="Enter 5-character code if prompted"
+                      className="bg-surface border-border focus:border-primary/50 h-9 font-mono tracking-widest uppercase text-sm"
+                    />
+                  </div>
                 </div>
 
-                <TabsContent value="qr" className="p-4 md:p-6 mt-0 outline-none">
-                  <SteamQRAuthView />
-                </TabsContent>
-
-                <TabsContent value="manual" className="p-4 md:p-6 mt-0 outline-none">
-                  <form onSubmit={handleSaveAuth} className="space-y-6">
-                    <div className="grid gap-4 sm:gap-6 grid-cols-1 sm:grid-cols-2">
-                      <div className="space-y-1.5">
-                        <label htmlFor="steam-username" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Username</label>
-                        <Input 
-                          id="steam-username"
-                          value={auth.username} 
-                          onChange={e => setAuth({...auth, username: e.target.value})}
-                          placeholder="Steam username"
-                          className="bg-surface border-border focus:border-primary/50 h-9 text-sm"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label htmlFor="steam-password" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Password</label>
-                        <Input 
-                          id="steam-password"
-                          type="password"
-                          value={auth.password} 
-                          onChange={e => setAuth({...auth, password: e.target.value})}
-                          placeholder="••••••••••••"
-                          className="bg-surface border-border focus:border-primary/50 h-9 text-sm"
-                        />
-                      </div>
-                      <div className="space-y-1.5 sm:col-span-2">
-                        <label htmlFor="steam-guardToken" className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1">Steam Guard Token</label>
-                        <Input 
-                          id="steam-guardToken"
-                          value={auth.steamGuardToken} 
-                          onChange={e => setAuth({...auth, steamGuardToken: e.target.value})}
-                          placeholder="Enter 5-digit code"
-                          className="bg-surface border-border focus:border-primary/50 h-9 font-mono tracking-widest uppercase text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="flex flex-col md:flex-row items-center justify-between pt-6 border-t border-border gap-4 md:gap-0">
-                      <div className="flex items-center gap-3 px-3 py-2 bg-accent/30 rounded-lg border border-border w-full md:max-w-sm">
-                        <Info className="w-3.5 h-3.5 text-primary shrink-0" />
-                        <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest leading-normal">
-                          Required to securely download and update server content via SteamCMD.
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap items-center justify-end gap-2 w-full md:w-auto">
-                        <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive text-[10px] font-bold uppercase tracking-widest" onClick={() => setClearConfirm(true)}>
-                          Reset
-                        </Button>
-                        <Button 
-                          type="button" 
-                          variant="outline" 
-                          size="sm" 
-                          className="text-[10px] font-bold uppercase tracking-widest border-border" 
-                          onClick={handleTestAuth}
-                          disabled={testingLogin}
-                        >
-                          {testingLogin ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 mr-2" />}
-                          Test
-                        </Button>
-                        <Button type="submit" size="sm" className="min-w-[140px] shadow-lg shadow-primary/20 text-[10px] font-bold uppercase tracking-widest">
-                          <Save className="w-3.5 h-3.5 mr-2" />
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </form>
-                </TabsContent>
-              </Tabs>
+                <div className="flex flex-col md:flex-row items-center justify-between pt-6 border-t border-border gap-4 md:gap-0">
+                  <div className="flex items-center gap-3 px-3 py-2 bg-accent/30 rounded-lg border border-border w-full md:max-w-md">
+                    <Info className="w-3.5 h-3.5 text-primary shrink-0" />
+                    <p className="text-[9px] text-muted-foreground font-bold uppercase tracking-widest leading-normal">
+                      Dedicated Steam credentials required by SteamCMD to download Arma 3 server files and Steam Workshop mods.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center justify-end gap-2 w-full md:w-auto">
+                    <Button type="button" variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive text-[10px] font-bold uppercase tracking-widest" onClick={() => setClearConfirm(true)}>
+                      Reset
+                    </Button>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      className="text-[10px] font-bold uppercase tracking-widest border-border" 
+                      onClick={handleTestAuth}
+                      disabled={testingLogin}
+                    >
+                      {testingLogin ? <Loader2 className="w-3.5 h-3.5 mr-2 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5 mr-2" />}
+                      Test
+                    </Button>
+                    <Button type="submit" size="sm" className="min-w-[140px] shadow-lg shadow-primary/20 text-[10px] font-bold uppercase tracking-widest">
+                      <Save className="w-3.5 h-3.5 mr-2" />
+                      Save
+                    </Button>
+                  </div>
+                </div>
+              </form>
             </CardContent>
           </Card>
 

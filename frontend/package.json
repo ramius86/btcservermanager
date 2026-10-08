@@ -39,7 +39,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.4.0",
     "lucide-react": "^1.49.0",
-    "qrcode.react": "^4.2.0",
     "react-chartjs-2": "^5.3.1",
     "react-image-crop": "^11.1.2",
     "react-router-dom": "^7.18.4",

@@ -78,8 +78,8 @@ Here's a quick look at the main features of the BTC Server Manager interface:
 * **Operational Alerts**: Automated Discord notifications for unexpected server crashes, Steam Workshop mod updates, and dedicated server game updates with configurable scan intervals.
 * **Graceful Degradation**: The manager works perfectly even if the Discord bot is not configured, automatically hiding Discord-dependent UI.
 
-### Passwordless Steam Authentication
-* **Steam QR Code Login**: Authenticate SteamCMD sessions using the official Steam Mobile App QR code scanning feature (`BeginAuthSessionViaQR`). This allows secure workshop downloads without storing plain-text user passwords or manual Steam Guard email verification on headless hosts.
+### Secure Steam Authentication
+* **Dedicated Steam Credentials & Session Caching**: Connect a dedicated Steam account required by SteamCMD to download Arma 3 server binaries and Steam Workshop mods. Sensitive credentials are encrypted at rest, and SteamCMD authentication session tickets are persistently cached on the host volume (`/home/steam/Steam/config/config.vdf`) across container restarts.
 
 ---
 

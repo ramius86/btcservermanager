@@ -184,7 +184,6 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 	scenarioService := scenario.NewService(scenarioRepo, paths, cfg)
 	installationService := installation.NewService(installationRepo)
 	steamAuthService := steamauth.NewAuthService(steamauthRepo)
-	steamQRService := steamauth.NewQRAuthService(steamauthRepo)
 	systemService := system.NewService(system.ServiceDeps{AppRepo: appSettingsRepo, SteamAuth: steamAuthService, SteamAPIKey: ""})
 
 	executor := steamcmd.NewExecutor(paths, steamAuthService)
@@ -211,7 +210,6 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 		SystemService:       systemService,
 		SteamCmdService:     steamCmdService,
 		SteamAuthService:    steamAuthService,
-		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
 		FileManagerService:  filemanager.NewService(cfg.StoragePath),
 		Config:              cfg,

@@ -35,7 +35,6 @@ type Router struct {
 	systemService       *system.Service
 	steamCmdService     *steamcmd.Service
 	steamAuthService    *steamauth.AuthService
-	steamQRService      *steamauth.QRAuthService
 	discordService      *discordbot.Service
 	fileManagerService  *filemanager.Service
 	scheduler           *system.Scheduler
@@ -53,7 +52,6 @@ type RouterDeps struct {
 	SystemService       *system.Service
 	SteamCmdService     *steamcmd.Service
 	SteamAuthService    *steamauth.AuthService
-	SteamQRService      *steamauth.QRAuthService
 	DiscordService      *discordbot.Service
 	FileManagerService  *filemanager.Service
 	Scheduler           *system.Scheduler
@@ -72,7 +70,6 @@ func NewRouter(deps RouterDeps) *Router {
 		systemService:       deps.SystemService,
 		steamCmdService:     deps.SteamCmdService,
 		steamAuthService:    deps.SteamAuthService,
-		steamQRService:      deps.SteamQRService,
 		discordService:      deps.DiscordService,
 		fileManagerService:  deps.FileManagerService,
 		scheduler:           deps.Scheduler,
@@ -267,8 +264,6 @@ func (r *Router) steamAuthRoutes() chi.Router {
 	mux.Post("/login", r.handleSteamLogin)
 	mux.Post("/test", r.handleTestSteamLogin)
 	mux.Get("/status", r.handleGetSteamAuthStatus)
-	mux.Post("/qr/begin", r.handleBeginSteamQR)
-	mux.Post("/qr/poll", r.handlePollSteamQR)
 
 	return mux
 }
