@@ -17,6 +17,7 @@ interface WebSocketContextType {
 const WebSocketContext = createContext<WebSocketContextType | undefined>(undefined)
 
 export function WebSocketProvider({ children }: Readonly<{ children: React.ReactNode }>) {
+  const isMountedRef = useRef(true)
   const [isConnected, setIsConnected] = useState(false)
   const ws = useRef<WebSocket | null>(null)
   const listeners = useRef<Map<string, Set<(e: WSEvent) => void>>>(new Map())
@@ -115,10 +116,7 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
 
     socket.onclose = () => {
       if (watchdogTimeout.current) clearTimeout(watchdogTimeout.current)
-      if (ws.current !== socket) {
-        // Ignore close events from superseded sockets
-        return
-      }
+      if (!isMountedRef.current || !ws.current || ws.current !== socket) return;
       console.log('WebSocket disconnected')
       setIsConnected(false)
       scheduleReconnect()
@@ -143,9 +141,14 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
   useEffect(() => {
     connect()
     return () => {
+      isMountedRef.current = false
       if (watchdogTimeout.current) clearTimeout(watchdogTimeout.current)
-      if (ws.current) ws.current.close()
       if (reconnectTimeout.current) clearTimeout(reconnectTimeout.current)
+      if (ws.current) {
+        const socket = ws.current
+        ws.current = null
+        socket.close()
+      }
     }
   }, [])
 
