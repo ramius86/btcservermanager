@@ -1015,6 +1015,11 @@ func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, custo
 	}
 
 	for _, event := range events {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		s.sendReminderForEvent(ctx, event, customMessage, roleIDs)
 	}
 
@@ -1029,6 +1034,7 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	}
 
 	if len(userIDs) == 0 {
+		_ = s.repo.MarkReminderSent(ctx, event.ID)
 		return
 	}
 
@@ -1051,6 +1057,7 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	}
 
 	if len(filteredUserIDs) == 0 {
+		_ = s.repo.MarkReminderSent(ctx, event.ID)
 		return
 	}
 
@@ -1061,7 +1068,24 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 
 	msgContent := fmt.Sprintf("%s\n\n**Event:** %s\n**When:** %s", customMessage, event.Title, formattedDateTime)
 
-	for _, userID := range filteredUserIDs {
+	sentCount := 0
+	for i, userID := range filteredUserIDs {
+		select {
+		case <-ctx.Done():
+			log.Printf("⚠️  Event reminder delivery cancelled for event %d", event.ID)
+			return
+		default:
+		}
+
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				log.Printf("⚠️  Event reminder delivery cancelled for event %d", event.ID)
+				return
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+
 		ch, err := s.session.UserChannelCreate(userID)
 		if err != nil {
 			log.Printf("⚠️  Failed to create DM channel for user %s: %v", userID, err)
@@ -1071,11 +1095,15 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 		_, err = s.session.ChannelMessageSend(ch.ID, msgContent)
 		if err != nil {
 			log.Printf("⚠️  Failed to send DM to user %s: %v", userID, err)
+			continue
 		}
+		sentCount++
 	}
 
-	if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
-		log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
+	if sentCount > 0 {
+		if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
+			log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
+		}
 	}
 }
 
