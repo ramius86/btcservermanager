@@ -9,6 +9,7 @@ import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog'
 import { ImageCropperModal } from '../components/ui/ImageCropperModal'
 import { ManageRSVPModal } from '../components/events/ManageRSVPModal'
+import { useWebSocket } from '../contexts/WebSocketContext'
 import {
   DiscordService,
   DiscordEventDetail,
@@ -21,6 +22,7 @@ type Tag = { value: string; label: string }
 
 export function EventsPage() {
   const { showToast } = useToast()
+  const { subscribe } = useWebSocket()
   
   const [configured, setConfigured] = useState<boolean>(true)
   const [loading, setLoading] = useState(true)
@@ -93,10 +95,23 @@ export function EventsPage() {
   }, [gameType, channels])
 
   useEffect(() => {
-    // Polling every 30 seconds
+    const unsubRsvp = subscribe('discord_event_rsvp_updated', () => {
+      loadData(false)
+    })
+    const unsubEvt = subscribe('discord_event_updated', () => {
+      loadData(false)
+    })
+    return () => {
+      unsubRsvp()
+      unsubEvt()
+    }
+  }, [subscribe])
+
+  useEffect(() => {
+    // Fallback polling every 60 seconds
     const interval = setInterval(() => {
       loadData(false)
-    }, 30000)
+    }, 60000)
     return () => clearInterval(interval)
   }, [])
 

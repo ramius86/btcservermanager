@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react'
 
-export type EventType = 'server_status' | 'install_progress' | 'system_info' | 'steamcmd_log' | 'reforger_stats' | 'server_log' | 'server_updated' | 'mod_metadata_updated' | 'reforger_scenarios_updated' | 'mod_deleted' | 'heartbeat'
+export type EventType = 'server_status' | 'install_progress' | 'system_info' | 'steamcmd_log' | 'reforger_stats' | 'server_log' | 'server_updated' | 'mod_metadata_updated' | 'reforger_scenarios_updated' | 'mod_deleted' | 'discord_event_rsvp_updated' | 'discord_event_updated' | 'heartbeat'
 
 export interface WSEvent {
   type: EventType
