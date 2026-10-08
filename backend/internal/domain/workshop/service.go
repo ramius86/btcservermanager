@@ -372,7 +372,7 @@ func (s *Service) SyncAllBiKeys(ctx context.Context) error {
 
 	var count int
 	for _, mod := range mods {
-		if mod.ServerType == server.TypeArma3 && mod.InstallationStatus == InstallationFinished {
+		if (mod.ServerType == server.TypeArma3 || mod.ServerType == server.TypeDayZ || mod.ServerType == server.TypeDayZExp) && mod.InstallationStatus == InstallationFinished {
 			select {
 			case s.postInstallQueue <- mod.ID:
 				count++

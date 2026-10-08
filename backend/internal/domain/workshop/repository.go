@@ -54,8 +54,18 @@ func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
 		bikeysMap, err := r.getBiKeysBatch(ctx, ids)
 		if err == nil {
 			for _, m := range mods {
-				m.BiKeys = bikeysMap[m.ID]
+				if keys, ok := bikeysMap[m.ID]; ok && keys != nil {
+					m.BiKeys = keys
+				} else {
+					m.BiKeys = []string{}
+				}
 			}
+		}
+	}
+
+	for _, m := range mods {
+		if m.BiKeys == nil {
+			m.BiKeys = []string{}
 		}
 	}
 
@@ -94,6 +104,9 @@ func (r *Repository) scanMod(ctx context.Context, scanner interface {
 
 	// Load BiKeys
 	m.BiKeys, _ = r.getBiKeys(ctx, m.ID)
+	if m.BiKeys == nil {
+		m.BiKeys = []string{}
+	}
 
 	return m, nil
 }
