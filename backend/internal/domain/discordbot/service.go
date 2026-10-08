@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -54,6 +55,7 @@ type Service struct {
 	rolesCache          []DiscordRole
 	rolesCacheExpiry    time.Time
 	rolesCacheMu        sync.RWMutex
+	isSyncingNicknames  int32
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -326,10 +328,6 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-
-	if members, mErr := s.getCachedGuildMembers(); mErr == nil && len(members) > 0 {
-		go s.syncMemberNicknamesToDatabase(context.Background(), members)
 	}
 
 	detail := &DiscordEventDetail{
@@ -681,8 +679,6 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 		})
 	}
 
-	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
-
 	return result, nil
 }
 
@@ -815,7 +811,7 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 	s.membersCache = allMembers
 	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
 
-	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
+	s.tryAsyncSyncMemberNicknames(allMembers)
 	return allMembers, nil
 }
 
@@ -922,6 +918,18 @@ func (s *Service) SyncMemberNicknames(ctx context.Context) error {
 
 	s.syncMemberNicknamesToDatabase(ctx, allMembers)
 	return nil
+}
+
+func (s *Service) tryAsyncSyncMemberNicknames(members []*discordgo.Member) {
+	if !atomic.CompareAndSwapInt32(&s.isSyncingNicknames, 0, 1) {
+		return
+	}
+	go func() {
+		defer atomic.StoreInt32(&s.isSyncingNicknames, 0)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.syncMemberNicknamesToDatabase(ctx, members)
+	}()
 }
 
 func (s *Service) syncMemberNicknamesToDatabase(ctx context.Context, members []*discordgo.Member) {
