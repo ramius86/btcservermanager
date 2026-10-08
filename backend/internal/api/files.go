@@ -141,6 +141,7 @@ func (r *Router) handleCreateFileOrDir(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	r.json(w, map[string]string{"message": "created successfully"})
 }
