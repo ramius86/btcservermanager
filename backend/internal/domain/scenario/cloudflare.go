@@ -8,6 +8,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"time"
 )
 
@@ -20,7 +21,7 @@ func (s *Service) PurgeCloudflareCache(filename string) error {
 		return nil // Not configured, silently skip
 	}
 
-	urlToPurge := fmt.Sprintf("https://%s/%s", s.config.FastDLDomain, filename)
+	urlToPurge := fmt.Sprintf("https://%s/%s", s.config.FastDLDomain, url.PathEscape(filename))
 
 	reqBody := cloudflarePurgeRequest{
 		Files: []string{urlToPurge},
@@ -64,7 +65,7 @@ func (s *Service) PreCacheScenario(filename string) {
 		return // Not configured
 	}
 
-	urlToPreCache := fmt.Sprintf("https://%s/%s", s.config.FastDLDomain, filename)
+	urlToPreCache := fmt.Sprintf("https://%s/%s", s.config.FastDLDomain, url.PathEscape(filename))
 
 	// Run in background to avoid blocking
 	go func(targetURL string) {
