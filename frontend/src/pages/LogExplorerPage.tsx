@@ -177,6 +177,7 @@ export const LogExplorerPage: React.FC = () => {
     if (logType === 'steamcmd') {
       if (selectedFile.startsWith('steamcmd_') && selectedFile.endsWith('.log')) {
         return subscribe('steamcmd_log', (e) => {
+          if (!e?.payload?.message) return
           setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
         })
       }
@@ -186,6 +187,7 @@ export const LogExplorerPage: React.FC = () => {
         const serverId = Number.parseInt(match[2], 10)
         if (!Number.isNaN(serverId)) {
           return subscribe('server_log', (e) => {
+            if (!e?.payload?.message) return
             setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
           }, serverId)
         }
