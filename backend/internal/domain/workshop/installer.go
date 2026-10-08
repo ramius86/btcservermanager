@@ -3,6 +3,7 @@ package workshop
 import (
 	"btcservermanager/internal/config"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -31,6 +32,13 @@ func NewInstaller(paths *config.Paths, repo *Repository) *Installer {
 // This replaces the previous three separate filepath.Walk calls
 // (directoryToLowercase, updateBiKeys, getDirSize).
 func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if m == nil {
+		return errors.New("workshop mod cannot be nil")
+	}
+
 	modDir := i.paths.GetModInstallationPath(m.ID, m.ServerType)
 
 	type bikeyEntry struct {
@@ -100,11 +108,29 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	// Remove old bikeys recorded in DB, then copy newly found ones from their
 	// post-rename paths (computed above during the walk).
 	for _, k := range m.BiKeys {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		if i.repo != nil {
+			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
+			if err != nil {
+				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				continue
+			} else if used {
+				continue
+			}
+		}
 		_ = os.Remove(i.paths.GetServerKeyPath(k, m.ServerType))
 	}
 	m.BiKeys = m.BiKeys[:0]
 
+	seenBiKeys := make(map[string]struct{})
 	for _, bk := range bikeys {
+		if _, seen := seenBiKeys[bk.name]; seen {
+			continue
+		}
+		seenBiKeys[bk.name] = struct{}{}
+
 		dest := i.paths.GetServerKeyPath(bk.name, m.ServerType)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			fmt.Printf("[Installer] Failed to create directory for key %s: %v\n", bk.name, err)
@@ -129,13 +155,32 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	return i.repo.Save(ctx, m)
 }
 
-func (i *Installer) UninstallMod(m *WorkshopMod) error {
+func (i *Installer) UninstallMod(ctx context.Context, m *WorkshopMod) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if m == nil {
+		return nil
+	}
+
 	// Remove symlink
 	link := i.paths.GetModLinkPath(m.GetNormalizedName(), m.ServerType)
 	_ = os.Remove(link)
 
 	// Remove BiKeys from server keys folder
 	for _, k := range m.BiKeys {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		if i.repo != nil {
+			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
+			if err != nil {
+				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				continue
+			} else if used {
+				continue
+			}
+		}
 		_ = os.Remove(i.paths.GetServerKeyPath(k, m.ServerType))
 	}
 

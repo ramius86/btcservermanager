@@ -170,7 +170,7 @@ func (s *Service) handleDeletedModGetError(id int64, err error) (bool, error) {
 
 func (s *Service) uninstallModFilesAndScenarios(ctx context.Context, mod *WorkshopMod) {
 	if s.installer != nil {
-		if err := s.installer.UninstallMod(mod); err != nil {
+		if err := s.installer.UninstallMod(ctx, mod); err != nil {
 			log.Printf("[Workshop] Warning: Failed to uninstall mod files for %d: %v", mod.ID, err)
 		}
 	}

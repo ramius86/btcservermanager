@@ -7,6 +7,8 @@ import (
 
 type Type string
 
+type ServerType = Type
+
 const (
 	TypeArma3    Type = "ARMA3"
 	TypeDayZ     Type = "DAYZ"
