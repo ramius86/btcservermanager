@@ -6,7 +6,9 @@ import (
 	"btcservermanager/internal/domain/server"
 	"context"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	// Register the pure-Go SQLite driver
@@ -56,6 +58,233 @@ func TestInstaller(t *testing.T) {
 		lowerFile := filepath.Join(modDir, "addons", "mymod.pbo")
 		if _, err := os.Stat(lowerFile); os.IsNotExist(err) {
 			t.Errorf("file %s was not converted to lowercase correctly", lowerFile)
+		}
+	})
+
+	t.Run("Directory To Lowercase Collision Merge", func(t *testing.T) {
+		modDir := filepath.Join(tempDir, "mod_casing_collision")
+		if err := os.MkdirAll(modDir, 0o755); err != nil {
+			t.Fatalf("failed to create test directory: %v", err)
+		}
+
+		// Probe whether the underlying filesystem is case-sensitive (e.g. Linux ext4).
+		// On case-insensitive filesystems (Windows/macOS), 'Addons' and 'addons' resolve
+		// to the exact same directory entry, making distinct colliding directories impossible.
+		probeDir := filepath.Join(modDir, ".case_probe")
+		_ = os.MkdirAll(filepath.Join(probeDir, "a"), 0o755)
+		_ = os.WriteFile(filepath.Join(probeDir, "a", "probe.txt"), []byte("1"), 0o644)
+		isCaseSensitive := false
+		if _, err := os.Stat(filepath.Join(probeDir, "A", "probe.txt")); os.IsNotExist(err) {
+			isCaseSensitive = true
+		}
+		_ = os.RemoveAll(probeDir)
+
+		if !isCaseSensitive && runtime.GOOS == "windows" {
+			_ = exec.Command("fsutil.exe", "file", "setCaseSensitiveInfo", modDir, "enable").Run()
+			probeDir := filepath.Join(modDir, ".case_probe")
+			_ = os.MkdirAll(filepath.Join(probeDir, "a"), 0o755)
+			_ = os.WriteFile(filepath.Join(probeDir, "a", "probe.txt"), []byte("1"), 0o644)
+			if _, err := os.Stat(filepath.Join(probeDir, "A", "probe.txt")); os.IsNotExist(err) {
+				isCaseSensitive = true
+			}
+			_ = os.RemoveAll(probeDir)
+		}
+
+		if !isCaseSensitive {
+			t.Skip("skipping case-collision test on case-insensitive filesystem")
+		}
+
+		upperAddons := filepath.Join(modDir, "Addons")
+		lowerAddons := filepath.Join(modDir, "addons")
+		allUpperAddons := filepath.Join(modDir, "ADDONS")
+
+		if err := os.MkdirAll(upperAddons, 0o755); err != nil {
+			t.Fatalf("failed to create upper Addons directory: %v", err)
+		}
+		if err := os.MkdirAll(lowerAddons, 0o755); err != nil {
+			t.Fatalf("failed to create lower addons directory: %v", err)
+		}
+		if err := os.MkdirAll(allUpperAddons, 0o755); err != nil {
+			t.Fatalf("failed to create all-upper ADDONS directory: %v", err)
+		}
+
+		// Create files in all three directories
+		upperFile := filepath.Join(upperAddons, "ModUpper.PBO")
+		lowerFile := filepath.Join(lowerAddons, "modlower.pbo")
+		allUpperFile := filepath.Join(allUpperAddons, "ALLUPPER.PBO")
+		if err := os.WriteFile(upperFile, []byte("upper-data"), 0o644); err != nil {
+			t.Fatalf("failed to create upper file: %v", err)
+		}
+		if err := os.WriteFile(lowerFile, []byte("lower-data"), 0o644); err != nil {
+			t.Fatalf("failed to create lower file: %v", err)
+		}
+		if err := os.WriteFile(allUpperFile, []byte("all-upper-data"), 0o644); err != nil {
+			t.Fatalf("failed to create all-upper file: %v", err)
+		}
+
+		// Colliding file with identical lowercase name in upper and lower
+		upperConflict := filepath.Join(upperAddons, "Conflict.PBO")
+		lowerConflict := filepath.Join(lowerAddons, "conflict.pbo")
+		if err := os.WriteFile(upperConflict, []byte("from-upper-conflict"), 0o644); err != nil {
+			t.Fatalf("failed to create upper conflict file: %v", err)
+		}
+		if err := os.WriteFile(lowerConflict, []byte("from-lower-conflict"), 0o644); err != nil {
+			t.Fatalf("failed to create lower conflict file: %v", err)
+		}
+
+		// Create colliding subdirectories: Addons/Sub and addons/sub
+		upperSub := filepath.Join(upperAddons, "Sub")
+		lowerSub := filepath.Join(lowerAddons, "sub")
+		if err := os.MkdirAll(upperSub, 0o755); err != nil {
+			t.Fatalf("failed to create upper sub dir: %v", err)
+		}
+		if err := os.MkdirAll(lowerSub, 0o755); err != nil {
+			t.Fatalf("failed to create lower sub dir: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(upperSub, "NestedUpper.pbo"), []byte("nested-upper"), 0o644); err != nil {
+			t.Fatalf("failed to create nested upper file: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(lowerSub, "nestedlower.pbo"), []byte("nested-lower"), 0o644); err != nil {
+			t.Fatalf("failed to create nested lower file: %v", err)
+		}
+
+		if err := lowercaseDir(modDir); err != nil {
+			t.Fatalf("lowercaseDir failed to merge colliding directories: %v", err)
+		}
+
+		// Upper Addons and ADDONS directories should no longer exist
+		if _, err := os.Stat(upperAddons); !os.IsNotExist(err) {
+			t.Errorf("upper Addons directory still exists after merge")
+		}
+		if _, err := os.Stat(allUpperAddons); !os.IsNotExist(err) {
+			t.Errorf("allUpperAddons directory still exists after merge")
+		}
+
+		// All files should exist under lowercase paths
+		expected := map[string]string{
+			filepath.Join(lowerAddons, "modupper.pbo"): "upper-data",
+			filepath.Join(lowerAddons, "modlower.pbo"): "lower-data",
+			filepath.Join(lowerAddons, "allupper.pbo"): "all-upper-data",
+			filepath.Join(lowerSub, "nestedupper.pbo"): "nested-upper",
+			filepath.Join(lowerSub, "nestedlower.pbo"): "nested-lower",
+		}
+		for path, content := range expected {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Errorf("expected merged file %s: %v", path, err)
+				continue
+			}
+			if string(data) != content {
+				t.Errorf("file %s content mismatch: got %q, want %q", path, string(data), content)
+			}
+		}
+
+		// Conflict file should exist
+		if _, err := os.Stat(filepath.Join(lowerAddons, "conflict.pbo")); err != nil {
+			t.Errorf("expected conflict.pbo to exist in lowerAddons: %v", err)
+		}
+	})
+
+	t.Run("renameOrMerge Directory Merge", func(t *testing.T) {
+		mergeTestDir := filepath.Join(tempDir, "rename_or_merge_test")
+		srcDir := filepath.Join(mergeTestDir, "src_dir")
+		dstDir := filepath.Join(mergeTestDir, "dst_dir")
+
+		if err := os.MkdirAll(filepath.Join(srcDir, "SubDir"), 0o755); err != nil {
+			t.Fatalf("failed to create src SubDir: %v", err)
+		}
+		if err := os.MkdirAll(filepath.Join(dstDir, "subdir"), 0o755); err != nil {
+			t.Fatalf("failed to create dst subdir: %v", err)
+		}
+
+		if err := os.WriteFile(filepath.Join(srcDir, "FileA.txt"), []byte("data-a"), 0o644); err != nil {
+			t.Fatalf("failed to write src FileA: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(srcDir, "SubDir", "FileB.txt"), []byte("data-b"), 0o644); err != nil {
+			t.Fatalf("failed to write src FileB: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "filec.txt"), []byte("data-c"), 0o644); err != nil {
+			t.Fatalf("failed to write dst filec: %v", err)
+		}
+		if err := os.WriteFile(filepath.Join(dstDir, "subdir", "filed.txt"), []byte("data-d"), 0o644); err != nil {
+			t.Fatalf("failed to write dst filed: %v", err)
+		}
+
+		if err := renameOrMerge(srcDir, dstDir); err != nil {
+			t.Fatalf("renameOrMerge failed: %v", err)
+		}
+
+		// srcDir should be deleted
+		if _, err := os.Stat(srcDir); !os.IsNotExist(err) {
+			t.Errorf("expected srcDir to be removed, but still exists")
+		}
+
+		// dstDir should contain all merged files
+		expected := map[string]string{
+			filepath.Join(dstDir, "filea.txt"):           "data-a",
+			filepath.Join(dstDir, "subdir", "fileb.txt"): "data-b",
+			filepath.Join(dstDir, "filec.txt"):           "data-c",
+			filepath.Join(dstDir, "subdir", "filed.txt"): "data-d",
+		}
+		for path, content := range expected {
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Errorf("expected merged file %s: %v", path, err)
+				continue
+			}
+			if string(data) != content {
+				t.Errorf("file %s content mismatch: got %q, want %q", path, string(data), content)
+			}
+		}
+
+		// Edge case: empty directory merge
+		emptySrc := filepath.Join(mergeTestDir, "empty_src")
+		if err := os.MkdirAll(emptySrc, 0o755); err != nil {
+			t.Fatalf("failed to create emptySrc: %v", err)
+		}
+		if err := renameOrMerge(emptySrc, dstDir); err != nil {
+			t.Errorf("expected nil for empty src merge, got %v", err)
+		}
+		if _, err := os.Stat(emptySrc); !os.IsNotExist(err) {
+			t.Errorf("expected emptySrc to be removed after merge, but still exists")
+		}
+
+		// Edge case: single file rename
+		fileSrc := filepath.Join(mergeTestDir, "single_src.txt")
+		fileDst := filepath.Join(mergeTestDir, "single_dst.txt")
+		if err := os.WriteFile(fileSrc, []byte("single"), 0o644); err != nil {
+			t.Fatalf("failed to write fileSrc: %v", err)
+		}
+		if err := renameOrMerge(fileSrc, fileDst); err != nil {
+			t.Errorf("expected nil for file rename, got %v", err)
+		}
+		if data, err := os.ReadFile(fileDst); err != nil || string(data) != "single" {
+			t.Errorf("unexpected file content after rename: %s, err: %v", string(data), err)
+		}
+
+		// Edge case: file overwrite
+		fileOverSrc := filepath.Join(mergeTestDir, "over_src.txt")
+		fileOverDst := filepath.Join(mergeTestDir, "over_dst.txt")
+		_ = os.WriteFile(fileOverSrc, []byte("new-data"), 0o644)
+		_ = os.WriteFile(fileOverDst, []byte("old-data"), 0o644)
+		if err := renameOrMerge(fileOverSrc, fileOverDst); err != nil {
+			t.Errorf("expected nil for file overwrite, got %v", err)
+		}
+		if data, _ := os.ReadFile(fileOverDst); string(data) != "new-data" {
+			t.Errorf("expected new-data in fileOverDst, got %s", string(data))
+		}
+
+		// Edge case: src == dst returns nil (including trailing slashes)
+		if err := renameOrMerge(dstDir, dstDir); err != nil {
+			t.Errorf("expected nil for src == dst, got %v", err)
+		}
+		if err := renameOrMerge(dstDir+string(filepath.Separator), dstDir); err != nil {
+			t.Errorf("expected nil for src == dst with trailing separator, got %v", err)
+		}
+
+		// Edge case: non-existent src returns nil
+		if err := renameOrMerge(filepath.Join(mergeTestDir, "non_existent"), dstDir); err != nil {
+			t.Errorf("expected nil for non-existent src, got %v", err)
 		}
 	})
 

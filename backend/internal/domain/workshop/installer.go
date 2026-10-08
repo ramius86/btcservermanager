@@ -97,11 +97,8 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	for j := len(pathsToRename) - 1; j >= 0; j-- {
 		p := pathsToRename[j]
 		newPath := filepath.Join(filepath.Dir(p), strings.ToLower(filepath.Base(p)))
-		if err := os.Rename(p, newPath); err != nil {
-			// Ignore ENOENT: may occur on case-insensitive filesystems.
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("failed to lowercase %s: %w", p, err)
-			}
+		if err := renameOrMerge(p, newPath); err != nil {
+			return fmt.Errorf("failed to lowercase %s: %w", p, err)
 		}
 	}
 
@@ -214,9 +211,58 @@ func lowercaseDir(root string) error {
 	for j := len(pathsToRename) - 1; j >= 0; j-- {
 		p := pathsToRename[j]
 		newPath := filepath.Join(filepath.Dir(p), strings.ToLower(filepath.Base(p)))
-		if err := os.Rename(p, newPath); err != nil && !os.IsNotExist(err) {
+		if err := renameOrMerge(p, newPath); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// renameOrMerge moves src to dst. If both src and dst exist as distinct directories,
+// it recursively merges the contents of src into dst and removes src.
+// Otherwise, it performs an os.Rename(src, dst).
+func renameOrMerge(src, dst string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+	if src == dst {
+		return nil
+	}
+
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	dstInfo, err := os.Lstat(dst)
+	if err == nil && srcInfo.IsDir() && dstInfo.IsDir() && !os.SameFile(srcInfo, dstInfo) {
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+
+		for _, entry := range entries {
+			srcChild := filepath.Join(src, entry.Name())
+			dstChild := filepath.Join(dst, strings.ToLower(entry.Name()))
+			if err := renameOrMerge(srcChild, dstChild); err != nil {
+				return err
+			}
+		}
+
+		if err := os.Remove(src); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := os.Rename(src, dst); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 
 	return nil
