@@ -256,11 +256,10 @@ func (s *Scheduler) queryGameServers() {
 		return
 	}
 
+	var wg sync.WaitGroup
 	for _, srv := range servers {
 		var id int64
-
 		var queryPort int
-
 		host := "127.0.0.1"
 
 		switch v := srv.(type) {
@@ -271,8 +270,10 @@ func (s *Scheduler) queryGameServers() {
 			id = v.ID
 			queryPort = v.QueryPort
 		case *server.ReforgerServer:
-			id = v.ID
-			queryPort = v.QueryPort
+			// Reforger does not support A2S query; stats are tracked via console log parsing
+			continue
+		default:
+			continue
 		}
 
 		if queryPort == 0 {
@@ -280,12 +281,17 @@ func (s *Scheduler) queryGameServers() {
 		}
 
 		if s.serverService.GetInstanceInfo(id) != nil {
-			addr := fmt.Sprintf("%s:%d", host, queryPort)
-			if qInfo, err := QueryServerInfo(addr); err == nil {
-				s.serverService.UpdateQueryInfo(id, int(qInfo.Players), qInfo.Map, qInfo.Mission)
-			}
+			wg.Add(1)
+			go func(serverID int64, qPort int) {
+				defer wg.Done()
+				addr := fmt.Sprintf("%s:%d", host, qPort)
+				if qInfo, err := QueryServerInfo(addr); err == nil {
+					s.serverService.UpdateQueryInfo(serverID, int(qInfo.Players), qInfo.Map, qInfo.Mission)
+				}
+			}(id, queryPort)
 		}
 	}
+	wg.Wait()
 }
 
 func (s *Scheduler) runWorkshopUpdate() {
