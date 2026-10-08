@@ -336,10 +336,12 @@ func (m *ProcessManager) logStartMessage(id int64, t Type, executable string, pa
 
 func (m *ProcessManager) handlePostWait(p *Process, logsDone chan struct{}, logFile, statsFile *os.File) {
 	go func() {
-		// Wait for pipe readers to hit EOF before cmd.Wait closes descriptors
-		<-logsDone
-
 		err := p.cmd.Wait()
+
+		select {
+		case <-logsDone:
+		case <-time.After(2 * time.Second):
+		}
 
 		// Stop FastDL deterministically for this server if active
 		m.cleanupFastDL(p)
