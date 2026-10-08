@@ -118,6 +118,11 @@ func (r *Router) handleDeleteArma3Scenario(w http.ResponseWriter, req *http.Requ
 		http.Error(w, "Invalid filename", http.StatusBadRequest)
 		return
 	}
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == "" || !strings.HasSuffix(strings.ToLower(cleanName), ".pbo") {
+		http.Error(w, "Invalid filename extension", http.StatusBadRequest)
+		return
+	}
 	if err := r.scenarioService.DeleteScenario(ctx, name); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
