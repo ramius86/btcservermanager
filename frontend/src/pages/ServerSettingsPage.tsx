@@ -55,9 +55,12 @@ export function ServerSettingsPage() {
           missions: d.missions || [],
           missionHeader: d.type === 'REFORGER' ? missionHeaderStr : d.missionHeader
         })
+      }).catch(err => {
+        showToast(err?.message || 'Failed to load server', 'error')
+        navigate('/servers')
       }).finally(() => setLoading(false))
     }
-  }, [id])
+  }, [id, navigate, showToast])
 
   useEffect(() => {
     if (server.type === 'REFORGER') {
