@@ -4,6 +4,7 @@ import (
 	"btcservermanager/internal/domain/server"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -53,8 +54,18 @@ func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
 		bikeysMap, err := r.getBiKeysBatch(ctx, ids)
 		if err == nil {
 			for _, m := range mods {
-				m.BiKeys = bikeysMap[m.ID]
+				if keys, ok := bikeysMap[m.ID]; ok && keys != nil {
+					m.BiKeys = keys
+				} else {
+					m.BiKeys = []string{}
+				}
 			}
+		}
+	}
+
+	for _, m := range mods {
+		if m.BiKeys == nil {
+			m.BiKeys = []string{}
 		}
 	}
 
@@ -93,6 +104,9 @@ func (r *Repository) scanMod(ctx context.Context, scanner interface {
 
 	// Load BiKeys
 	m.BiKeys, _ = r.getBiKeys(ctx, m.ID)
+	if m.BiKeys == nil {
+		m.BiKeys = []string{}
+	}
 
 	return m, nil
 }
@@ -296,4 +310,29 @@ func (r *Repository) ResolveModNames(ctx context.Context, ids []int64) ([]server
 	}
 
 	return infos, nil
+}
+
+func (r *Repository) IsBiKeyUsedByOtherMods(ctx context.Context, modID int64, bikey string, serverType server.ServerType) (bool, error) {
+	if r == nil || r.db == nil {
+		return false, nil
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if strings.TrimSpace(bikey) == "" {
+		return false, nil
+	}
+
+	query := `SELECT 1 FROM workshop_mod_bikey b JOIN workshop_mod m ON b.workshop_mod_id = m.id WHERE b.bikey = ? AND b.workshop_mod_id != ? AND m.server_type = ? AND m.installation_status = ? LIMIT 1`
+
+	var dummy int
+	err := r.db.QueryRowContext(ctx, query, bikey, modID, serverType, InstallationFinished).Scan(&dummy)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	return true, nil
 }

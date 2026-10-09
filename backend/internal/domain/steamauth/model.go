@@ -5,6 +5,4 @@ type SteamAuth struct {
 	Username        string `json:"username"`
 	Password        string `json:"password"`
 	SteamGuardToken string `json:"steamGuardToken"`
-	RefreshToken    string `json:"refreshToken"`
-	AccountName     string `json:"accountName"`
 }

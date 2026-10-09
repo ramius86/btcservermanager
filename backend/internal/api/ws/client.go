@@ -19,8 +19,8 @@ const (
 	// Time allowed to read the next pong message from the peer.
 	pongWait = 60 * time.Second
 
-	// Send pings to peer with this period. Must be less than pongWait.
-	pingPeriod = (pongWait * 9) / 10
+	// Send pings and application heartbeats to peer with this period. Must be less than pongWait.
+	pingPeriod = pongWait / 2
 )
 
 type Client struct {
@@ -106,6 +106,9 @@ func (c *Client) writePump(ctx context.Context, cancel context.CancelFunc) {
 			}
 		case <-ticker.C:
 			pingCtx, cancelPing := context.WithTimeout(ctx, writeWait)
+			_ = wsjson.Write(pingCtx, c.conn, Event{
+				Type: EvtHeartbeat,
+			})
 			err := c.conn.Ping(pingCtx)
 
 			cancelPing()
@@ -131,7 +134,13 @@ func (c *Client) close() {
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string) {
 	opts := &websocket.AcceptOptions{}
 	if allowedOrigin == "" {
-		opts.InsecureSkipVerify = true
+		// Secure default: allow same host (r.Host) and local development, preventing CSWSH
+		hostPattern := r.Host
+		if hostPattern != "" {
+			opts.OriginPatterns = []string{hostPattern, "localhost:*", "127.0.0.1:*"}
+		} else {
+			opts.OriginPatterns = []string{"localhost:*", "127.0.0.1:*"}
+		}
 	} else {
 		opts.OriginPatterns = []string{allowedOrigin}
 	}

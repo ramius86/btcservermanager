@@ -116,7 +116,6 @@ func (r *Router) handleSaveFileContent(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "file saved successfully"})
 }
 
@@ -142,6 +141,7 @@ func (r *Router) handleCreateFileOrDir(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	r.json(w, map[string]string{"message": "created successfully"})
 }
@@ -158,7 +158,6 @@ func (r *Router) handleDeleteFileOrDir(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "deleted successfully"})
 }
 
@@ -184,7 +183,6 @@ func (r *Router) handleRenameFileOrDir(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "renamed successfully"})
 }
 
@@ -195,6 +193,11 @@ func (r *Router) handleUploadFiles(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to parse multipart form: %v", err), http.StatusBadRequest)
 		return
 	}
+	defer func() {
+		if req.MultipartForm != nil {
+			_ = req.MultipartForm.RemoveAll()
+		}
+	}()
 
 	targetDir := req.FormValue("destination")
 	files := req.MultipartForm.File["files"]
@@ -223,7 +226,6 @@ func (r *Router) handleUploadFiles(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "files uploaded successfully"})
 }
 
@@ -333,7 +335,6 @@ func (r *Router) handleExtractZip(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "archive extracted successfully"})
 }
 
@@ -364,6 +365,5 @@ func (r *Router) handleCompressZip(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
 	r.json(w, map[string]string{"message": "archive created successfully"})
 }

@@ -1,4 +1,4 @@
-import { ServerInstanceInfoDto, CreatorDlcDto, AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
+import { ServerInstanceInfoDto, CreatorDlcDto, AnyServerDto, ServerInstallationDto, ReforgerCustomNamesPayload } from '../dtos/ServerDto'
 import { ModDto, ModPresetDto, SteamCmdItemInfoDto, WorkshopResponseDto } from '../dtos/ModDto'
 import {
   FileListResponseDto,
@@ -33,8 +33,24 @@ export async function fetchApi(path: string, options: RequestInit = {}) {
     throw new Error(`API Error: ${res.status} ${res.statusText} ${errorBody}`)
   }
   if (res.status === 204) return null
+
+  const contentType = res.headers.get('content-type') || ''
   const text = await res.text()
-  return text ? JSON.parse(text) : null
+
+  // Handle Cloudflare Access authentication redirects or HTML responses
+  if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
+    if (typeof window !== 'undefined' && window.location) {
+      window.location.reload()
+    }
+    return null
+  }
+
+  try {
+    return text ? JSON.parse(text) : null
+  } catch (err) {
+    console.error('Failed to parse API response as JSON:', text, err)
+    throw new Error(`Invalid JSON response: ${err instanceof Error ? err.message : String(err)}`)
+  }
 }
 
 export const ServerService = {
@@ -67,8 +83,8 @@ export const ServerService = {
     const query = name ? '?name=' + encodeURIComponent(name) : ''
     return fetchApi(`/server/${id}/reforger/saves${query}`, { method: 'DELETE' })
   },
-  getCustomNames: (id: number): Promise<Record<string, { playerName: string, customName: string }>> => fetchApi(`/server/${id}/reforger/custom-names`),
-  updateCustomNames: (id: number, data: Record<string, { playerName: string, customName: string }>): Promise<void> => fetchApi(`/server/${id}/reforger/custom-names`, { method: 'PUT', body: JSON.stringify(data) }),
+  getCustomNames: (id: number): Promise<ReforgerCustomNamesPayload> => fetchApi(`/server/${id}/reforger/custom-names`),
+  updateCustomNames: (id: number, data: ReforgerCustomNamesPayload): Promise<void> => fetchApi(`/server/${id}/reforger/custom-names`, { method: 'PUT', body: JSON.stringify(data) }),
   
   getInstallations: (): Promise<ServerInstallationDto[]> => fetchApi('/server/installation'),
   getInstallation: (type: string): Promise<ServerInstallationDto> => fetchApi(`/server/installation/${type}`),
@@ -171,8 +187,6 @@ export const SteamCmdService = {
   update: (): Promise<void> => fetchApi('/steamcmd/update', { method: 'POST' }),
   checkForUpdates: (type?: string): Promise<void> => 
     fetchApi(type ? `/steamcmd/check-updates?type=${encodeURIComponent(type)}` : '/steamcmd/check-updates', { method: 'POST' }),
-  beginQr: (): Promise<any> => fetchApi('/config/auth/qr/begin', { method: 'POST' }),
-  pollQr: (clientId: string, requestId: string): Promise<any> => fetchApi('/config/auth/qr/poll', { method: 'POST', body: JSON.stringify({ client_id: clientId, request_id: requestId }) }),
   login: (credentials: any): Promise<any> => fetchApi('/config/auth/login', { method: 'POST', body: JSON.stringify(credentials) }),
   testLogin: (credentials: any): Promise<{ success: boolean, error?: string }> => fetchApi('/config/auth/test', { method: 'POST', body: JSON.stringify(credentials) }),
   getAuthStatus: (): Promise<any> => fetchApi('/config/auth/status'),
@@ -272,6 +286,8 @@ export interface DiscordUser {
 	id: string
 	username: string
 	isActive: boolean
+	playsArma3: boolean
+	playsReforger: boolean
 	updatedAt: string
 }
 
@@ -368,6 +384,7 @@ export const DiscordService = {
 	deleteEvent: (id: number): Promise<void> => fetchApi(`/discord/events/${id}`, { method: 'DELETE' }),
 	getUsers: (): Promise<DiscordUser[]> => fetchApi('/discord/users'),
 	setUserActive: (id: string, active: boolean, username?: string): Promise<void> => fetchApi(`/discord/users/${id}/active`, { method: 'PATCH', body: JSON.stringify({ active, username }) }),
+	setUserGames: (id: string, games: { playsArma3: boolean, playsReforger: boolean }): Promise<void> => fetchApi(`/discord/users/${id}/games`, { method: 'PATCH', body: JSON.stringify(games) }),
 	deleteUser: (id: string): Promise<void> => fetchApi(`/discord/users/${id}`, { method: 'DELETE' }),
 	mergeUsers: (data: { sourceUserId: string, targetUserId: string }): Promise<{ success: boolean }> => fetchApi('/discord/users/merge', { method: 'POST', body: JSON.stringify(data) }),
 	getGuildMembers: (): Promise<DiscordGuildMember[]> => fetchApi('/discord/members'),

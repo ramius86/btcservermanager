@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { formatUptime } from '../utils/time'
 
-import { Cpu, MemoryStick as Memory, Server, ShieldCheck, Download, RefreshCw, Layers, MoreVertical, RotateCcw, FileText, Trash2, AlertCircle } from 'lucide-react'
+import { Cpu, MemoryStick as Memory, Server, ShieldCheck, Download, RefreshCw, Layers, MoreVertical, RotateCcw, FileText, Trash2, AlertCircle, Loader2 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
@@ -11,6 +11,7 @@ import { Progress } from '../components/ui/Progress'
 import { useToast } from '../components/ui/Toast'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { useServerStatus } from '../contexts/ServerStatusContext'
+import { useInstallProgress } from '../contexts/InstallProgressContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
 import { AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
@@ -145,8 +146,8 @@ export function DashboardPage() {
   const navigate = useNavigate()
   const { showToast } = useToast()
   const { systemInfo: sysInfo } = useSystemInfo()
+  const { installations: wsInstallations } = useInstallProgress()
   const { 
-    installations: wsInstallations, 
     statuses: wsStatuses, 
     startingServers, 
     stoppingServers, 
@@ -155,7 +156,7 @@ export function DashboardPage() {
   
   const { servers, fetchServers } = useServersStatusSync(wsStatuses, startingServers, stoppingServers, refreshStatuses)
   const { installations, fetchInstallations } = useInstallationsSync(wsInstallations)
-  const { subscribe } = useWebSocket()
+  const { subscribe, onReconnect } = useWebSocket()
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [uninstallTarget, setUninstallTarget] = useState<string | null>(null)
 
@@ -168,8 +169,16 @@ export function DashboardPage() {
       fetchInstallations()
     })
 
-    return () => unsubscribe()
-  }, [subscribe, fetchServers, fetchInstallations])
+    const unsubReconnect = onReconnect(() => {
+      fetchServers()
+      fetchInstallations()
+    })
+
+    return () => {
+      unsubscribe()
+      unsubReconnect()
+    }
+  }, [subscribe, onReconnect, fetchServers, fetchInstallations])
 
   const handleRefreshAll = async () => {
     if (isRefreshing) return
@@ -198,7 +207,11 @@ export function DashboardPage() {
     }
   }
 
+  const [updatingTypes, setUpdatingTypes] = useState<Record<string, boolean>>({})
+
   const handleUpdate = async (type: string) => {
+    if (updatingTypes[type]) return
+    setUpdatingTypes(prev => ({ ...prev, [type]: true }))
     try {
       await ServerService.installOrUpdate(type)
       showToast(`${type} installation/update started.`, 'success')
@@ -206,6 +219,8 @@ export function DashboardPage() {
     } catch (err: any) {
       console.error(err)
       showToast(err.message || `Failed to start ${type} update.`, 'error')
+    } finally {
+      setUpdatingTypes(prev => ({ ...prev, [type]: false }))
     }
   }
   
@@ -392,6 +407,7 @@ export function DashboardPage() {
                     inst={inst} 
                     serversConfiguredCount={serversConfiguredCount}
                     hasRunningServer={hasRunningServer}
+                    isUpdating={Boolean(updatingTypes[inst.type])}
                     onUpdate={handleUpdate} 
                     onSetBranch={handleSetBranch} 
                     onRequestUninstall={(type) => setUninstallTarget(type)}
@@ -536,6 +552,7 @@ function InstallationItem({
   inst, 
   serversConfiguredCount,
   hasRunningServer,
+  isUpdating = false,
   onUpdate, 
   onSetBranch,
   onRequestUninstall,
@@ -545,6 +562,7 @@ function InstallationItem({
   inst: ServerInstallationDto, 
   serversConfiguredCount: number,
   hasRunningServer: boolean,
+  isUpdating?: boolean,
   onUpdate: (type: string) => void, 
   onSetBranch: (type: string, branch: string) => void,
   onRequestUninstall: (type: string) => void,
@@ -585,7 +603,7 @@ function InstallationItem({
             <DropdownMenuContent align="end" className="bg-surface-elevated border-border min-w-[160px] p-1 shadow-lg">
               <DropdownMenuItem 
                 onClick={() => onUpdate(inst.type)}
-                disabled={hasRunningServer}
+                disabled={hasRunningServer || isUpdating}
                 className="cursor-pointer text-xs py-2 font-medium flex items-center gap-2"
               >
                 <RotateCcw className="w-3.5 h-3.5 opacity-70" />
@@ -697,12 +715,13 @@ function InstallationItem({
             size="sm" 
             variant={(isFinished && !isDifferentBranch && !isError) ? 'outline' : 'primary'}
             onClick={() => onUpdate(inst.type)}
-            disabled={isInstalling || hasRunningServer}
+            disabled={isInstalling || hasRunningServer || isUpdating}
             title={hasRunningServer ? 'Server running - stop before update' : undefined}
             className={`min-w-[100px] transition-all duration-500 ${
               isDifferentBranch ? 'animate-pulse shadow-[0_0_20px_var(--color-primary)]/40 border-primary' : ''
             }`}
           >
+            {isUpdating && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
             {inst.installationStatus === 'NOT_INSTALLED' && 'Install'}
             {isError && 'Retry'}
             {inst.installationStatus !== 'NOT_INSTALLED' && !isError && isDifferentBranch && 'Switch branch'}

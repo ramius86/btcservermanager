@@ -41,6 +41,7 @@ import { useToast } from '../components/ui/Toast'
 import { FileManagerService } from '../services/api'
 import { FileItemDto } from '../dtos/FileDto'
 import { FileEditorModal } from '../components/files/FileEditorModal'
+import { TableVirtuoso, TableComponents } from 'react-virtuoso'
 
 // Quick jump targets from storage root
 const QUICK_JUMPS = [
@@ -189,6 +190,18 @@ export const FileManagerPage: React.FC = () => {
 
   // Multi-selection
   const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set())
+
+  // Scroll parent for virtualization
+  const [scrollParent, setScrollParent] = useState<HTMLElement | undefined>(() => {
+    return typeof document !== 'undefined' ? document.querySelector('main') || undefined : undefined
+  })
+
+  useEffect(() => {
+    if (!scrollParent) {
+      const mainEl = document.querySelector('main')
+      if (mainEl) setScrollParent(mainEl)
+    }
+  }, [scrollParent])
 
   // Drag & drop upload
   const [isDragging, setIsDragging] = useState<boolean>(false)
@@ -546,7 +559,242 @@ export const FileManagerPage: React.FC = () => {
   const deleteTargetLabel = deleteCount === 1 ? `"${deleteDialog.items[0]?.name}"` : `${deleteCount} selected items`
   const deleteDescription = `Are you sure you want to permanently delete ${deleteTargetLabel}? This action cannot be undone.`
 
-  // Table body content renderer (avoiding nested ternaries)
+  // Table header renderer
+  const renderTableHeader = () => (
+    <tr className="border-b border-border/50 bg-surface-elevated text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+      <th className="py-3 px-4 w-10">
+        <button
+          onClick={handleSelectAll}
+          className="flex items-center text-muted-foreground hover:text-foreground"
+        >
+          {selectedPaths.size > 0 && selectedPaths.size === filteredItems.length ? (
+            <CheckSquare className="w-4 h-4 text-primary" />
+          ) : (
+            <Square className="w-4 h-4" />
+          )}
+        </button>
+      </th>
+      <th
+        onClick={() => toggleSort('name')}
+        className="py-3 px-4 cursor-pointer select-none hover:text-foreground transition-colors group/th"
+      >
+        <span className="inline-flex items-center">
+          Name {renderSortIcon('name')}
+        </span>
+      </th>
+      <th
+        onClick={() => toggleSort('size')}
+        className="py-3 px-4 w-28 cursor-pointer select-none hover:text-foreground transition-colors group/th"
+      >
+        <span className="inline-flex items-center">
+          Size {renderSortIcon('size')}
+        </span>
+      </th>
+      <th
+        onClick={() => toggleSort('modified')}
+        className="py-3 px-4 w-44 hidden md:table-cell cursor-pointer select-none hover:text-foreground transition-colors group/th"
+      >
+        <span className="inline-flex items-center">
+          Modified {renderSortIcon('modified')}
+        </span>
+      </th>
+      <th className="py-3 px-4 w-20 text-right">Actions</th>
+    </tr>
+  )
+
+  // Table row cells renderer
+  const renderRowCells = (item: FileItemDto) => {
+    const isSelected = selectedPaths.has(item.path)
+    const isZip = item.extension.toLowerCase() === '.zip'
+    const isEditable = !item.isDir && EDITABLE_EXTENSIONS.has(item.extension.toLowerCase())
+
+    return (
+      <>
+        {/* Checkbox */}
+        <td className="py-2.5 px-4 w-10">
+          <button
+            onClick={() => handleToggleSelect(item.path)}
+            className="flex items-center text-muted-foreground hover:text-foreground"
+          >
+            {isSelected ? (
+              <CheckSquare className="w-4 h-4 text-primary" />
+            ) : (
+              <Square className="w-4 h-4 opacity-50 group-hover:opacity-100" />
+            )}
+          </button>
+        </td>
+
+        {/* Name & Icon */}
+        <td className="py-2.5 px-4 font-medium text-foreground">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {getItemIcon(item)}
+            {renderItemName(
+              item,
+              isEditable,
+              handleNavigate,
+              (target) =>
+                setEditorState({
+                  isOpen: true,
+                  filePath: target.path,
+                  fileName: target.name,
+                  isReadOnly: target.isReadOnly,
+                })
+            )}
+
+            {item.isReadOnly && (
+              <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
+                <Lock className="w-2.5 h-2.5" /> Read-Only
+              </span>
+            )}
+          </div>
+        </td>
+
+        {/* Size */}
+        <td className="py-2.5 px-4 w-28 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
+          {item.isDir ? '—' : formatFileSize(item.size)}
+        </td>
+
+        {/* Modified Date */}
+        <td className="py-2.5 px-4 w-44 text-muted-foreground/80 whitespace-nowrap hidden md:table-cell text-[11px]">
+          {formatDate(item.modTime)}
+        </td>
+
+        {/* Actions Dropdown */}
+        <td className="py-2.5 px-4 w-20 text-right">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 w-7 p-0 opacity-70 group-hover:opacity-100 hover:bg-muted/50"
+              >
+                <MoreVertical className="w-3.5 h-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-44">
+              {item.isDir && (
+                <>
+                  <DropdownMenuItem onClick={() => handleNavigate(item.path)}>
+                    <Folder className="w-3.5 h-3.5 mr-2 text-blue-400" />
+                    Open Folder
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      window.open(FileManagerService.downloadUrl(item.path), '_blank')
+                    }
+                  >
+                    <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                    Download as Zip
+                  </DropdownMenuItem>
+                </>
+              )}
+
+              {!item.isDir && isEditable && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    setEditorState({
+                      isOpen: true,
+                      filePath: item.path,
+                      fileName: item.name,
+                      isReadOnly: item.isReadOnly,
+                    })
+                  }
+                >
+                  <Edit3 className="w-3.5 h-3.5 mr-2 text-primary" />
+                  {item.isReadOnly ? 'View File' : 'Edit File'}
+                </DropdownMenuItem>
+              )}
+
+              {isZip && !item.isReadOnly && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    setExtractModal({
+                      isOpen: true,
+                      item,
+                      destination: currentPath,
+                    })
+                  }
+                >
+                  <Archive className="w-3.5 h-3.5 mr-2 text-amber-400" />
+                  Extract Archive
+                </DropdownMenuItem>
+              )}
+
+              {!item.isDir && (
+                <DropdownMenuItem
+                  onClick={() =>
+                    window.open(FileManagerService.downloadUrl(item.path), '_blank')
+                  }
+                >
+                  <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                  Download File
+                </DropdownMenuItem>
+              )}
+
+              {!item.isReadOnly && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() =>
+                      setRenameModal({
+                        isOpen: true,
+                        item,
+                        newName: item.name,
+                      })
+                    }
+                  >
+                    <Edit3 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
+                    Rename
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() =>
+                      setDeleteDialog({
+                        isOpen: true,
+                        items: [item],
+                      })
+                    }
+                    className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
+                  >
+                    <Trash2 className="w-3.5 h-3.5 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </td>
+      </>
+    )
+  }
+
+  // Virtuoso components definition
+  const virtuosoComponents: TableComponents<FileItemDto> = useMemo(
+    () => ({
+      Table: (props) => (
+        <table {...props} className="w-full text-left border-collapse text-xs" />
+      ),
+      TableHead: React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+        (props, ref) => <thead {...props} ref={ref} />
+      ),
+      TableRow: ({ item, ...props }) => {
+        const isSelected = item ? selectedPaths.has(item.path) : false
+        return (
+          <tr
+            {...props}
+            className={`group transition-colors hover:bg-muted/30 ${
+              isSelected ? 'bg-primary/5' : ''
+            }`}
+          />
+        )
+      },
+      TableBody: React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+        (props, ref) => <tbody {...props} ref={ref} className="divide-y divide-border/30" />
+      ),
+    }),
+    [selectedPaths]
+  )
+
+  // Table body content renderer (for non-virtualized standard view)
   const renderTableBody = () => {
     if (loading) {
       return (
@@ -578,9 +826,6 @@ export const FileManagerPage: React.FC = () => {
 
     return filteredItems.map((item) => {
       const isSelected = selectedPaths.has(item.path)
-      const isZip = item.extension.toLowerCase() === '.zip'
-      const isEditable = !item.isDir && EDITABLE_EXTENSIONS.has(item.extension.toLowerCase())
-
       return (
         <tr
           key={item.path}
@@ -588,159 +833,7 @@ export const FileManagerPage: React.FC = () => {
             isSelected ? 'bg-primary/5' : ''
           }`}
         >
-          {/* Checkbox */}
-          <td className="py-2.5 px-4">
-            <button
-              onClick={() => handleToggleSelect(item.path)}
-              className="flex items-center text-muted-foreground hover:text-foreground"
-            >
-              {isSelected ? (
-                <CheckSquare className="w-4 h-4 text-primary" />
-              ) : (
-                <Square className="w-4 h-4 opacity-50 group-hover:opacity-100" />
-              )}
-            </button>
-          </td>
-
-          {/* Name & Icon */}
-          <td className="py-2.5 px-4 font-medium text-foreground">
-            <div className="flex items-center gap-2.5 min-w-0">
-              {getItemIcon(item)}
-              {renderItemName(
-                item,
-                isEditable,
-                handleNavigate,
-                (target) =>
-                  setEditorState({
-                    isOpen: true,
-                    filePath: target.path,
-                    fileName: target.name,
-                    isReadOnly: target.isReadOnly,
-                  })
-              )}
-
-              {item.isReadOnly && (
-                <span className="inline-flex items-center gap-1 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 text-amber-400 shrink-0">
-                  <Lock className="w-2.5 h-2.5" /> Read-Only
-                </span>
-              )}
-            </div>
-          </td>
-
-          {/* Size */}
-          <td className="py-2.5 px-4 font-mono text-[11px] text-muted-foreground whitespace-nowrap">
-            {item.isDir ? '—' : formatFileSize(item.size)}
-          </td>
-
-          {/* Modified Date */}
-          <td className="py-2.5 px-4 text-muted-foreground/80 whitespace-nowrap hidden md:table-cell text-[11px]">
-            {formatDate(item.modTime)}
-          </td>
-
-          {/* Actions Dropdown */}
-          <td className="py-2.5 px-4 text-right">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 w-7 p-0 opacity-70 group-hover:opacity-100 hover:bg-muted/50"
-                >
-                  <MoreVertical className="w-3.5 h-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-44">
-                {item.isDir && (
-                  <>
-                    <DropdownMenuItem onClick={() => handleNavigate(item.path)}>
-                      <Folder className="w-3.5 h-3.5 mr-2 text-blue-400" />
-                      Open Folder
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        window.open(FileManagerService.downloadUrl(item.path), '_blank')
-                      }
-                    >
-                      <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                      Download as Zip
-                    </DropdownMenuItem>
-                  </>
-                )}
-
-                {!item.isDir && isEditable && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      setEditorState({
-                        isOpen: true,
-                        filePath: item.path,
-                        fileName: item.name,
-                        isReadOnly: item.isReadOnly,
-                      })
-                    }
-                  >
-                    <Edit3 className="w-3.5 h-3.5 mr-2 text-primary" />
-                    {item.isReadOnly ? 'View File' : 'Edit File'}
-                  </DropdownMenuItem>
-                )}
-
-                {isZip && !item.isReadOnly && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      setExtractModal({
-                        isOpen: true,
-                        item,
-                        destination: currentPath,
-                      })
-                    }
-                  >
-                    <Archive className="w-3.5 h-3.5 mr-2 text-amber-400" />
-                    Extract Archive
-                  </DropdownMenuItem>
-                )}
-
-                {!item.isDir && (
-                  <DropdownMenuItem
-                    onClick={() =>
-                      window.open(FileManagerService.downloadUrl(item.path), '_blank')
-                    }
-                  >
-                    <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                    Download File
-                  </DropdownMenuItem>
-                )}
-
-                {!item.isReadOnly && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setRenameModal({
-                          isOpen: true,
-                          item,
-                          newName: item.name,
-                        })
-                      }
-                    >
-                      <Edit3 className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
-                      Rename
-                    </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={() =>
-                        setDeleteDialog({
-                          isOpen: true,
-                          items: [item],
-                        })
-                      }
-                      className="text-red-400 focus:text-red-300 focus:bg-red-950/20"
-                    >
-                      <Trash2 className="w-3.5 h-3.5 mr-2" />
-                      Delete
-                    </DropdownMenuItem>
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </td>
+          {renderRowCells(item)}
         </tr>
       )
     })
@@ -997,54 +1090,24 @@ export const FileManagerPage: React.FC = () => {
 
       {/* Files Table Card */}
       <Card className="border-border/60 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="border-b border-border/50 bg-surface-elevated/40 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
-                <th className="py-3 px-4 w-10">
-                  <button
-                    onClick={handleSelectAll}
-                    className="flex items-center text-muted-foreground hover:text-foreground"
-                  >
-                    {selectedPaths.size > 0 && selectedPaths.size === filteredItems.length ? (
-                      <CheckSquare className="w-4 h-4 text-primary" />
-                    ) : (
-                      <Square className="w-4 h-4" />
-                    )}
-                  </button>
-                </th>
-                <th
-                  onClick={() => toggleSort('name')}
-                  className="py-3 px-4 cursor-pointer select-none hover:text-foreground transition-colors group/th"
-                >
-                  <span className="inline-flex items-center">
-                    Name {renderSortIcon('name')}
-                  </span>
-                </th>
-                <th
-                  onClick={() => toggleSort('size')}
-                  className="py-3 px-4 w-28 cursor-pointer select-none hover:text-foreground transition-colors group/th"
-                >
-                  <span className="inline-flex items-center">
-                    Size {renderSortIcon('size')}
-                  </span>
-                </th>
-                <th
-                  onClick={() => toggleSort('modified')}
-                  className="py-3 px-4 w-44 hidden md:table-cell cursor-pointer select-none hover:text-foreground transition-colors group/th"
-                >
-                  <span className="inline-flex items-center">
-                    Modified {renderSortIcon('modified')}
-                  </span>
-                </th>
-                <th className="py-3 px-4 w-20 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border/30">
-              {renderTableBody()}
-            </tbody>
-          </table>
-        </div>
+        {loading || filteredItems.length <= 50 ? (
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>{renderTableHeader()}</thead>
+              <tbody className="divide-y divide-border/30">{renderTableBody()}</tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="overflow-x-auto custom-scrollbar">
+            <TableVirtuoso
+              customScrollParent={scrollParent || undefined}
+              data={filteredItems}
+              components={virtuosoComponents}
+              fixedHeaderContent={renderTableHeader}
+              itemContent={(_index, item) => renderRowCells(item)}
+            />
+          </div>
+        )}
       </Card>
 
       {/* In-Browser Text Editor Modal */}

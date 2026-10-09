@@ -5,6 +5,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,13 +19,15 @@ type HeadlessClient struct {
 	StopCh  chan struct{}
 	mu      sync.RWMutex
 	alive   bool
+	onExit  func(serverID int64, hcID int)
 }
 
-func NewHeadlessClient(id int, server *Arma3Server, paths PathProvider) *HeadlessClient {
+func NewHeadlessClient(id int, server *Arma3Server, paths PathProvider, onExit func(serverID int64, hcID int)) *HeadlessClient {
 	return &HeadlessClient{
 		ID:     id,
 		Server: server,
 		Paths:  paths,
+		onExit: onExit,
 	}
 }
 
@@ -38,6 +41,10 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 	cmd := exec.Command(executable, params...)
 	cmd.Dir = hc.Paths.GetServerPath(TypeArma3)
 
+	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
+		return fmt.Errorf("failed to create HC log directory: %w", err)
+	}
+
 	f, err := os.OpenFile(logFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to open HC log file: %w", err)
@@ -46,6 +53,7 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 	cmd.Stdout = f
 	cmd.Stderr = f
 
+	setProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		f.Close()
 		return fmt.Errorf("failed to start HC process: %w", err)
@@ -66,6 +74,10 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 
 		f.Close()
 		close(hc.StopCh)
+
+		if hc.onExit != nil {
+			hc.onExit(hc.Server.ID, hc.ID)
+		}
 	}()
 
 	return nil
@@ -76,7 +88,7 @@ func (hc *HeadlessClient) Stop() error {
 	defer hc.mu.Unlock()
 
 	if hc.alive && hc.Process != nil && hc.Process.Process != nil {
-		return hc.Process.Process.Kill()
+		return killProcessGroup(hc.Process)
 	}
 
 	return nil
@@ -91,7 +103,8 @@ func (hc *HeadlessClient) IsAlive() bool {
 func (hc *HeadlessClient) prepareParameters(additionalMods []string) []string {
 	params := []string{
 		"-client",
-		"-connect=127.0.0.1:" + strconv.Itoa(hc.Server.Port),
+		"-connect=127.0.0.1",
+		"-port=" + strconv.Itoa(hc.Server.Port),
 	}
 	if hc.Server.Password != "" {
 		params = append(params, "-password="+hc.Server.Password)

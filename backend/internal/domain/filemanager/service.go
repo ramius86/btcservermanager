@@ -85,15 +85,22 @@ func (s *Service) ResolvePath(relPath string) (absPath, cleanRel string, isReadO
 		return "", "", false, ErrPathTraversal
 	}
 
-	// Symlink resolution verification if file exists
-	if fi, err := os.Lstat(absPath); err == nil && fi.Mode()&os.ModeSymlink != 0 {
-		resolvedTarget, err := filepath.EvalSymlinks(absPath)
+	// Symlink resolution verification to prevent bypass via intermediate symlinks
+	current := absPath
+	for {
+		resolvedTarget, err := filepath.EvalSymlinks(current)
 		if err == nil {
 			relTarget, err := filepath.Rel(s.storageRoot, resolvedTarget)
 			if err != nil || strings.HasPrefix(relTarget, "..") || relTarget == ".." {
 				return "", "", false, ErrPathTraversal
 			}
+			break
 		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			break
+		}
+		current = parent
 	}
 
 	cleanRel = filepath.ToSlash(rel)
@@ -334,6 +341,11 @@ func (s *Service) ExtractZip(zipSubpath, destDirSubpath string) error {
 		rel, err := filepath.Rel(destAbs, targetPath)
 		if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
 			return fmt.Errorf("insecure zip path traversal detected in file: %s", f.Name)
+		}
+
+		relToStorage, err := filepath.Rel(s.storageRoot, targetPath)
+		if err == nil && isPathInsideData(filepath.ToSlash(relToStorage)) {
+			return fmt.Errorf("insecure zip extraction targeting protected data directory: %s", f.Name)
 		}
 
 		if f.FileInfo().IsDir() {

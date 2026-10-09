@@ -3,9 +3,10 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Layout } from './components/Layout'
 import { ToastProvider } from './components/ui/Toast'
 import { WebSocketProvider } from './contexts/WebSocketContext'
+import { InstallProgressProvider } from './contexts/InstallProgressContext'
 import { ServerStatusProvider } from './contexts/ServerStatusContext'
 import { SystemInfoProvider } from './contexts/SystemInfoContext'
-import { SteamCmdProvider } from './contexts/SteamCmdContext'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 // Lazy loaded pages
 const DashboardPage = lazy(() => import('./pages/DashboardPage').then(m => ({ default: m.DashboardPage })))
@@ -34,37 +35,41 @@ export default function App() {
   return (
     <BrowserRouter>
       <WebSocketProvider>
-        <ServerStatusProvider>
-          <SystemInfoProvider>
-            <SteamCmdProvider>
+        <InstallProgressProvider>
+          <ServerStatusProvider>
+            <SystemInfoProvider>
               <ToastProvider>
+              <ErrorBoundary>
                 <Layout>
-                  <Suspense fallback={<PageLoader />}>
-                    <Routes>
-                      <Route path="/" element={<DashboardPage />} />
-                      <Route path="/servers" element={<ServersPage />} />
-                      <Route path="/servers/new" element={<ServerSettingsPage />} />
-                      <Route path="/servers/new/:type" element={<ServerSettingsPage />} />
-                      <Route path="/servers/:id" element={<ServerSettingsPage />} />
-                      <Route path="/mods" element={<ModsPage />} />
-                      <Route path="/scenarios" element={<ScenariosPage />} />
-                      <Route path="/logs" element={<LogExplorerPage />} />
-                      <Route path="/files" element={<FileManagerPage />} />
-                      <Route path="/events" element={<EventsPage />} />
-                      <Route path="/events/stats" element={<EventsStatsPage />} />
-                      <Route path="/events/:id/roster" element={<EventRosterPage />} />
-                      <Route path="/members" element={<MembersPage />} />
-                      <Route path="/config" element={<AppConfigPage />} />
-                      <Route path="/settings" element={<Navigate to="/config" replace />} />
-                      <Route path="*" element={<Navigate to="/" replace />} />
-                    </Routes>
-                  </Suspense>
+                  <ErrorBoundary>
+                    <Suspense fallback={<PageLoader />}>
+                      <Routes>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/servers" element={<ServersPage />} />
+                        <Route path="/servers/new" element={<ServerSettingsPage />} />
+                        <Route path="/servers/new/:type" element={<ServerSettingsPage />} />
+                        <Route path="/servers/:id" element={<ServerSettingsPage />} />
+                        <Route path="/mods" element={<ModsPage />} />
+                        <Route path="/scenarios" element={<ScenariosPage />} />
+                        <Route path="/logs" element={<LogExplorerPage />} />
+                        <Route path="/files" element={<FileManagerPage />} />
+                        <Route path="/events" element={<EventsPage />} />
+                        <Route path="/events/stats" element={<EventsStatsPage />} />
+                        <Route path="/events/:id/roster" element={<EventRosterPage />} />
+                        <Route path="/members" element={<MembersPage />} />
+                        <Route path="/config" element={<AppConfigPage />} />
+                        <Route path="/settings" element={<Navigate to="/config" replace />} />
+                        <Route path="*" element={<Navigate to="/" replace />} />
+                      </Routes>
+                    </Suspense>
+                  </ErrorBoundary>
                 </Layout>
-              </ToastProvider>
-            </SteamCmdProvider>
+              </ErrorBoundary>
+            </ToastProvider>
           </SystemInfoProvider>
         </ServerStatusProvider>
-      </WebSocketProvider>
-    </BrowserRouter>
-  )
+      </InstallProgressProvider>
+    </WebSocketProvider>
+  </BrowserRouter>
+)
 }

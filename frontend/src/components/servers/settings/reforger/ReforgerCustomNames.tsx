@@ -1,33 +1,30 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { ServerService } from '../../../../services/api'
+import { ReforgerCustomNameEntry } from '../../../../dtos/ServerDto'
 import { useToast } from '../../../ui/Toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
 import { Button } from '../../../ui/Button'
 import { Input } from '../../../ui/Input'
-import { Users, Save, RefreshCw, Trash2 } from 'lucide-react'
+import { Users, Save, RefreshCw, Trash2, Search } from 'lucide-react'
 import { ConfirmationDialog } from '../../../ui/ConfirmationDialog'
-
-interface CustomNameEntry {
-  playerName: string
-  customName: string
-}
 
 interface ReforgerCustomNamesProps {
   serverId: number
 }
 
 export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesProps>) {
-  const [namesMap, setNamesMap] = useState<Record<string, CustomNameEntry>>({})
+  const [entries, setEntries] = useState<ReforgerCustomNameEntry[]>([])
+  const [searchQuery, setSearchQuery] = useState('')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null)
+  const [deleteTargetUid, setDeleteTargetUid] = useState<string | null>(null)
   const { showToast } = useToast()
 
   const fetchCustomNames = async () => {
     setLoading(true)
     try {
       const data = await ServerService.getCustomNames(serverId)
-      setNamesMap(data || {})
+      setEntries(data?.entries ?? [])
     } catch (err: any) {
       showToast(err.message || 'Failed to fetch custom names', 'error')
     } finally {
@@ -39,20 +36,16 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
     fetchCustomNames()
   }, [serverId])
 
-  const handleCustomNameChange = (id: string, newCustomName: string) => {
-    setNamesMap(prev => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        customName: newCustomName
-      }
-    }))
+  const handleCustomNameChange = (uid: string, newCustomName: string) => {
+    setEntries(prev => prev.map(item =>
+      item.uid === uid ? { ...item, customName: newCustomName } : item
+    ))
   }
 
-  const handleSave = async (mapToSave = namesMap) => {
+  const handleSave = async (entriesToSave = entries) => {
     setSaving(true)
     try {
-      await ServerService.updateCustomNames(serverId, mapToSave)
+      await ServerService.updateCustomNames(serverId, { entries: entriesToSave })
       showToast('Custom names saved successfully', 'success')
       fetchCustomNames() // Reload to ensure sync
     } catch (err: any) {
@@ -63,15 +56,24 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
   }
 
   const handleDeleteConfirm = () => {
-    if (!deleteTargetId) return
-    const newNamesMap = { ...namesMap }
-    delete newNamesMap[deleteTargetId]
-    setNamesMap(newNamesMap)
-    setDeleteTargetId(null)
-    handleSave(newNamesMap) // Automatically save after deletion
+    if (!deleteTargetUid) return
+    const newEntries = entries.filter(item => item.uid !== deleteTargetUid)
+    setEntries(newEntries)
+    setDeleteTargetUid(null)
+    handleSave(newEntries) // Automatically save after deletion
   }
 
-  const entries = Object.entries(namesMap)
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery.trim()) return entries
+    const query = searchQuery.toLowerCase().trim()
+    return entries.filter(e =>
+      e.playerName.toLowerCase().includes(query) ||
+      e.customName.toLowerCase().includes(query) ||
+      e.uid.toLowerCase().includes(query)
+    )
+  }, [entries, searchQuery])
+
+  const targetEntry = entries.find(e => e.uid === deleteTargetUid)
 
   const renderContent = () => {
     if (loading) {
@@ -90,6 +92,14 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
       )
     }
 
+    if (filteredEntries.length === 0) {
+      return (
+        <div className="text-center py-12 border border-dashed border-border/50 rounded-2xl bg-muted/10 text-muted-foreground text-sm font-medium">
+          No players match your search filter.
+        </div>
+      )
+    }
+
     return (
       <div className="border border-border/50 rounded-2xl overflow-hidden bg-muted/10">
         <div className="overflow-x-auto">
@@ -102,15 +112,18 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
               </tr>
             </thead>
             <tbody className="divide-y divide-border/50">
-              {entries.map(([id, data]) => (
-                <tr key={id} className="hover:bg-muted/25 transition-colors">
+              {filteredEntries.map((entry) => (
+                <tr key={entry.uid} className="hover:bg-muted/25 transition-colors">
                   <td className="px-6 py-3 font-medium text-foreground">
-                    {data.playerName}
+                    <div className="font-semibold">{entry.playerName}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono tracking-wider truncate max-w-[280px]" title={entry.uid}>
+                      {entry.uid}
+                    </div>
                   </td>
                   <td className="px-6 py-3">
                     <Input
-                      value={data.customName}
-                      onChange={(e) => handleCustomNameChange(id, e.target.value)}
+                      value={entry.customName}
+                      onChange={(e) => handleCustomNameChange(entry.uid, e.target.value)}
                       className="bg-background border-border/50 focus:border-primary transition-colors h-9"
                       placeholder="Enter custom name..."
                     />
@@ -119,7 +132,7 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => setDeleteTargetId(id)}
+                      onClick={() => setDeleteTargetUid(entry.uid)}
                       className="h-8 w-8 p-0 text-muted-foreground hover:text-danger hover:bg-danger/10"
                       title="Delete Entry"
                     >
@@ -174,18 +187,31 @@ export function ReforgerCustomNames({ serverId }: Readonly<ReforgerCustomNamesPr
             </Button>
           </div>
         </div>
+        {entries.length > 0 && (
+          <div className="pt-4 max-w-sm">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search player, custom name or UID..."
+                className="pl-9 bg-background border-border/50 focus:border-primary transition-colors h-9 text-xs"
+              />
+            </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-6 p-6 lg:p-8">
         {renderContent()}
       </CardContent>
 
       <ConfirmationDialog
-        open={deleteTargetId !== null}
-        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        open={deleteTargetUid !== null}
+        onOpenChange={(open) => !open && setDeleteTargetUid(null)}
         title="Delete Custom Name Entry"
         description={
-          deleteTargetId && namesMap[deleteTargetId]
-            ? `Are you sure you want to completely remove the entry for "${namesMap[deleteTargetId].playerName}"? This action cannot be undone.`
+          targetEntry
+            ? `Are you sure you want to completely remove the entry for "${targetEntry.playerName}" (${targetEntry.uid})? This action cannot be undone.`
             : "Are you sure you want to completely remove this entry?"
         }
         onConfirm={handleDeleteConfirm}

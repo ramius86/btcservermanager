@@ -84,7 +84,7 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 // CorsHandler restituisce un middleware CORS configuration con origine specifica.
 // Usa la libreria go-chi/cors già presente nel go.mod.
 func CorsHandler(allowedOrigin string) func(http.Handler) http.Handler {
-	sanitizedOrigin := strings.TrimSpace(allowedOrigin)
+	sanitizedOrigin := strings.TrimRight(strings.TrimSpace(allowedOrigin), "/")
 	origins := []string{sanitizedOrigin}
 	if sanitizedOrigin == "" {
 		// Fallback per sviluppo locale se ALLOWED_ORIGIN non è impostato

@@ -44,6 +44,8 @@ func (e *Executor) processOutput(r io.Reader, job *Job, logPath string) string {
 	var fullOutput strings.Builder
 
 	scanner := bufio.NewScanner(r)
+	buf := make([]byte, 0, 64*1024)
+	scanner.Buffer(buf, 10*1024*1024)
 
 	for scanner.Scan() {
 		rawLine := scanner.Text()
@@ -282,18 +284,12 @@ func (e *Executor) handleResult(output string, job *Job) {
 
 	// For non-mod jobs (server installs, updates), keep existing coarse-grained logic
 	cleanOut := stripANSI(output)
-	isSuccess := strings.Contains(cleanOut, "Success!") || strings.Contains(cleanOut, "up to date") ||
-		strings.Contains(cleanOut, "fully installed") || strings.Contains(cleanOut, "already up to date")
-	isAuthOk := strings.Contains(cleanOut, "Waiting for user info...") && strings.Contains(cleanOut, "OK")
-
-	if isSuccess || isAuthOk {
-		return
-	}
 
 	hasErrorMarker := strings.Contains(cleanOut, "Error") || strings.Contains(cleanOut, "FAILED") || strings.Contains(cleanOut, "timed out")
 	if hasErrorMarker {
 		errStatus := parseJobErrorCode(cleanOut)
 		job.ErrorStatus = &errStatus
+		return
 	}
 }
 

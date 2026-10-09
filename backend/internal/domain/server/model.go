@@ -7,6 +7,8 @@ import (
 
 type Type string
 
+type ServerType = Type
+
 const (
 	TypeArma3    Type = "ARMA3"
 	TypeDayZ     Type = "DAYZ"
@@ -30,8 +32,8 @@ var ServerIDs = map[Type]int64{
 
 var ServerExecutables = map[Type]string{
 	TypeArma3:    "arma3server_x64",
-	TypeDayZ:     "DayZServer_x64",
-	TypeDayZExp:  "DayZServer_x64",
+	TypeDayZ:     "DayZServer",
+	TypeDayZExp:  "DayZServer",
 	TypeReforger: "ArmaReforgerServer",
 }
 

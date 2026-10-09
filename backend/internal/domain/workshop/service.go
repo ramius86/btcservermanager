@@ -170,7 +170,7 @@ func (s *Service) handleDeletedModGetError(id int64, err error) (bool, error) {
 
 func (s *Service) uninstallModFilesAndScenarios(ctx context.Context, mod *WorkshopMod) {
 	if s.installer != nil {
-		if err := s.installer.UninstallMod(mod); err != nil {
+		if err := s.installer.UninstallMod(ctx, mod); err != nil {
 			log.Printf("[Workshop] Warning: Failed to uninstall mod files for %d: %v", mod.ID, err)
 		}
 	}
@@ -372,7 +372,7 @@ func (s *Service) SyncAllBiKeys(ctx context.Context) error {
 
 	var count int
 	for _, mod := range mods {
-		if mod.ServerType == server.TypeArma3 && mod.InstallationStatus == InstallationFinished {
+		if (mod.ServerType == server.TypeArma3 || mod.ServerType == server.TypeDayZ || mod.ServerType == server.TypeDayZExp) && mod.InstallationStatus == InstallationFinished {
 			select {
 			case s.postInstallQueue <- mod.ID:
 				count++

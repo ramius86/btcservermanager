@@ -3,6 +3,7 @@ services:
     image: ghcr.io/ramius86/btcservermanager:${VERSION:-latest}
     init: true
     restart: unless-stopped
+    stop_grace_period: 60s
     volumes:
       - ${HOST_STORAGE_PATH:-./storage}:/app/storage
       - ${HOST_STORAGE_PATH:-./storage}/steam:/home/steam/Steam
@@ -11,6 +12,7 @@ services:
       - SECRET_KEY=${SECRET_KEY}
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN}
       - CF_TEAM_DOMAIN=${CF_TEAM_DOMAIN}
+      - CF_ACCESS_AUD=${CF_ACCESS_AUD}
       - CF_ZONE_ID=${CF_ZONE_ID}
       - CF_API_TOKEN=${CF_API_TOKEN}
       - CSP_ENABLED=${CSP_ENABLED}

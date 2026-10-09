@@ -146,6 +146,41 @@ func TestRepository_UserAndParticipationOperations(t *testing.T) {
 	if len(stats) != 1 || stats[0].UserID != "user1" || stats[0].Username != "AliceUpdated" || stats[0].Status != "going" {
 		t.Errorf("unexpected attendance stats: %+v", stats)
 	}
+
+	// 5. Test DeleteUserAndParticipations cascades qualifications and role history
+	_ = repo.SaveMemberQualifications(ctx, []string{"user1"}, []MemberQualification{{UserID: "user1", QualificationName: "Medic"}})
+	_ = repo.RecordPlayerRoleUsage(ctx, []PlayerRoleRecord{{UserID: "user1", PlayerName: "AliceUpdated", Role: "Rifleman"}}, "arma3")
+
+	err = repo.DeleteUserAndParticipations(ctx, "user1")
+	if err != nil {
+		t.Fatalf("failed to delete user and participations: %v", err)
+	}
+
+	quals, err := repo.GetMemberQualifications(ctx, []string{"user1"})
+	if err != nil {
+		t.Fatalf("failed to get member qualifications: %v", err)
+	}
+	if len(quals["user1"]) != 0 {
+		t.Errorf("expected 0 qualifications for deleted user, got %v", quals["user1"])
+	}
+
+	roles, err := repo.GetPlayerRoleStats(ctx, "all")
+	if err != nil {
+		t.Fatalf("failed to get role history: %v", err)
+	}
+	for _, r := range roles {
+		if r.UserID == "user1" {
+			t.Errorf("expected 0 role stats for deleted user1, found: %+v", r)
+		}
+	}
+
+	partsAfter, err := repo.GetEventParticipations(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to get participations after delete: %v", err)
+	}
+	if len(partsAfter) != 0 {
+		t.Errorf("expected 0 participations after delete, got %v", partsAfter)
+	}
 }
 
 func TestService_NotConfigured(t *testing.T) {
@@ -412,5 +447,501 @@ func TestRepository_NicknameSyncOperations(t *testing.T) {
 	}
 	if len(activeEvents) != 1 || activeEvents[0].ID != eID {
 		t.Errorf("expected active event %d, got %v", eID, activeEvents)
+	}
+}
+
+func TestRepository_UserGamesAndStatsFilter(t *testing.T) {
+	repo := setupTestDB(t)
+	ctx := t.Context()
+
+	// 1. Insert users
+	if err := repo.UpsertUser(ctx, "u_alice", "Alice"); err != nil {
+		t.Fatalf("failed to upsert user alice: %v", err)
+	}
+	if err := repo.UpsertUser(ctx, "u_bob", "Bob"); err != nil {
+		t.Fatalf("failed to upsert user bob: %v", err)
+	}
+
+	// Verify defaults are true
+	users, err := repo.GetAllUsers(ctx)
+	if err != nil {
+		t.Fatalf("failed to get all users: %v", err)
+	}
+	for _, u := range users {
+		if !u.PlaysArma3 || !u.PlaysReforger {
+			t.Errorf("expected user %s to play both games by default, got arma3=%v, reforger=%v", u.Username, u.PlaysArma3, u.PlaysReforger)
+		}
+	}
+
+	// 2. Create Arma 3 event and Reforger event
+	evArma3 := &Event{
+		ChannelID: "chan1",
+		MessageID: "msg1",
+		Title:     "Arma 3 Mission",
+		DateTime:  "2026-10-10T20:00",
+		GameType:  "ArmA III",
+	}
+	idA3, err := repo.SaveEvent(ctx, evArma3)
+	if err != nil {
+		t.Fatalf("failed to save arma 3 event: %v", err)
+	}
+
+	evReforger := &Event{
+		ChannelID: "chan2",
+		MessageID: "msg2",
+		Title:     "Reforger Conflict",
+		DateTime:  "2026-10-11T20:00",
+		GameType:  "Arma Reforger",
+	}
+	idRef, err := repo.SaveEvent(ctx, evReforger)
+	if err != nil {
+		t.Fatalf("failed to save reforger event: %v", err)
+	}
+
+	// 3. Set Bob to not play Reforger
+	if err := repo.SetUserGames(ctx, "u_bob", true, false); err != nil {
+		t.Fatalf("failed to set bob's games: %v", err)
+	}
+
+	// Verify Bob's updated flags
+	users, _ = repo.GetAllUsers(ctx)
+	for _, u := range users {
+		if u.ID == "u_bob" {
+			if !u.PlaysArma3 || u.PlaysReforger {
+				t.Errorf("expected bob to play arma3 only, got arma3=%v, reforger=%v", u.PlaysArma3, u.PlaysReforger)
+			}
+		}
+	}
+
+	// 4. Check stats: Bob should have no_response for Arma 3, but NO row for Reforger
+	stats, err := repo.GetAttendanceStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get attendance stats: %v", err)
+	}
+
+	bobA3Count := 0
+	bobRefCount := 0
+	aliceA3Count := 0
+	aliceRefCount := 0
+
+	for _, s := range stats {
+		if s.UserID == "u_bob" {
+			if s.GameType == "ArmA III" && s.Status == "no_response" {
+				bobA3Count++
+			}
+			if s.GameType == "Arma Reforger" && s.Status == "no_response" {
+				bobRefCount++
+			}
+		}
+		if s.UserID == "u_alice" {
+			if s.GameType == "ArmA III" && s.Status == "no_response" {
+				aliceA3Count++
+			}
+			if s.GameType == "Arma Reforger" && s.Status == "no_response" {
+				aliceRefCount++
+			}
+		}
+	}
+
+	if bobA3Count != 1 {
+		t.Errorf("expected bob to have 1 no_response for Arma 3, got %d", bobA3Count)
+	}
+	if bobRefCount != 0 {
+		t.Errorf("expected bob to have 0 no_response for Reforger, got %d", bobRefCount)
+	}
+	if aliceA3Count != 1 || aliceRefCount != 1 {
+		t.Errorf("expected alice to have 1 each, got a3=%d, ref=%d", aliceA3Count, aliceRefCount)
+	}
+
+	// 5. Test GetNoResponseUserIDs filters out non-players
+	noRespReforger, err := repo.GetNoResponseUserIDs(ctx, idRef)
+	if err != nil {
+		t.Fatalf("failed to get no response users for reforger: %v", err)
+	}
+	if len(noRespReforger) != 1 || noRespReforger[0] != "u_alice" {
+		t.Errorf("expected only alice in noResponse for reforger, got %v", noRespReforger)
+	}
+
+	noRespA3, err := repo.GetNoResponseUserIDs(ctx, idA3)
+	if err != nil {
+		t.Fatalf("failed to get no response users for arma 3: %v", err)
+	}
+	if len(noRespA3) != 2 {
+		t.Errorf("expected both alice and bob in noResponse for arma 3, got %v", noRespA3)
+	}
+
+	// 6. If Bob explicitly votes "not_going" on Reforger, his vote IS included
+	if err := repo.UpsertParticipation(ctx, idRef, "u_bob", "not_going"); err != nil {
+		t.Fatalf("failed to upsert participation: %v", err)
+	}
+	stats, _ = repo.GetAttendanceStats(ctx)
+	foundBobExplicit := false
+	for _, s := range stats {
+		if s.UserID == "u_bob" && s.GameType == "Arma Reforger" && s.Status == "not_going" {
+			foundBobExplicit = true
+		}
+	}
+	if !foundBobExplicit {
+		t.Errorf("expected bob's explicit not_going vote to be in stats")
+	}
+
+	// 7. Auto-enable on going
+	if err := repo.EnsureUserPlaysGame(ctx, "u_bob", "Arma Reforger"); err != nil {
+		t.Fatalf("failed to ensure user plays game: %v", err)
+	}
+	users, _ = repo.GetAllUsers(ctx)
+	for _, u := range users {
+		if u.ID == "u_bob" {
+			if !u.PlaysReforger {
+				t.Errorf("expected bob's plays_reforger to be auto-enabled, got false")
+			}
+		}
+	}
+}
+
+func TestService_ManualParticipationAutoEnableGame(t *testing.T) {
+	repo := setupTestDB(t)
+	ctx := t.Context()
+
+	svc, err := New("test_token", "test_guild", repo)
+	if err != nil {
+		t.Fatalf("failed to create service: %v", err)
+	}
+	svc.session = nil
+
+	if err := repo.UpsertUser(ctx, "u_charlie", "Charlie"); err != nil {
+		t.Fatalf("failed to upsert user: %v", err)
+	}
+	// Charlie does not play Reforger
+	if err := repo.SetUserGames(ctx, "u_charlie", true, false); err != nil {
+		t.Fatalf("failed to set user games: %v", err)
+	}
+
+	evReforger := &Event{
+		ChannelID: "chan2",
+		MessageID: "msg2",
+		Title:     "Reforger Op",
+		DateTime:  "2026-10-12T20:00",
+		GameType:  "Arma Reforger",
+	}
+	eID, err := repo.SaveEvent(ctx, evReforger)
+	if err != nil {
+		t.Fatalf("failed to save event: %v", err)
+	}
+
+	// Admin manually sets Charlie to "going" on Reforger event
+	if err := svc.UpdateManualParticipation(ctx, eID, "u_charlie", "Charlie", "going"); err != nil {
+		t.Fatalf("failed to update manual participation: %v", err)
+	}
+
+	// Verify Charlie now has plays_reforger = true
+	users, _ := repo.GetAllUsers(ctx)
+	for _, u := range users {
+		if u.ID == "u_charlie" {
+			if !u.PlaysReforger {
+				t.Errorf("expected charlie to have plays_reforger auto-enabled on going, got false")
+			}
+		}
+	}
+}
+
+func TestRepository_NewUserNoHistoricalNoResponse(t *testing.T) {
+	repo := setupTestDB(t)
+	ctx := t.Context()
+
+	// 1. Create 5 historical events from months ago
+	for i := 1; i <= 5; i++ {
+		ev := &Event{
+			ChannelID: "chan",
+			MessageID: fmt.Sprintf("msg%d", i),
+			Title:     fmt.Sprintf("Past Mission %d", i),
+			DateTime:  fmt.Sprintf("2026-0%d-15T20:00", i), // Months 1 to 5
+			GameType:  "ArmA III",
+		}
+		if _, err := repo.SaveEvent(ctx, ev); err != nil {
+			t.Fatalf("failed to save past event: %v", err)
+		}
+	}
+
+	// 2. Veteran user Alice has been here since month 1
+	if err := repo.UpsertUser(ctx, "u_alice", "Alice"); err != nil {
+		t.Fatalf("failed to upsert user alice: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, 1, "u_alice", "going"); err != nil {
+		t.Fatalf("failed to record alice participation: %v", err)
+	}
+
+	// 3. Newcomer Davide joins in month 6 and plays event 6 and event 7
+	ev6 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg6",
+		Title:     "Recent Mission 6",
+		DateTime:  "2026-06-01T20:00",
+		GameType:  "ArmA III",
+	}
+	ev6ID, err := repo.SaveEvent(ctx, ev6)
+	if err != nil {
+		t.Fatalf("failed to save event 6: %v", err)
+	}
+
+	ev7 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg7",
+		Title:     "Recent Mission 7",
+		DateTime:  "2026-06-05T20:00",
+		GameType:  "ArmA III",
+	}
+	ev7ID, err := repo.SaveEvent(ctx, ev7)
+	if err != nil {
+		t.Fatalf("failed to save event 7: %v", err)
+	}
+
+	if err := repo.UpsertUser(ctx, "u_davide", "Davide"); err != nil {
+		t.Fatalf("failed to upsert user davide: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, ev6ID, "u_davide", "going"); err != nil {
+		t.Fatalf("failed to record davide event 6: %v", err)
+	}
+	if err := repo.UpsertParticipation(ctx, ev7ID, "u_davide", "going"); err != nil {
+		t.Fatalf("failed to record davide event 7: %v", err)
+	}
+
+	// 4. Retrieve Attendance Stats
+	stats, err := repo.GetAttendanceStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get attendance stats: %v", err)
+	}
+
+	davideNoResponseCount := 0
+	davideGoingCount := 0
+	aliceNoResponseCount := 0
+
+	for _, s := range stats {
+		if s.UserID == "u_davide" {
+			if s.Status == "no_response" {
+				davideNoResponseCount++
+			} else if s.Status == "going" {
+				davideGoingCount++
+			}
+		}
+		if s.UserID == "u_alice" {
+			if s.Status == "no_response" {
+				aliceNoResponseCount++
+			}
+		}
+	}
+
+	// Davide should have ZERO no_response for past events 1..5!
+	if davideNoResponseCount != 0 {
+		t.Errorf("expected davide to have 0 no_response for past events, got %d", davideNoResponseCount)
+	}
+	if davideGoingCount != 2 {
+		t.Errorf("expected davide to have 2 going, got %d", davideGoingCount)
+	}
+
+	// Alice missed events 2..7, so she should have 6 no_response
+	if aliceNoResponseCount != 6 {
+		t.Errorf("expected alice to have 6 no_response, got %d", aliceNoResponseCount)
+	}
+
+	// 5. If event 8 happens AFTER Davide joined, and Davide does not respond, he DOES get 1 no_response
+	ev8 := &Event{
+		ChannelID: "chan",
+		MessageID: "msg8",
+		Title:     "Future Mission 8",
+		DateTime:  "2026-06-10T20:00",
+		GameType:  "ArmA III",
+	}
+	if _, err := repo.SaveEvent(ctx, ev8); err != nil {
+		t.Fatalf("failed to save event 8: %v", err)
+	}
+
+	statsAfterEv8, err := repo.GetAttendanceStats(ctx)
+	if err != nil {
+		t.Fatalf("failed to get attendance stats after ev8: %v", err)
+	}
+
+	davideNoRespAfterEv8 := 0
+	for _, s := range statsAfterEv8 {
+		if s.UserID == "u_davide" && s.Status == "no_response" {
+			davideNoRespAfterEv8++
+		}
+	}
+
+	if davideNoRespAfterEv8 != 1 {
+		t.Errorf("expected davide to have exactly 1 no_response for event 8 after he joined, got %d", davideNoRespAfterEv8)
+	}
+}
+
+type testDiscordBroadcaster struct {
+	events   []string
+	payloads []any
+}
+
+func (b *testDiscordBroadcaster) Broadcast(eventType string, payload any) {
+	b.events = append(b.events, eventType)
+	b.payloads = append(b.payloads, payload)
+}
+
+func TestService_MemberCacheEventHandling(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	// 1. Initial cached members
+	svc.membersCache = []*discordgo.Member{
+		{
+			User: &discordgo.User{ID: "user1", Username: "User One"},
+			Nick: "OldNick",
+		},
+	}
+
+	// 2. handleGuildMemberAdd with a new member
+	svc.handleGuildMemberAdd(nil, &discordgo.GuildMemberAdd{
+		Member: &discordgo.Member{
+			GuildID: "guild123",
+			User:    &discordgo.User{ID: "user2", Username: "User Two"},
+			Nick:    "NickTwo",
+		},
+	})
+
+	if len(svc.membersCache) != 2 {
+		t.Fatalf("expected 2 cached members after add, got %d", len(svc.membersCache))
+	}
+	if svc.membersCache[1].User.ID != "user2" {
+		t.Errorf("expected user2 to be appended, got %s", svc.membersCache[1].User.ID)
+	}
+
+	// 3. handleUserUpdate for user1
+	svc.handleUserUpdate(nil, &discordgo.UserUpdate{
+		User: &discordgo.User{ID: "user1", Username: "User One Updated", GlobalName: "GlobalName1"},
+	})
+
+	if svc.membersCache == nil {
+		t.Fatal("expected membersCache to remain valid, but was nil")
+	}
+	if svc.membersCache[0].User.Username != "User One Updated" {
+		t.Errorf("expected user1 username to be updated in-place, got %s", svc.membersCache[0].User.Username)
+	}
+
+	// 4. handleGuildMemberRemove for user1
+	svc.handleGuildMemberRemove(nil, &discordgo.GuildMemberRemove{
+		Member: &discordgo.Member{
+			GuildID: "guild123",
+			User:    &discordgo.User{ID: "user1"},
+		},
+	})
+
+	if len(svc.membersCache) != 1 {
+		t.Fatalf("expected 1 cached member after remove, got %d", len(svc.membersCache))
+	}
+	if svc.membersCache[0].User.ID != "user2" {
+		t.Errorf("expected remaining member to be user2, got %s", svc.membersCache[0].User.ID)
+	}
+}
+
+func TestService_ChannelAndRoleEventHandling(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	svc.channelsCache = []Channel{{ID: "c1", Name: "general"}}
+	svc.handleChannelCreate(nil, &discordgo.ChannelCreate{
+		Channel: &discordgo.Channel{GuildID: "guild123", ID: "c2", Name: "announcements"},
+	})
+	if svc.channelsCache != nil {
+		t.Error("expected channelsCache to be invalidated on ChannelCreate")
+	}
+
+	svc.channelsCache = []Channel{{ID: "c1", Name: "general"}}
+	svc.handleChannelDelete(nil, &discordgo.ChannelDelete{
+		Channel: &discordgo.Channel{GuildID: "guild123", ID: "c1"},
+	})
+	if svc.channelsCache != nil {
+		t.Error("expected channelsCache to be invalidated on ChannelDelete")
+	}
+
+	svc.rolesCache = []DiscordRole{{ID: "r1", Name: "@Admin"}}
+	svc.handleGuildRoleCreate(nil, &discordgo.GuildRoleCreate{
+		GuildRole: &discordgo.GuildRole{GuildID: "guild123", Role: &discordgo.Role{ID: "r2", Name: "Member"}},
+	})
+	if svc.rolesCache != nil {
+		t.Error("expected rolesCache to be invalidated on GuildRoleCreate")
+	}
+
+	svc.rolesCache = []DiscordRole{{ID: "r1", Name: "@Admin"}}
+	svc.handleGuildRoleDelete(nil, &discordgo.GuildRoleDelete{
+		GuildID: "guild123", RoleID: "r1",
+	})
+	if svc.rolesCache != nil {
+		t.Error("expected rolesCache to be invalidated on GuildRoleDelete")
+	}
+}
+
+func TestService_GetGuildMembers_Cached(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+	svc.guildID = "guild123"
+
+	// Set session so IsConfigured / check passes
+	session, err := discordgo.New("Bot dummy_token")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	svc.session = session
+
+	svc.membersCache = []*discordgo.Member{
+		{
+			User: &discordgo.User{ID: "m1", Username: "Member1", Bot: false},
+			Nick: "MemberOneNick",
+		},
+		{
+			User: &discordgo.User{ID: "bot1", Username: "BotUser", Bot: true},
+		},
+	}
+
+	ctx := t.Context()
+	members, err := svc.GetGuildMembers(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error getting guild members: %v", err)
+	}
+
+	if len(members) != 1 {
+		t.Fatalf("expected exactly 1 non-bot member, got %d", len(members))
+	}
+	if members[0].ID != "m1" || members[0].DisplayName != "MemberOneNick" {
+		t.Errorf("unexpected member data: %+v", members[0])
+	}
+}
+
+func TestService_RSVP_Broadcast(t *testing.T) {
+	repo := setupTestDB(t)
+	svc := NewUnconfigured(repo)
+
+	broadcaster := &testDiscordBroadcaster{}
+	svc.SetBroadcaster(broadcaster)
+
+	event := &Event{
+		ChannelID: "chan1",
+		MessageID: "msg1",
+		Title:     "Operation Test",
+		DateTime:  "2026-10-10T20:00",
+		GameType:  "ArmA III",
+	}
+	ctx := t.Context()
+	eventID, err := repo.SaveEvent(ctx, event)
+	if err != nil {
+		t.Fatalf("failed to save event: %v", err)
+	}
+
+	_ = svc.UpdateManualParticipation(ctx, eventID, "user_rsvp", "UserRsvp", "going")
+	// updateEventMessageEmbed will fail because session is nil, but participation and broadcast should be verified or skipped gracefully
+	// Note: since session is nil, updateEventMessageEmbed returns errBotNotConfigured or original message error
+	// Let's verify broadcaster got the event
+	if len(broadcaster.events) == 0 {
+		t.Fatal("expected at least 1 broadcast event for RSVP")
+	}
+	if broadcaster.events[0] != "discord_event_rsvp_updated" {
+		t.Errorf("expected discord_event_rsvp_updated, got %s", broadcaster.events[0])
 	}
 }

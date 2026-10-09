@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"net/url"
 	"strings"
 
 	"github.com/golang-migrate/migrate/v4"
@@ -28,24 +29,51 @@ func Connect(databaseURL string) (*sql.DB, error) {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	// SQLite serializes all writers regardless of pool size — a pool > 1 only
-	// increases lock contention without adding throughput. One connection is
-	// the correct setting for a write-heavy workload on a single SQLite file.
-	db.SetMaxOpenConns(1)
-	db.SetMaxIdleConns(1)
+	// In WAL mode, concurrent readers do not block writers and writers do not block readers.
+	// With _txlock=immediate set in buildDSN, transactions acquire a reserved lock upfront,
+	// eliminating writer-writer deadlocks while allowing concurrent readers.
+	db.SetMaxOpenConns(10)
+	db.SetMaxIdleConns(5)
 
 	return db, nil
 }
 
 func buildDSN(databaseURL string) string {
-	// If it's already a file URI, use it as is
-	if strings.HasPrefix(databaseURL, "file:") {
-		return databaseURL
+	target := databaseURL
+	if !strings.HasPrefix(target, "file:") {
+		target = "file:" + target
 	}
 
-	// Otherwise, wrap it in a file URI with mandatory pragmas for concurrent reliability.
-	// _pragma=busy_timeout(30000) is critical: it makes SQLite wait instead of failing immediately with SQLITE_BUSY.
-	return fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(30000)&_pragma=synchronous(NORMAL)", databaseURL)
+	u, err := url.Parse(target)
+	if err != nil {
+		return fmt.Sprintf("file:%s?_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=busy_timeout(30000)&_pragma=synchronous(NORMAL)&_txlock=immediate", databaseURL)
+	}
+
+	q := u.Query()
+	if q.Get("_txlock") == "" {
+		q.Set("_txlock", "immediate")
+	}
+
+	existingPragmas := make(map[string]bool)
+	for _, p := range q["_pragma"] {
+		existingPragmas[strings.ToLower(strings.TrimSpace(p))] = true
+	}
+
+	mandatoryPragmas := []string{
+		"foreign_keys(1)",
+		"journal_mode(WAL)",
+		"busy_timeout(30000)",
+		"synchronous(NORMAL)",
+	}
+
+	for _, p := range mandatoryPragmas {
+		if !existingPragmas[strings.ToLower(p)] {
+			q.Add("_pragma", p)
+		}
+	}
+
+	u.RawQuery = q.Encode()
+	return u.String()
 }
 
 func Migrate(databaseURL string) error {

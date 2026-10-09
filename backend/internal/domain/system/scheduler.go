@@ -20,6 +20,7 @@ type Scheduler struct {
 	discordService     *discordbot.Service
 	broadcaster        Broadcaster
 	stopCh             chan struct{}
+	stopOnce           sync.Once
 	workshopIntervalMu sync.RWMutex
 	workshopInterval   time.Duration
 	workshopResetCh    chan time.Duration
@@ -72,7 +73,9 @@ func (s *Scheduler) UpdateWorkshopInterval(minutes int) {
 }
 
 func (s *Scheduler) Stop() {
-	close(s.stopCh)
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 }
 
 func (s *Scheduler) Start() {
@@ -189,10 +192,11 @@ func (s *Scheduler) runAutoRestartCheck() {
 				continue
 			}
 
-			now := time.Now().Format("15:04")
+			nowTime := time.Now().Format("15:04")
+			nowFull := time.Now().Format("2006-01-02 15:04")
 
 			for _, srv := range servers {
-				s.autoRestartSingleServer(bgCtx, srv, now, lastRestart)
+				s.autoRestartSingleServer(bgCtx, srv, nowTime, nowFull, lastRestart)
 			}
 		}
 	}
@@ -211,19 +215,23 @@ func getServerRestartConfig(srv any) (int64, bool, *string) {
 	}
 }
 
-func (s *Scheduler) autoRestartSingleServer(bgCtx context.Context, srv any, now string, lastRestart map[int64]string) {
+func (s *Scheduler) autoRestartSingleServer(_ context.Context, srv any, nowTime, nowFull string, lastRestart map[int64]string) {
 	id, autoRestart, restartTime := getServerRestartConfig(srv)
 	if id == 0 {
 		return
 	}
 
-	shouldRestart := autoRestart && restartTime != nil && *restartTime == now && lastRestart[id] != now
+	shouldRestart := autoRestart && restartTime != nil && *restartTime == nowTime && lastRestart[id] != nowFull
 	if shouldRestart {
-		lastRestart[id] = now
+		lastRestart[id] = nowFull
 		log.Printf("Auto-restarting server %d...", id)
-		if err := s.serverService.RestartServer(bgCtx, id); err != nil {
-			log.Printf("Auto-restart failed for server %d: %v", id, err)
-		}
+		go func(serverID int64) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+			defer cancel()
+			if err := s.serverService.RestartServer(ctx, serverID); err != nil {
+				log.Printf("Auto-restart failed for server %d: %v", serverID, err)
+			}
+		}(id)
 	}
 }
 
@@ -248,11 +256,10 @@ func (s *Scheduler) queryGameServers() {
 		return
 	}
 
+	var wg sync.WaitGroup
 	for _, srv := range servers {
 		var id int64
-
 		var queryPort int
-
 		host := "127.0.0.1"
 
 		switch v := srv.(type) {
@@ -263,8 +270,10 @@ func (s *Scheduler) queryGameServers() {
 			id = v.ID
 			queryPort = v.QueryPort
 		case *server.ReforgerServer:
-			id = v.ID
-			queryPort = v.QueryPort
+			// Reforger does not support A2S query; stats are tracked via console log parsing
+			continue
+		default:
+			continue
 		}
 
 		if queryPort == 0 {
@@ -272,12 +281,17 @@ func (s *Scheduler) queryGameServers() {
 		}
 
 		if s.serverService.GetInstanceInfo(id) != nil {
-			addr := fmt.Sprintf("%s:%d", host, queryPort)
-			if qInfo, err := QueryServerInfo(addr); err == nil {
-				s.serverService.UpdateQueryInfo(id, int(qInfo.Players), qInfo.Map, qInfo.Mission)
-			}
+			wg.Add(1)
+			go func(serverID int64, qPort int) {
+				defer wg.Done()
+				addr := fmt.Sprintf("%s:%d", host, qPort)
+				if qInfo, err := QueryServerInfo(addr); err == nil {
+					s.serverService.UpdateQueryInfo(serverID, int(qInfo.Players), qInfo.Map, qInfo.Mission)
+				}
+			}(id, queryPort)
 		}
 	}
+	wg.Wait()
 }
 
 func (s *Scheduler) runWorkshopUpdate() {

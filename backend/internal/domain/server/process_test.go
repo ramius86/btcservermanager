@@ -169,6 +169,21 @@ func TestProcessManager_UpdateQueryInfo(t *testing.T) {
 	assert.Equal(t, 1, broadcaster.getCount())
 	assert.Equal(t, 5, p.info.Players)
 	assert.Equal(t, "Coop2", p.info.Mission)
+
+	// Update when stopping - should not broadcast or change
+	p.stopping = true
+	pm.UpdateQueryInfo(1, 10, "Altis", "Coop3")
+	assert.Equal(t, 1, broadcaster.getCount())
+	assert.Equal(t, 5, p.info.Players)
+	assert.Equal(t, "Coop2", p.info.Mission)
+
+	// Update when exited - should not broadcast or change
+	p.stopping = false
+	p.exited = true
+	pm.UpdateQueryInfo(1, 15, "Altis", "Coop4")
+	assert.Equal(t, 1, broadcaster.getCount())
+	assert.Equal(t, 5, p.info.Players)
+	assert.Equal(t, "Coop2", p.info.Mission)
 }
 
 func TestProcessManager_StartStopServer(t *testing.T) {
@@ -258,4 +273,32 @@ func TestProcessManager_ExitListener(t *testing.T) {
 	case <-time.After(3 * time.Second):
 		t.Fatal("timed out waiting for exit listener to be called")
 	}
+}
+
+func TestProcessManager_StopServer_CanceledContext(t *testing.T) {
+	tempDir := t.TempDir()
+	paths := &dummyPathProvider{tempDir: tempDir}
+	launcher := NewLauncher(paths, []string{})
+	pm := NewProcessManager(paths, launcher, false)
+
+	stopCh := make(chan struct{})
+	proc := &Process{
+		serverID:   123,
+		serverName: "Test Canceled Server",
+		serverType: TypeArma3,
+		stopCh:     stopCh,
+		exited:     false,
+	}
+	pm.processes.Store(int64(123), proc)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		close(stopCh)
+	}()
+
+	err := pm.StopServer(ctx, 123)
+	assert.NoError(t, err)
 }

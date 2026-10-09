@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
+	"time"
 )
 
 type Repository struct {
@@ -156,13 +158,14 @@ func (r *Repository) SyncUserNicknames(ctx context.Context, memberNames map[stri
 }
 
 func (r *Repository) GetActiveEventsForUser(ctx context.Context, userID string) ([]Event, error) {
+	cutoff := time.Now().Add(-2 * time.Hour).Format("2006-01-02T15:04:05")
 	query := `
 		SELECT e.id, e.channel_id, e.message_id, e.title, e.date_time, e.game_type, e.created_at, e.reminder_sent
 		FROM discord_events e
 		JOIN discord_event_participations p ON e.id = p.event_id
-		WHERE p.user_id = ? AND e.date_time >= datetime('now', '-2 hours')
+		WHERE p.user_id = ? AND datetime(e.date_time) >= datetime(?)
 	`
-	rows, err := r.db.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID, cutoff)
 	if err != nil {
 		return nil, err
 	}
@@ -234,10 +237,36 @@ func (r *Repository) GetEventByMessageID(ctx context.Context, messageID string) 
 func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
 	query := `
 		SELECT u.id, u.username, COALESCE(p.status, 'no_response') as status, e.date_time, e.game_type
-		FROM discord_users u
+		FROM (
+			SELECT id, username, plays_arma3, plays_reforger,
+			       COALESCE(
+			           (SELECT MIN(substr(e_sub.date_time, 1, 10))
+			            FROM discord_event_participations p_sub
+			            JOIN discord_events e_sub ON e_sub.id = p_sub.event_id
+			            WHERE p_sub.user_id = discord_users.id),
+			           substr(updated_at, 1, 10)
+			       ) as first_active_date
+			FROM discord_users 
+			WHERE is_active = 1
+		) u
 		CROSS JOIN discord_events e
 		LEFT JOIN discord_event_participations p ON p.user_id = u.id AND p.event_id = e.id
-		WHERE u.is_active = 1 OR p.status IS NOT NULL
+		WHERE (
+			p.status IS NOT NULL
+			OR (
+				substr(e.date_time, 1, 10) >= u.first_active_date
+				AND (
+					(LOWER(e.game_type) LIKE '%reforger%' AND u.plays_reforger = 1)
+					OR
+					(NOT (LOWER(e.game_type) LIKE '%reforger%') AND u.plays_arma3 = 1)
+				)
+			)
+		)
+		UNION ALL
+		SELECT u.id, u.username, p.status, e.date_time, e.game_type
+		FROM discord_event_participations p
+		JOIN discord_users u ON u.id = p.user_id AND u.is_active = 0
+		JOIN discord_events e ON e.id = p.event_id
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -260,14 +289,16 @@ func (r *Repository) GetAttendanceStats(ctx context.Context) ([]RawAttendance, e
 }
 
 func (r *Repository) GetPendingReminderEvents(ctx context.Context, hours int) ([]Event, error) {
+	now := time.Now().Format("2006-01-02T15:04:05")
+	maxFuture := time.Now().Add(time.Duration(hours) * time.Hour).Format("2006-01-02T15:04:05")
 	query := `
 		SELECT id, channel_id, message_id, title, date_time, game_type, created_at, reminder_sent
 		FROM discord_events
 		WHERE reminder_sent = 0
-		  AND datetime(date_time) > datetime('now', 'localtime')
-		  AND datetime(date_time) <= datetime('now', 'localtime', '+' || ? || ' hours')
+		  AND datetime(date_time) > datetime(?)
+		  AND datetime(date_time) <= datetime(?)
 	`
-	rows, err := r.db.QueryContext(ctx, query, hours)
+	rows, err := r.db.QueryContext(ctx, query, now, maxFuture)
 	if err != nil {
 		return nil, err
 	}
@@ -297,14 +328,20 @@ func (r *Repository) GetNoResponseUserIDs(ctx context.Context, eventID int64) ([
 	query := `
 		SELECT u.id
 		FROM discord_users u
+		JOIN discord_events e ON e.id = ?
 		WHERE u.is_active = 1
+		  AND (
+		      (LOWER(e.game_type) LIKE '%reforger%' AND u.plays_reforger = 1)
+		      OR
+		      (NOT (LOWER(e.game_type) LIKE '%reforger%') AND u.plays_arma3 = 1)
+		  )
 		  AND u.id NOT IN (
 		      SELECT p.user_id 
 		      FROM discord_event_participations p 
 		      WHERE p.event_id = ?
 		  )
 	`
-	rows, err := r.db.QueryContext(ctx, query, eventID)
+	rows, err := r.db.QueryContext(ctx, query, eventID, eventID)
 	if err != nil {
 		return nil, err
 	}
@@ -325,7 +362,7 @@ func (r *Repository) GetNoResponseUserIDs(ctx context.Context, eventID int64) ([
 }
 
 func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
-	query := `SELECT id, username, is_active, updated_at FROM discord_users WHERE is_active = 1 ORDER BY username ASC`
+	query := `SELECT id, username, is_active, plays_arma3, plays_reforger, updated_at FROM discord_users WHERE is_active = 1 ORDER BY username ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -335,7 +372,7 @@ func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
 	var users []DiscordUser
 	for rows.Next() {
 		var u DiscordUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.PlaysArma3, &u.PlaysReforger, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -347,7 +384,7 @@ func (r *Repository) GetAllUsers(ctx context.Context) ([]DiscordUser, error) {
 }
 
 func (r *Repository) GetAllUsersForManagement(ctx context.Context) ([]DiscordUser, error) {
-	query := `SELECT id, username, is_active, updated_at FROM discord_users ORDER BY username ASC`
+	query := `SELECT id, username, is_active, plays_arma3, plays_reforger, updated_at FROM discord_users ORDER BY username ASC`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		return nil, err
@@ -357,7 +394,7 @@ func (r *Repository) GetAllUsersForManagement(ctx context.Context) ([]DiscordUse
 	var users []DiscordUser
 	for rows.Next() {
 		var u DiscordUser
-		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.UpdatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Username, &u.IsActive, &u.PlaysArma3, &u.PlaysReforger, &u.UpdatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -366,6 +403,32 @@ func (r *Repository) GetAllUsersForManagement(ctx context.Context) ([]DiscordUse
 		return nil, err
 	}
 	return users, nil
+}
+
+func (r *Repository) SetUserGames(ctx context.Context, userID string, playsArma3, playsReforger bool) error {
+	arma3Val := 0
+	if playsArma3 {
+		arma3Val = 1
+	}
+	reforgerVal := 0
+	if playsReforger {
+		reforgerVal = 1
+	}
+
+	query := `UPDATE discord_users SET plays_arma3 = ?, plays_reforger = ?, updated_at = datetime('now') WHERE id = ?`
+	_, err := r.db.ExecContext(ctx, query, arma3Val, reforgerVal, userID)
+	return err
+}
+
+func (r *Repository) EnsureUserPlaysGame(ctx context.Context, userID, gameType string) error {
+	if strings.Contains(strings.ToLower(strings.TrimSpace(gameType)), "reforger") {
+		query := `UPDATE discord_users SET plays_reforger = 1, updated_at = datetime('now') WHERE id = ? AND plays_reforger = 0`
+		_, err := r.db.ExecContext(ctx, query, userID)
+		return err
+	}
+	query := `UPDATE discord_users SET plays_arma3 = 1, updated_at = datetime('now') WHERE id = ? AND plays_arma3 = 0`
+	_, err := r.db.ExecContext(ctx, query, userID)
+	return err
 }
 
 func (r *Repository) SetUserActive(ctx context.Context, userID, username string, active bool) error {
@@ -433,6 +496,14 @@ func (r *Repository) DeleteUserAndParticipations(ctx context.Context, userID str
 		return err
 	}
 
+	if _, err := tx.ExecContext(ctx, `DELETE FROM member_qualifications WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+
+	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_player_role_history WHERE user_id = ?`, userID); err != nil {
+		return err
+	}
+
 	if _, err := tx.ExecContext(ctx, `DELETE FROM discord_users WHERE id = ?`, userID); err != nil {
 		return err
 	}
@@ -446,8 +517,15 @@ func (r *Repository) GetMemberQualifications(ctx context.Context, userIDs []stri
 		return result, nil
 	}
 
-	query := `SELECT user_id, qualification_name FROM member_qualifications`
-	rows, err := r.db.QueryContext(ctx, query)
+	placeholders := make([]string, len(userIDs))
+	args := make([]any, len(userIDs))
+	for i, id := range userIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+
+	query := fmt.Sprintf(`SELECT user_id, qualification_name FROM member_qualifications WHERE user_id IN (%s)`, strings.Join(placeholders, ","))
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -757,6 +835,14 @@ func (r *Repository) MergeUsers(ctx context.Context, sourceUserID, targetUserID,
 		return fmt.Errorf("failed to ensure target user: %w", err)
 	}
 
+	// Combine plays_arma3 and plays_reforger
+	_, _ = tx.ExecContext(ctx, `
+		UPDATE discord_users
+		SET plays_arma3 = MAX(plays_arma3, COALESCE((SELECT plays_arma3 FROM discord_users WHERE id = ?), 0)),
+		    plays_reforger = MAX(plays_reforger, COALESCE((SELECT plays_reforger FROM discord_users WHERE id = ?), 0))
+		WHERE id = ?
+	`, sourceUserID, sourceUserID, targetUserID)
+
 	// 2. Transfer discord_event_participations
 	// Delete any source user participations for events where the target user has already responded
 	_, err = tx.ExecContext(ctx, `
@@ -843,11 +929,14 @@ func (r *Repository) MergeUsers(ctx context.Context, sourceUserID, targetUserID,
 	}
 
 	// 5. Update roster JSON data in discord_event_rosters
+	// Only replace exact quoted JSON string representation of the user ID (e.g. "123456789") to avoid partial substring matching
+	sourceJSONID := fmt.Sprintf(`"%s"`, sourceUserID)
+	targetJSONID := fmt.Sprintf(`"%s"`, targetUserID)
 	_, err = tx.ExecContext(ctx, `
 		UPDATE discord_event_rosters
 		SET data = replace(data, ?, ?)
 		WHERE data LIKE '%' || ? || '%'
-	`, sourceUserID, targetUserID, sourceUserID)
+	`, sourceJSONID, targetJSONID, sourceJSONID)
 	if err != nil {
 		return fmt.Errorf("failed to update event rosters: %w", err)
 	}

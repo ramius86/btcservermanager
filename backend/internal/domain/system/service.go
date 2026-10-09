@@ -77,6 +77,7 @@ type Service struct {
 	lastPublicIPFetch time.Time
 	publicIPFetchMu   sync.Mutex
 	rootPath          string
+	storagePath       string
 
 	// Cached static system values (computed once, never change)
 	staticOnce sync.Once
@@ -90,6 +91,7 @@ type ServiceDeps struct {
 	AppRepo     *appsettings.Repository
 	SteamAuth   *steamauth.AuthService
 	SteamAPIKey string
+	StoragePath string
 }
 
 func NewService(deps ServiceDeps) *Service {
@@ -97,6 +99,7 @@ func NewService(deps ServiceDeps) *Service {
 		appSettingsRepo:  deps.AppRepo,
 		steamAuthService: deps.SteamAuth,
 		steamAPIKey:      deps.SteamAPIKey,
+		storagePath:      deps.StoragePath,
 	}
 }
 

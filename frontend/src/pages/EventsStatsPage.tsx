@@ -1,11 +1,13 @@
 import { useEffect, useState, useMemo } from 'react'
 import { Card } from '../components/ui/Card'
 import { DiscordService, DiscordRawAttendance, DiscordUser } from '../services/api'
-import { ArrowLeft, ArrowUpDown, CalendarDays, UserX } from 'lucide-react'
+import { ArrowLeft, ArrowUpDown, CalendarDays, Gamepad2, UserX } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/Dialog'
 import { Button } from '../components/ui/Button'
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
+import { useToast } from '../components/ui/Toast'
+import { Switch } from '../components/ui/Switch'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -33,6 +35,7 @@ type SortOrder = 'asc' | 'desc'
 type ViewMode = 'all_time' | 'yearly' | 'monthly'
 
 export function EventsStatsPage() {
+  const { showToast } = useToast()
   const [attendances, setAttendances] = useState<DiscordRawAttendance[]>([])
   const [users, setUsers] = useState<DiscordUser[]>([])
   const [loading, setLoading] = useState(true)
@@ -303,8 +306,36 @@ export function EventsStatsPage() {
       
       const freshStats = await DiscordService.getAttendanceStats()
       setAttendances(freshStats || [])
+      showToast(`User marked as ${!currentActive ? 'active' : 'inactive'}`, 'success')
     } catch (err: any) {
-      alert(err.message || 'Failed to update user status')
+      showToast(err.message || 'Failed to update user status', 'error')
+    }
+  }
+
+  const handleToggleUserGame = async (userId: string, game: 'arma3' | 'reforger', enabled: boolean) => {
+    const user = users.find(u => u.id === userId)
+    if (!user) return
+
+    const playsArma3 = game === 'arma3' ? enabled : (user.playsArma3 ?? true)
+    const playsReforger = game === 'reforger' ? enabled : (user.playsReforger ?? true)
+
+    const updatedUser = { ...user, playsArma3, playsReforger }
+    setUsers(prev => prev.map(u => u.id === userId ? updatedUser : u))
+    if (selectedUserForAction?.id === userId) {
+      setSelectedUserForAction(updatedUser)
+    }
+
+    try {
+      await DiscordService.setUserGames(userId, { playsArma3, playsReforger })
+      const freshStats = await DiscordService.getAttendanceStats()
+      setAttendances(freshStats || [])
+      showToast(`Updated game participation for ${user.username}`, 'success')
+    } catch (err: any) {
+      setUsers(prev => prev.map(u => u.id === userId ? user : u))
+      if (selectedUserForAction?.id === userId) {
+        setSelectedUserForAction(user)
+      }
+      showToast(err.message || 'Failed to update user games', 'error')
     }
   }
 
@@ -576,10 +607,25 @@ export function EventsStatsPage() {
               >
                 <div className="min-w-0 mr-4">
                   <p className="font-semibold text-foreground truncate">{user.username}</p>
-                  <div className="flex items-center gap-1.5 mt-1">
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                     <span className={`w-1.5 h-1.5 rounded-full ${user.isActive ? 'bg-success' : 'bg-[#6b7280]'}`}></span>
                     <span className="text-[10px] text-muted-foreground uppercase font-semibold">
                       {user.isActive ? 'Active' : 'Frozen'}
+                    </span>
+                    <span className="text-[10px] text-muted-foreground">•</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                      user.playsArma3 ?? true 
+                        ? 'bg-primary/10 text-primary border border-primary/20' 
+                        : 'bg-muted text-muted-foreground line-through opacity-60'
+                    }`}>
+                      ArmA III
+                    </span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-mono font-medium ${
+                      user.playsReforger ?? true 
+                        ? 'bg-amber-500/10 text-amber-500 border border-amber-500/20' 
+                        : 'bg-muted text-muted-foreground line-through opacity-60'
+                    }`}>
+                      Reforger
                     </span>
                   </div>
                 </div>
@@ -609,8 +655,48 @@ export function EventsStatsPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="py-4 space-y-4">
-            <p className="text-sm text-muted-foreground">
-              Choose how you want to manage this user in the stats.
+            {/* Game Participation Selector */}
+            <div className="p-3.5 rounded-lg border border-border bg-surface/50 space-y-3">
+              <div className="flex items-center gap-2">
+                <Gamepad2 className="w-4 h-4 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Game Participation (Owned Games)
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Uncheck a game if this player does not own it. They will not be counted as &quot;No Response&quot; for its events.
+                Voting &quot;Going&quot; on an event will automatically re-enable the game.
+              </p>
+              
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between p-2.5 rounded-md bg-surface border border-border">
+                  <span className="text-sm font-medium text-foreground">ArmA III</span>
+                  <Switch 
+                    checked={selectedUserForAction?.playsArma3 ?? true}
+                    onCheckedChange={(checked) => {
+                      if (selectedUserForAction) {
+                        handleToggleUserGame(selectedUserForAction.id, 'arma3', checked)
+                      }
+                    }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between p-2.5 rounded-md bg-surface border border-border">
+                  <span className="text-sm font-medium text-foreground">Arma Reforger</span>
+                  <Switch 
+                    checked={selectedUserForAction?.playsReforger ?? true}
+                    onCheckedChange={(checked) => {
+                      if (selectedUserForAction) {
+                        handleToggleUserGame(selectedUserForAction.id, 'reforger', checked)
+                      }
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <p className="text-sm text-muted-foreground pt-2 border-t border-border">
+              Additional user actions:
             </p>
             <div className="space-y-3">
               <Button 

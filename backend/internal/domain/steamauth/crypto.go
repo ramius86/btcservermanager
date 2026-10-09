@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"log"
 	"os"
 )
 
@@ -16,6 +17,10 @@ func deriveKey() ([]byte, error) {
 
 	if secret == "" {
 		return nil, errors.New("FATAL SECURITY ERROR: SECRET_KEY environment variable must be set to secure Steam credentials")
+	}
+
+	if len(secret) < 16 {
+		log.Printf("⚠️  SECURITY WARNING: SECRET_KEY is shorter than 16 characters. A 32+ character key is strongly recommended.")
 	}
 
 	hash := sha256.Sum256([]byte(secret))

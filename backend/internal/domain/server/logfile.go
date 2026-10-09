@@ -76,12 +76,12 @@ func readChunkAt(file *os.File, startPos, readSize int64) ([]byte, error) {
 	}
 
 	buf := make([]byte, readSize)
-	_, err := io.ReadFull(file, buf)
+	n, err := io.ReadFull(file, buf)
 	isRealError := err != nil && err != io.EOF && err != io.ErrUnexpectedEOF
 	if isRealError {
 		return nil, err
 	}
-	return buf, nil
+	return buf[:n], nil
 }
 
 func formatLinesFromEnd(lines []string, offset, limit int, hasPrefix bool) string {
