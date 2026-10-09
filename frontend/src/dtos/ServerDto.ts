@@ -21,6 +21,16 @@ export interface ReforgerModDto {
     thumbnail: string;
 }
 
+export interface ReforgerCustomNameEntry {
+    uid: string;
+    playerName: string;
+    customName: string;
+}
+
+export interface ReforgerCustomNamesPayload {
+    entries: ReforgerCustomNameEntry[];
+}
+
 export interface LaunchParameter {
     id?: number;
     serverId?: number;
