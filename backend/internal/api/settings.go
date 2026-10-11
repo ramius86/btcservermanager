@@ -32,10 +32,10 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 		return
 	}
 
-	if len(payload.Renames) > 0 && r.discordRepo != nil {
+	if len(payload.Renames) > 0 && r.discordService != nil {
 		for _, rename := range payload.Renames {
 			if rename.OldName != "" && rename.NewName != "" {
-				if err := r.discordRepo.RenameQualification(ctx, rename.OldName, rename.NewName); err != nil {
+				if err := r.discordService.RenameQualification(ctx, rename.OldName, rename.NewName); err != nil {
 					log.Printf("Warning: failed to rename qualification %q to %q: %v", rename.OldName, rename.NewName, err)
 				}
 			}
@@ -54,8 +54,8 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 		r.steamCmdService.UpdateCheckInterval(payload.GameUpdateCheckIntervalMinutes)
 	}
 
-	if r.discordRepo != nil {
-		if err := r.discordRepo.CleanupOrphanedQualifications(ctx, payload.QualificationNames); err != nil {
+	if r.discordService != nil {
+		if err := r.discordService.CleanupOrphanedQualifications(ctx, payload.QualificationNames); err != nil {
 			log.Printf("Warning: failed to cleanup orphaned qualifications: %v", err)
 		}
 	}

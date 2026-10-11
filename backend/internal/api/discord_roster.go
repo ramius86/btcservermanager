@@ -36,8 +36,8 @@ type SaveTemplateRequest struct {
 }
 
 func (r *Router) handleGetDiscordEventRoster(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -48,7 +48,7 @@ func (r *Router) handleGetDiscordEventRoster(w http.ResponseWriter, req *http.Re
 		return
 	}
 
-	roster, err := r.discordRepo.GetEventRoster(req.Context(), id)
+	roster, err := r.discordService.GetEventRoster(req.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -67,8 +67,8 @@ func (r *Router) handleGetDiscordEventRoster(w http.ResponseWriter, req *http.Re
 }
 
 func (r *Router) handleSaveDiscordEventRoster(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -85,13 +85,13 @@ func (r *Router) handleSaveDiscordEventRoster(w http.ResponseWriter, req *http.R
 		return
 	}
 
-	if err := r.discordRepo.SaveEventRoster(req.Context(), id, payload.Data); err != nil {
+	if err := r.discordService.SaveEventRoster(req.Context(), id, payload.Data); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	if len(payload.Assignments) > 0 {
-		_ = r.discordRepo.RecordPlayerRoleUsage(req.Context(), payload.Assignments, payload.GameType)
+		_ = r.discordService.RecordPlayerRoleUsage(req.Context(), payload.Assignments, payload.GameType)
 	}
 
 	r.json(w, map[string]bool{"success": true})
@@ -153,12 +153,12 @@ func (r *Router) handleSyncDiscordEventRosterPreview(w http.ResponseWriter, req 
 }
 
 func (r *Router) handleGetDiscordRosterTemplates(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
-	templates, err := r.discordRepo.GetRosterTemplates(req.Context())
+	templates, err := r.discordService.GetRosterTemplates(req.Context())
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -168,8 +168,8 @@ func (r *Router) handleGetDiscordRosterTemplates(w http.ResponseWriter, req *htt
 }
 
 func (r *Router) handleSaveDiscordRosterTemplate(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (r *Router) handleSaveDiscordRosterTemplate(w http.ResponseWriter, req *htt
 		return
 	}
 
-	template, err := r.discordRepo.SaveRosterTemplate(req.Context(), payload.Name, payload.GameType, payload.Structure)
+	template, err := r.discordService.SaveRosterTemplate(req.Context(), payload.Name, payload.GameType, payload.Structure)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -194,8 +194,8 @@ func (r *Router) handleSaveDiscordRosterTemplate(w http.ResponseWriter, req *htt
 }
 
 func (r *Router) handleDeleteDiscordRosterTemplate(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -206,7 +206,7 @@ func (r *Router) handleDeleteDiscordRosterTemplate(w http.ResponseWriter, req *h
 		return
 	}
 
-	if err := r.discordRepo.DeleteRosterTemplate(req.Context(), id); err != nil {
+	if err := r.discordService.DeleteRosterTemplate(req.Context(), id); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -215,13 +215,13 @@ func (r *Router) handleDeleteDiscordRosterTemplate(w http.ResponseWriter, req *h
 }
 
 func (r *Router) handleGetDiscordRosterLearningStats(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
 	gameType := req.URL.Query().Get("gameType")
-	stats, err := r.discordRepo.GetPlayerRoleStats(req.Context(), gameType)
+	stats, err := r.discordService.GetPlayerRoleStats(req.Context(), gameType)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

@@ -41,10 +41,12 @@ type UpdateEventRequest struct {
 }
 
 type DiscordUser struct {
-	ID        string `json:"id"`
-	Username  string `json:"username"`
-	IsActive  bool   `json:"isActive"`
-	UpdatedAt string `json:"updatedAt"`
+	ID            string `json:"id"`
+	Username      string `json:"username"`
+	IsActive      bool   `json:"isActive"`
+	PlaysArma3    bool   `json:"playsArma3"`
+	PlaysReforger bool   `json:"playsReforger"`
+	UpdatedAt     string `json:"updatedAt"`
 }
 
 type Participation struct {

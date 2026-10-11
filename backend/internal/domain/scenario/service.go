@@ -57,12 +57,14 @@ func (s *Service) GetArma3Scenarios(ctx context.Context) ([]Arma3Scenario, error
 
 	for _, f := range files {
 		if !f.IsDir() && strings.HasSuffix(strings.ToLower(f.Name()), ".pbo") {
-			info, _ := f.Info()
-			scenarios = append(scenarios, Arma3Scenario{
-				Name:      f.Name(),
-				Size:      info.Size(),
-				CreatedAt: info.ModTime(),
-			})
+			info, err := f.Info()
+			if err == nil && info != nil {
+				scenarios = append(scenarios, Arma3Scenario{
+					Name:      f.Name(),
+					Size:      info.Size(),
+					CreatedAt: info.ModTime(),
+				})
+			}
 		}
 	}
 

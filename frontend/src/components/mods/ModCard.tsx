@@ -5,7 +5,7 @@
  * Context: Used in the 'Workshop Mods' tab of the ModsPage.
  */
 import React from 'react'
-import { Download, Trash2, Calendar, Clock, RefreshCw } from 'lucide-react'
+import { Download, Trash2, Calendar, Clock, RefreshCw, KeyRound } from 'lucide-react'
 import { Button, cn } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
@@ -68,6 +68,9 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
   isUpdating
 }) => {
   const inProgress = isUpdating || isModInProgress(mod.installationStatus)
+  const isKeyRequiredGame = mod.serverType === 'ARMA3' || mod.serverType === 'DAYZ' || mod.serverType === 'DAYZ_EXP'
+  const isInstalled = mod.installationStatus === 'FINISHED'
+  const hasNoBikey = isKeyRequiredGame && isInstalled && !inProgress && (!mod.biKeys || mod.biKeys.length === 0)
   const { statusVariant, statusText } = getModStatusBadge(mod, inProgress)
   const updateTitle = getUpdateButtonTitle(inProgress, Boolean(mod.needsUpdate))
   const deleteTitle = getDeleteButtonTitle(inProgress)
@@ -119,6 +122,16 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
             <Badge variant="outline" className="text-[9px] font-mono uppercase tracking-widest h-5 px-2 text-muted-foreground border-muted-foreground/30">
               {mod.serverType}
             </Badge>
+            {hasNoBikey && (
+              <Badge 
+                variant="warning" 
+                className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-help"
+                title="Warning: .bikey not found for this mod"
+              >
+                <KeyRound className="w-2.5 h-2.5 shrink-0" />
+                NO BIKEY
+              </Badge>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-x-6 gap-y-1 mt-1">
             <span className="text-[10px] font-mono text-muted-foreground tracking-widest uppercase">ID: {mod.id}</span>

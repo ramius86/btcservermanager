@@ -45,7 +45,7 @@ export function AddPartModal({
             Add Mission Part
           </DialogTitle>
           <p className="text-xs text-muted-foreground">
-            Configure an additional part or mission for tonight's roster (e.g. Part 2).
+            Configure an additional part or mission for this event's roster (e.g. Part 2).
           </p>
         </DialogHeader>
 

@@ -3,6 +3,7 @@ package workshop
 import (
 	"btcservermanager/internal/config"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -31,6 +32,13 @@ func NewInstaller(paths *config.Paths, repo *Repository) *Installer {
 // This replaces the previous three separate filepath.Walk calls
 // (directoryToLowercase, updateBiKeys, getDirSize).
 func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if m == nil {
+		return errors.New("workshop mod cannot be nil")
+	}
+
 	modDir := i.paths.GetModInstallationPath(m.ID, m.ServerType)
 
 	type bikeyEntry struct {
@@ -89,22 +97,37 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	for j := len(pathsToRename) - 1; j >= 0; j-- {
 		p := pathsToRename[j]
 		newPath := filepath.Join(filepath.Dir(p), strings.ToLower(filepath.Base(p)))
-		if err := os.Rename(p, newPath); err != nil {
-			// Ignore ENOENT: may occur on case-insensitive filesystems.
-			if !os.IsNotExist(err) {
-				return fmt.Errorf("failed to lowercase %s: %w", p, err)
-			}
+		if err := renameOrMerge(p, newPath); err != nil {
+			return fmt.Errorf("failed to lowercase %s: %w", p, err)
 		}
 	}
 
 	// Remove old bikeys recorded in DB, then copy newly found ones from their
 	// post-rename paths (computed above during the walk).
 	for _, k := range m.BiKeys {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		if i.repo != nil {
+			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
+			if err != nil {
+				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				continue
+			} else if used {
+				continue
+			}
+		}
 		_ = os.Remove(i.paths.GetServerKeyPath(k, m.ServerType))
 	}
 	m.BiKeys = m.BiKeys[:0]
 
+	seenBiKeys := make(map[string]struct{})
 	for _, bk := range bikeys {
+		if _, seen := seenBiKeys[bk.name]; seen {
+			continue
+		}
+		seenBiKeys[bk.name] = struct{}{}
+
 		dest := i.paths.GetServerKeyPath(bk.name, m.ServerType)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
 			fmt.Printf("[Installer] Failed to create directory for key %s: %v\n", bk.name, err)
@@ -129,13 +152,32 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	return i.repo.Save(ctx, m)
 }
 
-func (i *Installer) UninstallMod(m *WorkshopMod) error {
+func (i *Installer) UninstallMod(ctx context.Context, m *WorkshopMod) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if m == nil {
+		return nil
+	}
+
 	// Remove symlink
 	link := i.paths.GetModLinkPath(m.GetNormalizedName(), m.ServerType)
 	_ = os.Remove(link)
 
 	// Remove BiKeys from server keys folder
 	for _, k := range m.BiKeys {
+		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		if i.repo != nil {
+			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
+			if err != nil {
+				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				continue
+			} else if used {
+				continue
+			}
+		}
 		_ = os.Remove(i.paths.GetServerKeyPath(k, m.ServerType))
 	}
 
@@ -169,9 +211,58 @@ func lowercaseDir(root string) error {
 	for j := len(pathsToRename) - 1; j >= 0; j-- {
 		p := pathsToRename[j]
 		newPath := filepath.Join(filepath.Dir(p), strings.ToLower(filepath.Base(p)))
-		if err := os.Rename(p, newPath); err != nil && !os.IsNotExist(err) {
+		if err := renameOrMerge(p, newPath); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+// renameOrMerge moves src to dst. If both src and dst exist as distinct directories,
+// it recursively merges the contents of src into dst and removes src.
+// Otherwise, it performs an os.Rename(src, dst).
+func renameOrMerge(src, dst string) error {
+	src = filepath.Clean(src)
+	dst = filepath.Clean(dst)
+	if src == dst {
+		return nil
+	}
+
+	srcInfo, err := os.Lstat(src)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	dstInfo, err := os.Lstat(dst)
+	if err == nil && srcInfo.IsDir() && dstInfo.IsDir() && !os.SameFile(srcInfo, dstInfo) {
+		entries, err := os.ReadDir(src)
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+
+		for _, entry := range entries {
+			srcChild := filepath.Join(src, entry.Name())
+			dstChild := filepath.Join(dst, strings.ToLower(entry.Name()))
+			if err := renameOrMerge(srcChild, dstChild); err != nil {
+				return err
+			}
+		}
+
+		if err := os.Remove(src); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	if err := os.Rename(src, dst); err != nil && !os.IsNotExist(err) {
+		return err
 	}
 
 	return nil

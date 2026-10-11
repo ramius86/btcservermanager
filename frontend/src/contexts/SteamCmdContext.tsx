@@ -19,6 +19,7 @@ export function SteamCmdProvider({ children }: Readonly<{ children: React.ReactN
     send({ type: 'subscribe', payload: { domain: 'steamcmd_log' } })
 
     const unsub = subscribe('steamcmd_log', (e) => {
+      if (!e?.payload?.message) return
       const { message } = e.payload as SteamCmdLog
       setLogBuffer((prev) => {
         const newBuffer = [...prev, message]

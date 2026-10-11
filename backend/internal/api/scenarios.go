@@ -44,6 +44,11 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	defer func() {
+		if req.MultipartForm != nil {
+			_ = req.MultipartForm.RemoveAll()
+		}
+	}()
 
 	files := req.MultipartForm.File["file"]
 	if len(files) == 0 {
@@ -59,7 +64,12 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 
 		filename := filepath.Base(fileHeader.Filename)
 		if strings.HasSuffix(strings.ToLower(filename), ".pbo") {
-			r.scenarioService.PreCacheScenario(filename)
+			go func(name string) {
+				if err := r.scenarioService.PurgeCloudflareCache(name); err != nil {
+					log.Printf("[Cloudflare] Error purging cache for uploaded scenario %s: %v", name, err)
+				}
+				r.scenarioService.PreCacheScenario(name)
+			}(filename)
 		}
 	}
 
@@ -106,6 +116,11 @@ func (r *Router) handleDeleteArma3Scenario(w http.ResponseWriter, req *http.Requ
 	isPathTraversal := strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\")
 	if isPathTraversal {
 		http.Error(w, "Invalid filename", http.StatusBadRequest)
+		return
+	}
+	cleanName := filepath.Clean(name)
+	if cleanName == "." || cleanName == "" || !strings.HasSuffix(strings.ToLower(cleanName), ".pbo") {
+		http.Error(w, "Invalid filename extension", http.StatusBadRequest)
 		return
 	}
 	if err := r.scenarioService.DeleteScenario(ctx, name); err != nil {

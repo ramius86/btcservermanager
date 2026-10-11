@@ -20,6 +20,7 @@ import { LogSidebar } from '../components/LogSidebar'
 import { LogViewerHeader } from '../components/LogViewerHeader'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 import { useServerStatus } from '../contexts/ServerStatusContext'
+import { useInstallProgress } from '../contexts/InstallProgressContext'
 
 const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | null, sortedFiles: string[]): string | null => {
   if (sortedFiles.length === 0) return null;
@@ -32,6 +33,16 @@ const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | n
     return sortedFiles.find(f => f.startsWith('steamcmd_')) || null;
   }
   return null;
+}
+
+const MAX_LOG_STREAM_LINES = 5000
+
+const appendWithFifoLimit = (prev: string[], newLines: string[]): string[] => {
+  const combined = [...prev, ...newLines]
+  if (combined.length > MAX_LOG_STREAM_LINES) {
+    return combined.slice(-MAX_LOG_STREAM_LINES)
+  }
+  return combined
 }
 
 const serverIdRegex = /^([A-Z0-9]+)_(\d+)_/
@@ -57,7 +68,8 @@ export const LogExplorerPage: React.FC = () => {
   const view = searchParams.get('view') || 'logs'
   const { subscribe } = useWebSocket()
   const { sidebarWidth, containerRef, startResizing } = useResizableSidebar(380)
-  const { statuses, installations } = useServerStatus()
+  const { statuses } = useServerStatus()
+  const { installations } = useInstallProgress()
 
   const liveFiles = React.useMemo(() => {
     const live = new Set<string>()
@@ -165,7 +177,8 @@ export const LogExplorerPage: React.FC = () => {
     if (logType === 'steamcmd') {
       if (selectedFile.startsWith('steamcmd_') && selectedFile.endsWith('.log')) {
         return subscribe('steamcmd_log', (e) => {
-          setLines(prev => [...prev, ...e.payload.message.split('\n')])
+          if (!e?.payload?.message) return
+          setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
         })
       }
     } else {
@@ -174,7 +187,8 @@ export const LogExplorerPage: React.FC = () => {
         const serverId = Number.parseInt(match[2], 10)
         if (!Number.isNaN(serverId)) {
           return subscribe('server_log', (e) => {
-            setLines(prev => [...prev, ...e.payload.message.split('\n')])
+            if (!e?.payload?.message) return
+            setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
           }, serverId)
         }
       }

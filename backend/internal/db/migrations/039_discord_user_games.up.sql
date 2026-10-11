@@ -1,0 +1,2 @@
+ALTER TABLE discord_users ADD COLUMN plays_arma3 INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE discord_users ADD COLUMN plays_reforger INTEGER NOT NULL DEFAULT 1;

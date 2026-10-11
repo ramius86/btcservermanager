@@ -112,7 +112,7 @@ export function SlotPickerModal({
                 <span className="text-[9px] text-muted-foreground font-normal">({recommended.length})</span>
               </div>
               <div className="grid gap-1.5">
-                {recommended.map(({ candidate, hasBrevetto, matchedQualification, playCount, score }) => (
+                {recommended.map(({ candidate, hasQualification, matchedQualification, playCount, score }) => (
                   <button
                     key={candidate.id + candidate.name}
                     type="button"
@@ -136,10 +136,10 @@ export function SlotPickerModal({
                         )}
                       </div>
                       <div className="flex flex-wrap items-center gap-1">
-                        {hasBrevetto && (
+                        {hasQualification && (
                           <span className="inline-flex items-center gap-1 text-[9px] text-success font-medium bg-success/10 px-1.5 py-0.5 rounded">
                             <Award className="w-2.5 h-2.5" />
-                            {matchedQualification || 'Brevetto'}
+                            {matchedQualification || 'Qualification'}
                           </span>
                         )}
                         {playCount > 0 && (

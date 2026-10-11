@@ -145,4 +145,5 @@ formatters:
       - examples$
   settings:
     gofumpt:
-      extra-rules: true
+      extra:
+        group-params: true

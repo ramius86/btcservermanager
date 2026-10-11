@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -18,6 +19,9 @@ import (
 const (
 	embedColor       = 16048263 // Giallo paglierino
 	maxFieldLength   = 1024
+	statusGoing      = "going"
+	statusNotGoing   = "not_going"
+	statusMaybe      = "maybe"
 	goingCustomID    = "rsvp_going"
 	notGoingCustomID = "rsvp_notgoing"
 	maybeCustomID    = "rsvp_maybe"
@@ -38,13 +42,27 @@ const (
 	dateTimeFormat      = "2006-01-02T15:04"
 )
 
+type Broadcaster interface {
+	Broadcast(eventType string, payload any)
+}
+
 type Service struct {
 	session            *discordgo.Session
 	guildID            string
 	repo               *Repository
+	broadcaster        Broadcaster
 	membersCache       []*discordgo.Member
-	membersCacheExpiry time.Time
 	membersCacheMu     sync.RWMutex
+	channelsCache      []Channel
+	channelsCacheMu    sync.RWMutex
+	rolesCache         []DiscordRole
+	rolesCacheMu       sync.RWMutex
+	isSyncingNicknames int32
+	stopTicker         chan struct{}
+}
+
+func (s *Service) SetBroadcaster(b Broadcaster) {
+	s.broadcaster = b
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -64,10 +82,24 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 	}
 
 	session.AddHandler(svc.handleInteraction)
+	session.AddHandler(svc.handleGuildMemberAdd)
+	session.AddHandler(svc.handleGuildMemberRemove)
 	session.AddHandler(svc.handleGuildMemberUpdate)
 	session.AddHandler(svc.handleUserUpdate)
+	session.AddHandler(svc.handleChannelCreate)
+	session.AddHandler(svc.handleChannelDelete)
+	session.AddHandler(svc.handleChannelUpdate)
+	session.AddHandler(svc.handleGuildRoleCreate)
+	session.AddHandler(svc.handleGuildRoleDelete)
+	session.AddHandler(svc.handleGuildRoleUpdate)
 
 	return svc, nil
+}
+
+func NewUnconfigured(repo *Repository) *Service {
+	return &Service{
+		repo: repo,
+	}
 }
 
 func (s *Service) Open() error {
@@ -82,11 +114,36 @@ func (s *Service) Open() error {
 		return err
 	}
 
+	s.stopTicker = make(chan struct{})
+
+	// Warm caches in background at startup
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 		defer cancel()
 		if err := s.SyncMemberNicknames(ctx); err != nil {
 			log.Printf("⚠️  Failed initial member nickname sync: %v", err)
+		}
+		if _, err := s.GetChannels(); err != nil {
+			log.Printf("⚠️  Failed initial channels warm up: %v", err)
+		}
+		if _, err := s.GetRoles(ctx); err != nil {
+			log.Printf("⚠️  Failed initial roles warm up: %v", err)
+		}
+	}()
+
+	// Periodic self-healing background reconciliation ticker (every 30 min)
+	go func() {
+		ticker := time.NewTicker(30 * time.Minute)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+				_ = s.SyncMemberNicknames(ctx)
+				cancel()
+			case <-s.stopTicker:
+				return
+			}
 		}
 	}()
 
@@ -94,6 +151,13 @@ func (s *Service) Open() error {
 }
 
 func (s *Service) Close() {
+	if s.stopTicker != nil {
+		select {
+		case <-s.stopTicker:
+		default:
+			close(s.stopTicker)
+		}
+	}
 	if s.session != nil {
 		s.session.Close()
 	}
@@ -106,6 +170,21 @@ func (s *Service) IsConfigured() bool {
 func (s *Service) GetChannels() ([]Channel, error) {
 	if s.session == nil {
 		return nil, errors.New(errBotNotConfigured)
+	}
+
+	s.channelsCacheMu.RLock()
+	if s.channelsCache != nil {
+		channels := s.channelsCache
+		s.channelsCacheMu.RUnlock()
+		return channels, nil
+	}
+	s.channelsCacheMu.RUnlock()
+
+	s.channelsCacheMu.Lock()
+	defer s.channelsCacheMu.Unlock()
+
+	if s.channelsCache != nil {
+		return s.channelsCache, nil
 	}
 
 	discordChannels, err := s.session.GuildChannels(s.guildID)
@@ -128,12 +207,28 @@ func (s *Service) GetChannels() ([]Channel, error) {
 		return strings.ToLower(channels[i].Name) < strings.ToLower(channels[j].Name)
 	})
 
+	s.channelsCache = channels
 	return channels, nil
 }
 
 func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 	if s.session == nil {
 		return nil, errors.New(errBotNotConfigured)
+	}
+
+	s.rolesCacheMu.RLock()
+	if s.rolesCache != nil {
+		roles := s.rolesCache
+		s.rolesCacheMu.RUnlock()
+		return roles, nil
+	}
+	s.rolesCacheMu.RUnlock()
+
+	s.rolesCacheMu.Lock()
+	defer s.rolesCacheMu.Unlock()
+
+	if s.rolesCache != nil {
+		return s.rolesCache, nil
 	}
 
 	var roles []DiscordRole
@@ -153,6 +248,8 @@ func (s *Service) GetRoles(ctx context.Context) ([]DiscordRole, error) {
 			})
 		}
 	}
+
+	s.rolesCache = roles
 	return roles, nil
 }
 
@@ -171,7 +268,9 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 	allUsers, _ := s.repo.GetAllUsers(ctx)
 	var noRespNames []string
 	for _, u := range allUsers {
-		noRespNames = append(noRespNames, u.Username)
+		if UserPlaysGame(u, gameType) {
+			noRespNames = append(noRespNames, u.Username)
+		}
 	}
 
 	embed := &discordgo.MessageEmbed{
@@ -265,6 +364,9 @@ func (s *Service) CreateEventMessage(ctx context.Context, channelID, title, date
 	}
 
 	event.ID = id
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
 	return event, nil
 }
 
@@ -272,10 +374,6 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 	event, err := s.repo.GetEventByID(ctx, id)
 	if err != nil {
 		return nil, err
-	}
-
-	if members, mErr := s.getCachedGuildMembers(); mErr == nil && len(members) > 0 {
-		s.syncMemberNicknamesToDatabase(ctx, members)
 	}
 
 	detail := &DiscordEventDetail{
@@ -294,11 +392,11 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 		for _, p := range parts {
 			respondedMap[p.UserID] = true
 			switch p.Status {
-			case "going":
+			case statusGoing:
 				detail.Going = append(detail.Going, p.Username)
-			case "not_going":
+			case statusNotGoing:
 				detail.NotGoing = append(detail.NotGoing, p.Username)
-			case "maybe":
+			case statusMaybe:
 				detail.Maybe = append(detail.Maybe, p.Username)
 			}
 		}
@@ -306,7 +404,9 @@ func (s *Service) GetEvent(ctx context.Context, id int64) (*DiscordEventDetail, 
 
 	for _, u := range allUsers {
 		if !respondedMap[u.ID] {
-			detail.NoResponse = append(detail.NoResponse, u.Username)
+			if UserPlaysGame(u, event.GameType) {
+				detail.NoResponse = append(detail.NoResponse, u.Username)
+			}
 		}
 	}
 
@@ -327,7 +427,13 @@ func (s *Service) DeleteEvent(ctx context.Context, id int64) error {
 		}
 	}
 
-	return s.repo.DeleteEvent(ctx, id)
+	if err := s.repo.DeleteEvent(ctx, id); err != nil {
+		return err
+	}
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
+	return nil
 }
 
 func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datetime, gameType string) (*Event, error) {
@@ -386,6 +492,10 @@ func (s *Service) UpdateEventMessage(ctx context.Context, id int64, title, datet
 	event.DateTime = datetime
 	event.GameType = gameType
 
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_updated", map[string]any{"event_id": id})
+	}
+
 	return event, nil
 }
 
@@ -422,11 +532,11 @@ func getInteractionUserID(i *discordgo.InteractionCreate) string {
 func statusFromCustomID(customID string) string {
 	switch customID {
 	case goingCustomID:
-		return "going"
+		return statusGoing
 	case notGoingCustomID:
-		return "not_going"
+		return statusNotGoing
 	case maybeCustomID:
-		return "maybe"
+		return statusMaybe
 	}
 	return ""
 }
@@ -434,11 +544,11 @@ func statusFromCustomID(customID string) string {
 func groupParticipants(parts []Participation) (going, notGoing, maybe []string) {
 	for _, p := range parts {
 		switch p.Status {
-		case "going":
+		case statusGoing:
 			going = append(going, p.Username)
-		case "not_going":
+		case statusNotGoing:
 			notGoing = append(notGoing, p.Username)
-		case "maybe":
+		case statusMaybe:
 			maybe = append(maybe, p.Username)
 		}
 	}
@@ -491,8 +601,21 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 		log.Printf("⚠️  Failed to upsert discord user: %v", err)
 	}
 
+	if status == statusGoing {
+		if err := s.repo.EnsureUserPlaysGame(ctx, userID, event.GameType); err != nil {
+			log.Printf("⚠️  Failed to ensure user plays game: %v", err)
+		}
+	}
+
 	if err := s.repo.UpsertParticipation(ctx, event.ID, userID, status); err != nil {
 		log.Printf("⚠️  Failed to upsert participation: %v", err)
+	} else if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_rsvp_updated", map[string]any{
+			"event_id": event.ID,
+			"user_id":  userID,
+			"username": username,
+			"status":   status,
+		})
 	}
 
 	if err := s.buildEmbedFields(ctx, event.ID, embed); err != nil {
@@ -520,6 +643,12 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 
 	going, notGoing, maybe := groupParticipants(parts)
 
+	event, _ := s.repo.GetEventByID(ctx, eventID)
+	gameType := ""
+	if event != nil {
+		gameType = event.GameType
+	}
+
 	allUsers, _ := s.repo.GetAllUsers(ctx)
 	respondedMap := make(map[string]bool)
 	for _, p := range parts {
@@ -528,7 +657,9 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 	var noResponse []string
 	for _, u := range allUsers {
 		if !respondedMap[u.ID] {
-			noResponse = append(noResponse, u.Username)
+			if gameType == "" || UserPlaysGame(u, gameType) {
+				noResponse = append(noResponse, u.Username)
+			}
 		}
 	}
 
@@ -550,6 +681,9 @@ func (s *Service) buildEmbedFields(ctx context.Context, eventID int64, embed *di
 }
 
 func (s *Service) updateEventMessageEmbed(ctx context.Context, event *Event) error {
+	if s.session == nil {
+		return nil
+	}
 	msg, err := s.session.ChannelMessage(event.ChannelID, event.MessageID)
 	if err != nil {
 		return err
@@ -579,21 +713,9 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 		return nil, errors.New(errBotNotConfigured)
 	}
 
-	var allMembers []*discordgo.Member
-	var after string
-	for {
-		members, err := s.session.GuildMembers(s.guildID, after, 1000)
-		if err != nil {
-			return nil, fmt.Errorf("failed to fetch guild members: %w", err)
-		}
-		if len(members) == 0 {
-			break
-		}
-		allMembers = append(allMembers, members...)
-		if len(members) < 1000 {
-			break
-		}
-		after = members[len(members)-1].User.ID
+	allMembers, err := s.getCachedGuildMembers()
+	if err != nil {
+		return nil, err
 	}
 
 	var result []GuildMember
@@ -607,8 +729,6 @@ func (s *Service) GetGuildMembers(ctx context.Context) ([]GuildMember, error) {
 			DisplayName: getMemberDisplayName(m),
 		})
 	}
-
-	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
 
 	return result, nil
 }
@@ -627,9 +747,21 @@ func (s *Service) UpdateManualParticipation(ctx context.Context, eventID int64, 
 		if err := s.repo.UpsertUser(ctx, userID, username); err != nil {
 			return err
 		}
+		if status == statusGoing {
+			_ = s.repo.EnsureUserPlaysGame(ctx, userID, event.GameType)
+		}
 		if err := s.repo.UpsertParticipation(ctx, eventID, userID, status); err != nil {
 			return err
 		}
+	}
+
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("discord_event_rsvp_updated", map[string]any{
+			"event_id": eventID,
+			"user_id":  userID,
+			"username": username,
+			"status":   status,
+		})
 	}
 
 	return s.updateEventMessageEmbed(ctx, event)
@@ -718,7 +850,7 @@ func (s *Service) fetchAllGuildMembers() ([]*discordgo.Member, error) {
 
 func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 	s.membersCacheMu.RLock()
-	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+	if s.membersCache != nil {
 		members := s.membersCache
 		s.membersCacheMu.RUnlock()
 		return members, nil
@@ -728,7 +860,7 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 	s.membersCacheMu.Lock()
 	defer s.membersCacheMu.Unlock()
 
-	if s.membersCache != nil && time.Now().Before(s.membersCacheExpiry) {
+	if s.membersCache != nil {
 		return s.membersCache, nil
 	}
 
@@ -737,9 +869,8 @@ func (s *Service) getCachedGuildMembers() ([]*discordgo.Member, error) {
 		return nil, err
 	}
 	s.membersCache = allMembers
-	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
 
-	go s.syncMemberNicknamesToDatabase(context.Background(), allMembers)
+	s.tryAsyncSyncMemberNicknames(allMembers)
 	return allMembers, nil
 }
 
@@ -762,6 +893,44 @@ func getMemberDisplayName(m *discordgo.Member) string {
 	return m.User.Username
 }
 
+func (s *Service) handleGuildMemberAdd(_ *discordgo.Session, m *discordgo.GuildMemberAdd) {
+	if m == nil || m.Member == nil || m.GuildID != s.guildID {
+		return
+	}
+	s.membersCacheMu.Lock()
+	if s.membersCache != nil {
+		exists := false
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == m.User.ID {
+				s.membersCache[i] = m.Member
+				exists = true
+				break
+			}
+		}
+		if !exists {
+			s.membersCache = append(s.membersCache, m.Member)
+		}
+	}
+	s.membersCacheMu.Unlock()
+	s.onMemberUpdated(m.Member)
+}
+
+func (s *Service) handleGuildMemberRemove(_ *discordgo.Session, m *discordgo.GuildMemberRemove) {
+	if m == nil || m.Member == nil || m.GuildID != s.guildID {
+		return
+	}
+	s.membersCacheMu.Lock()
+	if s.membersCache != nil {
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == m.User.ID {
+				s.membersCache = append(s.membersCache[:i], s.membersCache[i+1:]...)
+				break
+			}
+		}
+	}
+	s.membersCacheMu.Unlock()
+}
+
 func (s *Service) handleGuildMemberUpdate(_ *discordgo.Session, m *discordgo.GuildMemberUpdate) {
 	if m == nil || m.Member == nil || m.GuildID != s.guildID {
 		return
@@ -774,9 +943,69 @@ func (s *Service) handleUserUpdate(_ *discordgo.Session, u *discordgo.UserUpdate
 		return
 	}
 	s.membersCacheMu.Lock()
-	s.membersCache = nil
-	s.membersCacheExpiry = time.Time{}
+	if s.membersCache != nil {
+		for i, cached := range s.membersCache {
+			if cached.User != nil && cached.User.ID == u.ID {
+				s.membersCache[i].User = u.User
+				break
+			}
+		}
+	}
 	s.membersCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelCreate(_ *discordgo.Session, c *discordgo.ChannelCreate) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelDelete(_ *discordgo.Session, c *discordgo.ChannelDelete) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleChannelUpdate(_ *discordgo.Session, c *discordgo.ChannelUpdate) {
+	if c == nil || c.GuildID != s.guildID {
+		return
+	}
+	s.channelsCacheMu.Lock()
+	s.channelsCache = nil
+	s.channelsCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleCreate(_ *discordgo.Session, r *discordgo.GuildRoleCreate) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleDelete(_ *discordgo.Session, r *discordgo.GuildRoleDelete) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
+}
+
+func (s *Service) handleGuildRoleUpdate(_ *discordgo.Session, r *discordgo.GuildRoleUpdate) {
+	if r == nil || r.GuildID != s.guildID {
+		return
+	}
+	s.rolesCacheMu.Lock()
+	s.rolesCache = nil
+	s.rolesCacheMu.Unlock()
 }
 
 func (s *Service) onMemberUpdated(m *discordgo.Member) {
@@ -841,11 +1070,22 @@ func (s *Service) SyncMemberNicknames(ctx context.Context) error {
 
 	s.membersCacheMu.Lock()
 	s.membersCache = allMembers
-	s.membersCacheExpiry = time.Now().Add(2 * time.Minute)
 	s.membersCacheMu.Unlock()
 
 	s.syncMemberNicknamesToDatabase(ctx, allMembers)
 	return nil
+}
+
+func (s *Service) tryAsyncSyncMemberNicknames(members []*discordgo.Member) {
+	if !atomic.CompareAndSwapInt32(&s.isSyncingNicknames, 0, 1) {
+		return
+	}
+	go func() {
+		defer atomic.StoreInt32(&s.isSyncingNicknames, 0)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		s.syncMemberNicknamesToDatabase(ctx, members)
+	}()
 }
 
 func (s *Service) syncMemberNicknamesToDatabase(ctx context.Context, members []*discordgo.Member) {
@@ -931,6 +1171,11 @@ func (s *Service) SendEventReminders(ctx context.Context, hoursBefore int, custo
 	}
 
 	for _, event := range events {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
 		s.sendReminderForEvent(ctx, event, customMessage, roleIDs)
 	}
 
@@ -945,6 +1190,7 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	}
 
 	if len(userIDs) == 0 {
+		_ = s.repo.MarkReminderSent(ctx, event.ID)
 		return
 	}
 
@@ -967,6 +1213,7 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 	}
 
 	if len(filteredUserIDs) == 0 {
+		_ = s.repo.MarkReminderSent(ctx, event.ID)
 		return
 	}
 
@@ -977,7 +1224,24 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 
 	msgContent := fmt.Sprintf("%s\n\n**Event:** %s\n**When:** %s", customMessage, event.Title, formattedDateTime)
 
-	for _, userID := range filteredUserIDs {
+	sentCount := 0
+	for i, userID := range filteredUserIDs {
+		select {
+		case <-ctx.Done():
+			log.Printf("⚠️  Event reminder delivery cancelled for event %d", event.ID)
+			return
+		default:
+		}
+
+		if i > 0 {
+			select {
+			case <-ctx.Done():
+				log.Printf("⚠️  Event reminder delivery cancelled for event %d", event.ID)
+				return
+			case <-time.After(250 * time.Millisecond):
+			}
+		}
+
 		ch, err := s.session.UserChannelCreate(userID)
 		if err != nil {
 			log.Printf("⚠️  Failed to create DM channel for user %s: %v", userID, err)
@@ -987,11 +1251,15 @@ func (s *Service) sendReminderForEvent(ctx context.Context, event Event, customM
 		_, err = s.session.ChannelMessageSend(ch.ID, msgContent)
 		if err != nil {
 			log.Printf("⚠️  Failed to send DM to user %s: %v", userID, err)
+			continue
 		}
+		sentCount++
 	}
 
-	if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
-		log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
+	if sentCount > 0 {
+		if err := s.repo.MarkReminderSent(ctx, event.ID); err != nil {
+			log.Printf("⚠️  Failed to mark reminder sent for event %d: %v", event.ID, err)
+		}
 	}
 }
 
@@ -1042,4 +1310,122 @@ func (s *Service) SyncRosterPreview(ctx context.Context, channelID, messageID, m
 		return "", err
 	}
 	return msg.ID, nil
+}
+
+// Data and Repository delegation methods
+
+func (s *Service) GetAllEvents(ctx context.Context) ([]Event, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAllEvents(ctx)
+}
+
+func (s *Service) GetAttendanceStats(ctx context.Context) ([]RawAttendance, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAttendanceStats(ctx)
+}
+
+func (s *Service) GetAllUsersForManagement(ctx context.Context) ([]DiscordUser, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetAllUsersForManagement(ctx)
+}
+
+func (s *Service) SetUserActive(ctx context.Context, id, username string, active bool) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SetUserActive(ctx, id, username, active)
+}
+
+func (s *Service) GetEventRoster(ctx context.Context, eventID int64) (*EventRoster, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetEventRoster(ctx, eventID)
+}
+
+func (s *Service) SaveEventRoster(ctx context.Context, eventID int64, data string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveEventRoster(ctx, eventID, data)
+}
+
+func (s *Service) RecordPlayerRoleUsage(ctx context.Context, records []PlayerRoleRecord, gameType string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.RecordPlayerRoleUsage(ctx, records, gameType)
+}
+
+func (s *Service) GetRosterTemplates(ctx context.Context) ([]RosterTemplate, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetRosterTemplates(ctx)
+}
+
+func (s *Service) SaveRosterTemplate(ctx context.Context, name, gameType, structure string) (*RosterTemplate, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveRosterTemplate(ctx, name, gameType, structure)
+}
+
+func (s *Service) DeleteRosterTemplate(ctx context.Context, id int64) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.DeleteRosterTemplate(ctx, id)
+}
+
+func (s *Service) GetPlayerRoleStats(ctx context.Context, gameType string) ([]PlayerRoleStat, error) {
+	if s.repo == nil {
+		return nil, errors.New("discord repository not initialized")
+	}
+	return s.repo.GetPlayerRoleStats(ctx, gameType)
+}
+
+func (s *Service) SaveMemberQualifications(ctx context.Context, userIDs []string, qualifications []MemberQualification) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SaveMemberQualifications(ctx, userIDs, qualifications)
+}
+
+func (s *Service) RenameQualification(ctx context.Context, oldName, newName string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.RenameQualification(ctx, oldName, newName)
+}
+
+func (s *Service) CleanupOrphanedQualifications(ctx context.Context, qualificationNames []string) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.CleanupOrphanedQualifications(ctx, qualificationNames)
+}
+
+func (s *Service) SetUserGames(ctx context.Context, id string, playsArma3, playsReforger bool) error {
+	if s.repo == nil {
+		return errors.New("discord repository not initialized")
+	}
+	return s.repo.SetUserGames(ctx, id, playsArma3, playsReforger)
+}
+
+func IsReforgerGame(gameType string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(gameType)), "reforger")
+}
+
+func UserPlaysGame(u DiscordUser, gameType string) bool {
+	if IsReforgerGame(gameType) {
+		return u.PlaysReforger
+	}
+	return u.PlaysArma3
 }

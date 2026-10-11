@@ -30,13 +30,12 @@ export function ReforgerStatsProvider({ serverId, children }: Readonly<{ serverI
 
     const unsub = subscribe('reforger_stats', (e) => {
       // payload: { server_id: number, stats: ReforgerStat }
-      if (e.payload.server_id === serverId) {
-        setStats((prev) => {
-          const newStats = [...prev, e.payload.stats]
-          if (newStats.length > 15000) return newStats.slice(-15000)
-          return newStats
-        })
-      }
+      if (!e?.payload || e.payload.server_id !== serverId || !e.payload.stats) return
+      setStats((prev) => {
+        const newStats = [...prev, e.payload.stats]
+        if (newStats.length > 15000) return newStats.slice(-15000)
+        return newStats
+      })
     })
 
     return () => {

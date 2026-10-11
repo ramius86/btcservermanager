@@ -31,6 +31,24 @@ function getServerImage(type: string): string {
   return SERVER_IMAGE_MAP[type] ?? `/${type.toLowerCase()}.png`
 }
 
+function UptimeDisplay({ startedAt }: { startedAt: string | null }) {
+  const [uptime, setUptime] = useState(() => startedAt ? formatUptime(startedAt) : "00:00:00")
+
+  useEffect(() => {
+    if (!startedAt) {
+      setUptime("00:00:00")
+      return
+    }
+    setUptime(formatUptime(startedAt))
+    const timer = setInterval(() => {
+      setUptime(formatUptime(startedAt))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [startedAt])
+
+  return <span>{uptime}</span>
+}
+
 interface ServerCardItemProps {
   instance: {
     server: AnyServerDto
@@ -348,7 +366,7 @@ function ServerInfoBar({
           <div className="w-6 h-6 rounded bg-surface border border-border/50 flex items-center justify-center shrink-0">
             <Clock className="w-3 h-3 text-muted-foreground/60" />
           </div>
-          {status.startedAt ? formatUptime(status.startedAt) : "00:00:00"}
+          <UptimeDisplay startedAt={status.startedAt} />
         </div>
       </div>
 
@@ -586,7 +604,6 @@ export function ServersPage() {
   const [loading, setLoading] = useState(true)
   const [serverToDelete, setServerToDelete] = useState<AnyServerDto | null>(null)
   const [activeHCMenu, setActiveHCMenu] = useState<number | null>(null)
-  const [tick, setTick] = useState(0)
   
   const navigate = useNavigate()
   const { showToast } = useToast()
@@ -598,8 +615,15 @@ export function ServersPage() {
     setServerStopping, 
     refreshStatuses 
   } = useServerStatus()
-  const { subscribe } = useWebSocket()
+  const { subscribe, onReconnect } = useWebSocket()
   const [installingGames, setInstallingGames] = useState<Record<string, { status: string, progress: number }>>({})
+
+  useEffect(() => {
+    const unsub = onReconnect(() => {
+      loadServers()
+    })
+    return () => unsub()
+  }, [onReconnect])
 
   const onDragEnd = useCallback(async (result: DropResult) => {
     if (!result.destination) return
@@ -622,14 +646,6 @@ export function ServersPage() {
       loadServers()
     }
   }, [servers, showToast])
-
-  // Force re-render every second to update the uptime counter dynamically
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTick(prev => prev + 1)
-    }, 1000)
-    return () => clearInterval(timer)
-  }, [])
 
   // Close Headless Client popover menu on clicking outside
   useEffect(() => {
@@ -714,7 +730,7 @@ export function ServersPage() {
         }
       };
     })
-  }, [servers, wsStatuses, startingServers, stoppingServers, tick]);
+  }, [servers, wsStatuses, startingServers, stoppingServers]);
 
   const isServerWithSamePortRunning = (server: AnyServerDto) => {
     return serverInstances.some((inst: any) => 

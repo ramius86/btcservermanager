@@ -52,14 +52,14 @@ var (
 )
 
 func (m *WorkshopMod) GetNormalizedName() string {
-	name := m.Name
-	if name == "" {
-		name = strconv.FormatInt(m.ID, 10)
-	}
-
-	retVal := strings.TrimSpace(name)
+	retVal := strings.TrimSpace(m.Name)
 	retVal = whitespaceRegex.ReplaceAllString(retVal, "_")
 	retVal = nonAlphanumericRegex.ReplaceAllString(retVal, "")
+	retVal = strings.Trim(retVal, "_")
+
+	if retVal == "" {
+		retVal = strconv.FormatInt(m.ID, 10)
+	}
 
 	return "@" + retVal
 }

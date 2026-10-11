@@ -6,7 +6,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Upload, Search, Plus, AlertCircle, RefreshCw, CheckCircle, AlertTriangle, Download, Terminal } from 'lucide-react'
+import { Upload, Search, Plus, AlertCircle, RefreshCw, CheckCircle, AlertTriangle, Download, Terminal, Loader2 } from 'lucide-react'
 import { Button, cn } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
@@ -249,13 +249,16 @@ function usePresetOperations(filter: string, loadData: () => void) {
   const { showToast } = useToast()
   const [createPresetOpen, setCreatePresetOpen] = useState(false)
   const [newPresetName, setNewPresetName] = useState('')
+  const [isCreatingPreset, setIsCreatingPreset] = useState(false)
   const [editPresetOpen, setEditPresetOpen] = useState(false)
   const [editingPreset, setEditingPreset] = useState<any>(null)
   const [editPresetMods, setEditPresetMods] = useState<number[]>([])
+  const [isSavingPreset, setIsSavingPreset] = useState(false)
   const [presetToDelete, setPresetToDelete] = useState<any>(null)
 
   const handleCreatePreset = async () => {
-    if (!newPresetName.trim()) return
+    if (!newPresetName.trim() || isCreatingPreset) return
+    setIsCreatingPreset(true)
     try {
       await ModPresetService.create({ name: newPresetName, serverType: filter })
       showToast(`Preset '${newPresetName}' created.`, "success")
@@ -265,6 +268,8 @@ function usePresetOperations(filter: string, loadData: () => void) {
     } catch (err) {
       console.error(err)
       showToast("Failed to create preset", "error")
+    } finally {
+      setIsCreatingPreset(false)
     }
   }
 
@@ -283,6 +288,8 @@ function usePresetOperations(filter: string, loadData: () => void) {
   }
 
   const handleSavePresetEdit = async () => {
+    if (isSavingPreset) return
+    setIsSavingPreset(true)
     try {
       await ModPresetService.updateMods(editingPreset.id, editPresetMods)
       showToast(`Preset '${editingPreset.name}' updated.`, "success")
@@ -292,6 +299,8 @@ function usePresetOperations(filter: string, loadData: () => void) {
     } catch (err) {
       console.error(err)
       showToast("Failed to update preset", "error")
+    } finally {
+      setIsSavingPreset(false)
     }
   }
 
@@ -330,12 +339,14 @@ function usePresetOperations(filter: string, loadData: () => void) {
     setCreatePresetOpen,
     newPresetName,
     setNewPresetName,
+    isCreatingPreset,
     editPresetOpen,
     setEditPresetOpen,
     editingPreset,
     setEditingPreset,
     editPresetMods,
     setEditPresetMods,
+    isSavingPreset,
     presetToDelete,
     setPresetToDelete,
     handleCreatePreset,
@@ -560,17 +571,20 @@ export function ModsPage() {
   // Install Mod Dialog
   const [installDialogOpen, setInstallDialogOpen] = useState(false)
   const [installModId, setInstallModId] = useState('')
+  const [isInstallingMod, setIsInstallingMod] = useState(false)
 
   const {
     createPresetOpen,
     setCreatePresetOpen,
     newPresetName,
     setNewPresetName,
+    isCreatingPreset,
     editPresetOpen,
     setEditPresetOpen,
     editingPreset,
     setEditingPreset,
     editPresetMods,
+    isSavingPreset,
     presetToDelete,
     setPresetToDelete,
     handleCreatePreset,
@@ -583,6 +597,7 @@ export function ModsPage() {
 
   const [updatingAll, setUpdatingAll] = useState(false)
   const [updatingModIds, setUpdatingModIds] = useState<number[]>([])
+  const [installingSteamModIds, setInstallingSteamModIds] = useState<number[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Filter mods by search query
@@ -603,7 +618,8 @@ export function ModsPage() {
   const { peakInProgress } = useProgressTracking(currentInProgress)
 
   const handleInstallMod = async () => {
-    if (!installModId.trim()) return
+    if (!installModId.trim() || isInstallingMod) return
+    setIsInstallingMod(true)
     try {
       await WorkshopService.install([{ id: Number(installModId), serverType: filter } as any])
       showToast("Installation started. Check dashboard for progress.", "success")
@@ -613,6 +629,8 @@ export function ModsPage() {
     } catch (err) {
       console.error(err)
       showToast("Failed to queue installation", "error")
+    } finally {
+      setIsInstallingMod(false)
     }
   }
 
@@ -729,6 +747,8 @@ export function ModsPage() {
   }
 
   const handleInstallFromSteam = async (mod: any) => {
+    if (installingSteamModIds.includes(mod.id)) return
+    setInstallingSteamModIds(prev => [...prev, mod.id])
     try {
       await WorkshopService.install([{ id: mod.id, name: mod.name, serverType: filter } as any])
       showToast(`Installation of '${mod.name}' started.`, "success")
@@ -736,6 +756,8 @@ export function ModsPage() {
     } catch (err) {
       console.error(err)
       showToast("Failed to queue installation", "error")
+    } finally {
+      setInstallingSteamModIds(prev => prev.filter(id => id !== mod.id))
     }
   }
 
@@ -984,7 +1006,10 @@ export function ModsPage() {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setInstallDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleInstallMod} disabled={!installModId.trim()}>Install</Button>
+            <Button onClick={handleInstallMod} disabled={!installModId.trim() || isInstallingMod}>
+              {isInstallingMod && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Install
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1006,7 +1031,10 @@ export function ModsPage() {
           />
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreatePresetOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreatePreset} disabled={!newPresetName.trim()}>Create</Button>
+            <Button onClick={handleCreatePreset} disabled={!newPresetName.trim() || isCreatingPreset}>
+              {isCreatingPreset && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Create
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -1040,6 +1068,7 @@ export function ModsPage() {
         selectedModIds={editPresetMods}
         onChangeMod={handleChangeModInPreset}
         onSave={handleSavePresetEdit}
+        isSaving={isSavingPreset}
         filter={filter}
       />
 

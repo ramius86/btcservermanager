@@ -18,9 +18,9 @@ func NewRepository(db *sql.DB) *Repository {
 func (r *Repository) GetAuth(ctx context.Context) (*SteamAuth, error) {
 	var a SteamAuth
 
-	query := `SELECT id, username, password, steam_guard_token, COALESCE(refresh_token, ''), COALESCE(account_name, '') FROM steam_auth LIMIT 1`
+	query := `SELECT id, username, password, steam_guard_token FROM steam_auth LIMIT 1`
 
-	err := r.db.QueryRowContext(ctx, query).Scan(&a.ID, &a.Username, &a.Password, &a.SteamGuardToken, &a.RefreshToken, &a.AccountName)
+	err := r.db.QueryRowContext(ctx, query).Scan(&a.ID, &a.Username, &a.Password, &a.SteamGuardToken)
 	if errors.Is(err, sql.ErrNoRows) {
 		return &SteamAuth{}, nil
 	}
@@ -36,9 +36,6 @@ func (r *Repository) GetAuth(ctx context.Context) (*SteamAuth, error) {
 	if a.SteamGuardToken, err = decrypt(a.SteamGuardToken); err != nil {
 		return nil, fmt.Errorf("failed to decrypt steam guard token: %w", err)
 	}
-	if a.RefreshToken, err = decrypt(a.RefreshToken); err != nil {
-		return nil, fmt.Errorf("failed to decrypt refresh token: %w", err)
-	}
 
 	return &a, nil
 }
@@ -49,12 +46,10 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 		Username        string
 		Password        string
 		SteamGuardToken string
-		RefreshToken    string
-		AccountName     string
 	}
 
-	query := `SELECT id, username, password, steam_guard_token, refresh_token, account_name FROM steam_auth LIMIT 1`
-	err := r.db.QueryRowContext(ctx, query).Scan(&current.ID, &current.Username, &current.Password, &current.SteamGuardToken, &current.RefreshToken, &current.AccountName)
+	query := `SELECT id, username, password, steam_guard_token FROM steam_auth LIMIT 1`
+	err := r.db.QueryRowContext(ctx, query).Scan(&current.ID, &current.Username, &current.Password, &current.SteamGuardToken)
 
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return err
@@ -79,19 +74,11 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 
 	tokenToSave := current.SteamGuardToken
 	if a.SteamGuardToken != "" {
-		enc, _ := encrypt(a.SteamGuardToken)
+		enc, err := encrypt(a.SteamGuardToken)
+		if err != nil {
+			return err
+		}
 		tokenToSave = enc
-	}
-
-	refreshTokenToSave := current.RefreshToken
-	if a.RefreshToken != "" {
-		enc, _ := encrypt(a.RefreshToken)
-		refreshTokenToSave = enc
-	}
-
-	accountNameToSave := a.AccountName
-	if accountNameToSave == "" && exists {
-		accountNameToSave = current.AccountName
 	}
 
 	if !exists {
@@ -99,10 +86,8 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 			username,
 			passwordToSave,
 			tokenToSave,
-			refreshTokenToSave,
-			accountNameToSave,
 		}
-		_, err := r.db.ExecContext(ctx, "INSERT INTO steam_auth (username, password, steam_guard_token, refresh_token, account_name) VALUES (?, ?, ?, ?, ?)", args...)
+		_, err := r.db.ExecContext(ctx, "INSERT INTO steam_auth (username, password, steam_guard_token) VALUES (?, ?, ?)", args...)
 		return err
 	}
 
@@ -110,11 +95,9 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 		username,
 		passwordToSave,
 		tokenToSave,
-		refreshTokenToSave,
-		accountNameToSave,
 		current.ID,
 	}
-	_, err = r.db.ExecContext(ctx, "UPDATE steam_auth SET username = ?, password = ?, steam_guard_token = ?, refresh_token = ?, account_name = ? WHERE id = ?", args...)
+	_, err = r.db.ExecContext(ctx, "UPDATE steam_auth SET username = ?, password = ?, steam_guard_token = ? WHERE id = ?", args...)
 
 	return err
 }

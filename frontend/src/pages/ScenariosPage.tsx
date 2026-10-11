@@ -61,9 +61,10 @@ export function ScenariosPage() {
 
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files?.length) return
+    const input = e.target
     setLoading(true)
     try {
-      await ScenarioService.uploadArma3(e.target.files)
+      await ScenarioService.uploadArma3(input.files!)
       showToast("Scenarios uploaded successfully.", 'success')
       refreshScenarios()
     } catch (err) {
@@ -71,6 +72,7 @@ export function ScenariosPage() {
       showToast("Failed to upload scenario", "error")
     } finally {
       setLoading(false)
+      input.value = ''
     }
   }
 

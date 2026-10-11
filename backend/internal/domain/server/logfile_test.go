@@ -93,3 +93,30 @@ func TestLogFile_GetLastLines_DirectoryError(t *testing.T) {
 		}
 	}
 }
+
+func TestLogFile_ReadChunkAt_NoTrailingNullBytes(t *testing.T) {
+	tempDir := t.TempDir()
+	logPath := filepath.Join(tempDir, "partial.log")
+	content := []byte("hello world")
+	if err := os.WriteFile(logPath, content, 0o600); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	file, err := os.Open(logPath)
+	if err != nil {
+		t.Fatalf("failed to open file: %v", err)
+	}
+	defer file.Close()
+
+	// Request reading 100 bytes when file only has len(content) bytes
+	buf, err := readChunkAt(file, 0, 100)
+	if err != nil {
+		t.Fatalf("readChunkAt returned error: %v", err)
+	}
+	if len(buf) != len(content) {
+		t.Fatalf("expected len %d, got %d", len(content), len(buf))
+	}
+	if string(buf) != string(content) {
+		t.Fatalf("expected %q, got %q", string(content), string(buf))
+	}
+}

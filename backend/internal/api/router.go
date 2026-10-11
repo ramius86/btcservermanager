@@ -35,9 +35,7 @@ type Router struct {
 	systemService       *system.Service
 	steamCmdService     *steamcmd.Service
 	steamAuthService    *steamauth.AuthService
-	steamQRService      *steamauth.QRAuthService
 	discordService      *discordbot.Service
-	discordRepo         *discordbot.Repository
 	fileManagerService  *filemanager.Service
 	scheduler           *system.Scheduler
 	config              *config.Config
@@ -54,9 +52,7 @@ type RouterDeps struct {
 	SystemService       *system.Service
 	SteamCmdService     *steamcmd.Service
 	SteamAuthService    *steamauth.AuthService
-	SteamQRService      *steamauth.QRAuthService
 	DiscordService      *discordbot.Service
-	DiscordRepo         *discordbot.Repository
 	FileManagerService  *filemanager.Service
 	Scheduler           *system.Scheduler
 	Config              *config.Config
@@ -74,9 +70,7 @@ func NewRouter(deps RouterDeps) *Router {
 		systemService:       deps.SystemService,
 		steamCmdService:     deps.SteamCmdService,
 		steamAuthService:    deps.SteamAuthService,
-		steamQRService:      deps.SteamQRService,
 		discordService:      deps.DiscordService,
-		discordRepo:         deps.DiscordRepo,
 		fileManagerService:  deps.FileManagerService,
 		scheduler:           deps.Scheduler,
 		config:              deps.Config,
@@ -99,7 +93,7 @@ func (r *Router) Init() http.Handler {
 	mux.Use(CorsHandler(r.config.AllowedOrigin))
 	mux.Use(r.securityHeaders)
 
-	cfValidator := newCFAccessValidator(r.config.CFTeamDomain, r.config.DebugMode)
+	cfValidator := newCFAccessValidator(r.config.CFTeamDomain, r.config.CFAccessAud, r.config.DebugMode)
 
 	// Mount the CSP report receiver outside the Cloudflare Access validation
 	mux.Post("/api/csp-report", r.handleCSPReport)
@@ -270,8 +264,6 @@ func (r *Router) steamAuthRoutes() chi.Router {
 	mux.Post("/login", r.handleSteamLogin)
 	mux.Post("/test", r.handleTestSteamLogin)
 	mux.Get("/status", r.handleGetSteamAuthStatus)
-	mux.Post("/qr/begin", r.handleBeginSteamQR)
-	mux.Post("/qr/poll", r.handlePollSteamQR)
 
 	return mux
 }

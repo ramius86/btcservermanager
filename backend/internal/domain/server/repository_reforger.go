@@ -174,7 +174,46 @@ func (r *Repository) saveReforgerServer(ctx context.Context, tx *sql.Tx, id int6
 		s.StreamingBudget, s.LogStats, s.LogStatsIntervalMs, s.AddonsVerify, s.AddonsRepair, s.NoThrow,
 		string(adminsBytes), s.NwkResolution, s.DisableNavmeshStreaming,
 	}
-	_, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO reforger_server (id, scenario_id, third_person_view_enabled, battl_eye, visible, cross_platform, server_max_view_distance, server_min_grass_distance, network_view_distance, fast_validation, disable_ai, ai_limit, von_can_transmit_cross_faction, auto_save_interval, join_queue_max_size, max_fps, mission_header, network_dynamic_simulation, replication_timeout_ms, streams_delta, streaming_budget, log_stats, log_stats_interval_ms, addons_verify, addons_repair, no_throw, admins, nwk_resolution, disable_navmesh_streaming) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", args...)
+	query := `INSERT INTO reforger_server (
+		id, scenario_id, third_person_view_enabled, battl_eye, visible, cross_platform,
+		server_max_view_distance, server_min_grass_distance, network_view_distance, fast_validation,
+		disable_ai, ai_limit, von_can_transmit_cross_faction, auto_save_interval, join_queue_max_size,
+		max_fps, mission_header, network_dynamic_simulation, replication_timeout_ms, streams_delta,
+		streaming_budget, log_stats, log_stats_interval_ms, addons_verify, addons_repair, no_throw,
+		admins, nwk_resolution, disable_navmesh_streaming
+	) VALUES (
+		?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+	) ON CONFLICT(id) DO UPDATE SET
+		scenario_id = excluded.scenario_id,
+		third_person_view_enabled = excluded.third_person_view_enabled,
+		battl_eye = excluded.battl_eye,
+		visible = excluded.visible,
+		cross_platform = excluded.cross_platform,
+		server_max_view_distance = excluded.server_max_view_distance,
+		server_min_grass_distance = excluded.server_min_grass_distance,
+		network_view_distance = excluded.network_view_distance,
+		fast_validation = excluded.fast_validation,
+		disable_ai = excluded.disable_ai,
+		ai_limit = excluded.ai_limit,
+		von_can_transmit_cross_faction = excluded.von_can_transmit_cross_faction,
+		auto_save_interval = excluded.auto_save_interval,
+		join_queue_max_size = excluded.join_queue_max_size,
+		max_fps = excluded.max_fps,
+		mission_header = excluded.mission_header,
+		network_dynamic_simulation = excluded.network_dynamic_simulation,
+		replication_timeout_ms = excluded.replication_timeout_ms,
+		streams_delta = excluded.streams_delta,
+		streaming_budget = excluded.streaming_budget,
+		log_stats = excluded.log_stats,
+		log_stats_interval_ms = excluded.log_stats_interval_ms,
+		addons_verify = excluded.addons_verify,
+		addons_repair = excluded.addons_repair,
+		no_throw = excluded.no_throw,
+		admins = excluded.admins,
+		nwk_resolution = excluded.nwk_resolution,
+		disable_navmesh_streaming = excluded.disable_navmesh_streaming`
+
+	_, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return err
 	}

@@ -37,8 +37,8 @@ type SaveQualificationsRequest struct {
 }
 
 func (r *Router) handleSaveClanQualifications(w http.ResponseWriter, req *http.Request) {
-	if r.discordRepo == nil {
-		http.Error(w, errDiscordRepoNotInitialized, http.StatusInternalServerError)
+	if r.discordService == nil {
+		http.Error(w, errDiscordServiceNotInitialized, http.StatusInternalServerError)
 		return
 	}
 
@@ -55,7 +55,7 @@ func (r *Router) handleSaveClanQualifications(w http.ResponseWriter, req *http.R
 		payload.Qualifications = []discordbot.MemberQualification{}
 	}
 
-	if err := r.discordRepo.SaveMemberQualifications(req.Context(), payload.UserIDs, payload.Qualifications); err != nil {
+	if err := r.discordService.SaveMemberQualifications(req.Context(), payload.UserIDs, payload.Qualifications); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}

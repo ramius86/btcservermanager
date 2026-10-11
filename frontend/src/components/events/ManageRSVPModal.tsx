@@ -5,6 +5,7 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { useToast } from '../ui/Toast'
 import { DiscordService, DiscordGuildMember, DiscordEventDetail } from '../../services/api'
+import { useWebSocket } from '../../contexts/WebSocketContext'
 
 type RSVPStatus = 'going' | 'not_going' | 'maybe' | 'none'
 
@@ -18,6 +19,7 @@ interface ManageRSVPModalProps {
 
 export function ManageRSVPModal({ isOpen, onClose, eventId, eventTitle, onUpdate }: ManageRSVPModalProps) {
   const { showToast } = useToast()
+  const { subscribe } = useWebSocket()
   
   const [loading, setLoading] = useState(true)
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null)
@@ -31,6 +33,23 @@ export function ManageRSVPModal({ isOpen, onClose, eventId, eventTitle, onUpdate
       loadData()
     }
   }, [isOpen, eventId])
+
+  useEffect(() => {
+    if (!isOpen) return
+    const unsub = subscribe('discord_event_rsvp_updated', (e) => {
+      if (e.payload?.event_id === eventId) {
+        DiscordService.getEventDetail(eventId).then(detail => {
+          setEventDetail(detail)
+          onUpdate()
+        }).catch(err => {
+          console.error('Failed to reload event detail on live RSVP', err)
+        })
+      }
+    })
+    return () => {
+      unsub()
+    }
+  }, [isOpen, eventId, subscribe, onUpdate])
 
   const loadData = async () => {
     try {

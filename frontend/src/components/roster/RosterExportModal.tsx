@@ -21,6 +21,8 @@ import {
   buildDefaultRosterHeader,
   reconcileSquadsWithCandidates,
   type RosterCandidate,
+  type RosterLanguage,
+  ROSTER_HEADER_LANG_KEY,
 } from './rosterUtils'
 import { ChannelCombobox } from './ChannelCombobox'
 
@@ -42,6 +44,13 @@ interface RosterExportModalProps {
 
 const ROSTER_CHANNEL_STORAGE_KEY = 'discord_roster_channel'
 
+function detectHeaderLanguage(text?: string): RosterLanguage | null {
+  if (!text) return null
+  if (text.includes("per l'evento")) return 'ITA'
+  if (text.includes("tonight's event") || text.includes('Slotlist for')) return 'ENG'
+  return null
+}
+
 export function RosterExportModal({
   isOpen,
   onClose,
@@ -59,19 +68,44 @@ export function RosterExportModal({
 }: RosterExportModalProps) {
   const { showToast } = useToast()
 
+  const [headerLanguage, setHeaderLanguage] = useState<RosterLanguage>(() => {
+    const detected = detectHeaderLanguage(initialHeaderText)
+    if (detected) return detected
+    const saved = localStorage.getItem(ROSTER_HEADER_LANG_KEY)
+    return saved === 'ITA' ? 'ITA' : 'ENG'
+  })
+
   const [headerText, setHeaderText] = useState(() => {
-    return initialHeaderText || buildDefaultRosterHeader(dateTime, gameType)
+    if (initialHeaderText) return initialHeaderText
+    const saved = localStorage.getItem(ROSTER_HEADER_LANG_KEY)
+    const lang: RosterLanguage = saved === 'ITA' ? 'ITA' : 'ENG'
+    return buildDefaultRosterHeader(dateTime, gameType, lang)
   })
 
   React.useEffect(() => {
     if (isOpen) {
       if (initialHeaderText) {
         setHeaderText(initialHeaderText)
+        const detected = detectHeaderLanguage(initialHeaderText)
+        if (detected) {
+          setHeaderLanguage(detected)
+        }
       } else {
-        setHeaderText(buildDefaultRosterHeader(dateTime, gameType))
+        const saved = localStorage.getItem(ROSTER_HEADER_LANG_KEY)
+        const lang: RosterLanguage = saved === 'ITA' ? 'ITA' : 'ENG'
+        setHeaderLanguage(lang)
+        setHeaderText(buildDefaultRosterHeader(dateTime, gameType, lang))
       }
     }
   }, [isOpen, initialHeaderText, dateTime, gameType])
+
+  const handleLanguageChange = (newLang: RosterLanguage) => {
+    setHeaderLanguage(newLang)
+    localStorage.setItem(ROSTER_HEADER_LANG_KEY, newLang)
+    const newHeader = buildDefaultRosterHeader(dateTime, gameType, newLang)
+    setHeaderText(newHeader)
+    onHeaderChange?.(newHeader)
+  }
 
   const [copied, setCopied] = useState(false)
   const [selectedChannel, setSelectedChannel] = useState<string>(() => {
@@ -176,9 +210,23 @@ export function RosterExportModal({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
           <div className="space-y-1.5">
-            <label htmlFor="roster-header-input" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              Header Message
-            </label>
+            <div className="flex items-center justify-between">
+              <label htmlFor="roster-header-input" className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                Header Message
+              </label>
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Language:</span>
+                <select
+                  id="roster-header-lang-select"
+                  value={headerLanguage}
+                  onChange={e => handleLanguageChange(e.target.value as RosterLanguage)}
+                  className="h-6 px-1.5 text-[11px] font-semibold rounded bg-surface border border-border text-foreground hover:border-primary/50 focus:border-primary outline-none cursor-pointer"
+                >
+                  <option value="ENG">ENG</option>
+                  <option value="ITA">ITA</option>
+                </select>
+              </div>
+            </div>
             <Input
               id="roster-header-input"
               value={headerText}
@@ -186,7 +234,11 @@ export function RosterExportModal({
                 setHeaderText(e.target.value)
                 onHeaderChange?.(e.target.value)
               }}
-              placeholder="e.g. @here Slotlist for tonight's event..."
+              placeholder={
+                headerLanguage === 'ITA'
+                  ? "es. @here Slotlist per l'evento..."
+                  : "e.g. @here Slotlist for the event..."
+              }
               className="h-8 text-xs bg-surface border-border"
             />
           </div>

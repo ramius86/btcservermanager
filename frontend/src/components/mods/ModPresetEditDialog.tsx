@@ -5,6 +5,7 @@
  * Context: Triggered via the 'EDIT' action on a ModPresetCard.
  */
 import React from 'react'
+import { Loader2 } from 'lucide-react'
 import { Button } from '../ui/Button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '../ui/Dialog'
 
@@ -16,6 +17,7 @@ interface ModPresetEditDialogProps {
   selectedModIds: number[]
   onChangeMod: (id: number, action: 'add' | 'remove') => void
   onSave: () => void
+  isSaving?: boolean
   filter: string
 }
 
@@ -27,6 +29,7 @@ export const ModPresetEditDialog: React.FC<Readonly<ModPresetEditDialogProps>> =
   selectedModIds,
   onChangeMod,
   onSave,
+  isSaving = false,
   filter
 }) => {
   return (
@@ -61,7 +64,10 @@ export const ModPresetEditDialog: React.FC<Readonly<ModPresetEditDialogProps>> =
         <DialogFooter className="pt-3">
           <span className="text-xs text-muted-foreground mr-auto">{selectedModIds.length} mod(s) selected</span>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button onClick={onSave}>Save</Button>
+          <Button onClick={onSave} disabled={isSaving}>
+            {isSaving && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+            Save
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

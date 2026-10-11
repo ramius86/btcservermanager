@@ -88,7 +88,6 @@ func TestRouterInit(t *testing.T) {
 	scenarioService := scenario.NewService(scenarioRepo, paths, cfg)
 	installationService := installation.NewService(installationRepo)
 	steamAuthService := steamauth.NewAuthService(steamauthRepo)
-	steamQRService := steamauth.NewQRAuthService(steamauthRepo)
 	systemService := system.NewService(system.ServiceDeps{AppRepo: appSettingsRepo, SteamAuth: steamAuthService, SteamAPIKey: ""})
 	steamCmdService := steamcmd.NewService(steamcmd.ServiceDeps{
 		Paths:         paths,
@@ -106,7 +105,6 @@ func TestRouterInit(t *testing.T) {
 		SystemService:       systemService,
 		SteamCmdService:     steamCmdService,
 		SteamAuthService:    steamAuthService,
-		SteamQRService:      steamQRService,
 		FileManagerService:  filemanager.NewService(t.TempDir()),
 		Config:              cfg,
 		Paths:               paths,

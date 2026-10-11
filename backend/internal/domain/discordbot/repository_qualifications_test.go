@@ -58,6 +58,14 @@ func TestRepository_SaveMemberQualifications(t *testing.T) {
 		t.Errorf("Expected user2 to have 1 qualification, got %v", len(res["user2"]))
 	}
 
+	onlyUser1, err := repo.GetMemberQualifications(ctx, []string{"user1"})
+	if err != nil {
+		t.Fatalf("Failed to get qualifications for user1: %v", err)
+	}
+	if _, found := onlyUser1["user2"]; found {
+		t.Errorf("Expected user2 not to be returned when filtering for user1 only")
+	}
+
 	// Test Scoped Deletion: Update qualifications only for user1. user2's qualification should remain untouched if user2 is not in the scope.
 	user1NewQuals := []discordbot.MemberQualification{
 		{UserID: "user1", QualificationName: "Medic"}, // AT removed

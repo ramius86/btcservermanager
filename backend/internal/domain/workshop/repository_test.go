@@ -42,6 +42,10 @@ func TestRepository(t *testing.T) {
 	t.Run("Delete Mod", func(t *testing.T) {
 		testDeleteMod(t, repo, ctx)
 	})
+
+	t.Run("IsBiKeyUsedByOtherMods", func(t *testing.T) {
+		testIsBiKeyUsedByOtherMods(t, repo, ctx)
+	})
 }
 
 func testWorkshopModCRUD(t *testing.T, repo *Repository, ctx context.Context) {
@@ -109,5 +113,44 @@ func testDeleteMod(t *testing.T, repo *Repository, ctx context.Context) {
 	_, err = repo.GetModByID(ctx, 123456)
 	if err == nil {
 		t.Error("expected error getting deleted mod, got nil")
+	}
+}
+
+func testIsBiKeyUsedByOtherMods(t *testing.T, repo *Repository, ctx context.Context) {
+	modA := &WorkshopMod{
+		ID:                 3001,
+		Name:               "Mod Alpha",
+		ServerType:         server.TypeArma3,
+		InstallationStatus: InstallationFinished,
+		BiKeys:             []string{"alpha.bikey", "shared.bikey"},
+	}
+	modB := &WorkshopMod{
+		ID:                 3002,
+		Name:               "Mod Beta",
+		ServerType:         server.TypeArma3,
+		InstallationStatus: InstallationFinished,
+		BiKeys:             []string{"beta.bikey", "shared.bikey"},
+	}
+	if err := repo.Save(ctx, modA); err != nil {
+		t.Fatalf("failed to save modA: %v", err)
+	}
+	if err := repo.Save(ctx, modB); err != nil {
+		t.Fatalf("failed to save modB: %v", err)
+	}
+
+	used, err := repo.IsBiKeyUsedByOtherMods(ctx, modA.ID, "shared.bikey", server.TypeArma3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !used {
+		t.Errorf("expected shared.bikey to be in use by modB")
+	}
+
+	used, err = repo.IsBiKeyUsedByOtherMods(ctx, modA.ID, "alpha.bikey", server.TypeArma3)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if used {
+		t.Errorf("expected alpha.bikey not to be in use by other mods")
 	}
 }

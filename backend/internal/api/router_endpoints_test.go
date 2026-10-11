@@ -184,7 +184,6 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 	scenarioService := scenario.NewService(scenarioRepo, paths, cfg)
 	installationService := installation.NewService(installationRepo)
 	steamAuthService := steamauth.NewAuthService(steamauthRepo)
-	steamQRService := steamauth.NewQRAuthService(steamauthRepo)
 	systemService := system.NewService(system.ServiceDeps{AppRepo: appSettingsRepo, SteamAuth: steamAuthService, SteamAPIKey: ""})
 
 	executor := steamcmd.NewExecutor(paths, steamAuthService)
@@ -211,9 +210,7 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 		SystemService:       systemService,
 		SteamCmdService:     steamCmdService,
 		SteamAuthService:    steamAuthService,
-		SteamQRService:      steamQRService,
 		DiscordService:      discordService,
-		DiscordRepo:         discordRepo,
 		FileManagerService:  filemanager.NewService(cfg.StoragePath),
 		Config:              cfg,
 		Paths:               paths,
@@ -744,6 +741,30 @@ func TestRouterEndpoints(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code)
+		}
+
+		// Update User Games
+		{
+			_ = deps.DiscordService.SetUserActive(t.Context(), "user_patch_games", "Dave", true)
+			body := strings.NewReader(`{"playsArma3": false, "playsReforger": true}`)
+			req := httptest.NewRequest(http.MethodPatch, "/api/discord/users/user_patch_games/games", body)
+			req.Header.Set("Content-Type", "application/json")
+			rr := httptest.NewRecorder()
+			handler.ServeHTTP(rr, req)
+			assert.Equal(t, http.StatusOK, rr.Code)
+
+			users, err := deps.DiscordService.GetAllUsersForManagement(t.Context())
+			assert.NoError(t, err)
+			var dave *discordbot.DiscordUser
+			for i := range users {
+				if users[i].ID == "user_patch_games" {
+					dave = &users[i]
+					break
+				}
+			}
+			assert.NotNil(t, dave)
+			assert.False(t, dave.PlaysArma3)
+			assert.True(t, dave.PlaysReforger)
 		}
 	})
 

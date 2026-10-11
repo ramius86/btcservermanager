@@ -246,3 +246,46 @@ func TestFilesAPI_DownloadZip(t *testing.T) {
 		t.Errorf("expected zip to contain files")
 	}
 }
+
+func TestFilesAPI_ContentType_JSON(t *testing.T) {
+	router, _ := setupFilesTest(t)
+	mux := router.fileRoutes()
+
+	// 1. Save content should return Content-Type: application/json
+	saveBody := `{"path":"servers/ARMA3/server.cfg","content":"new content"}`
+	reqSave := httptest.NewRequest(http.MethodPut, "/content", strings.NewReader(saveBody))
+	rrSave := httptest.NewRecorder()
+	mux.ServeHTTP(rrSave, reqSave)
+
+	if rrSave.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", rrSave.Code, rrSave.Body.String())
+	}
+	if ct := rrSave.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type: application/json, got %q", ct)
+	}
+
+	// 2. Rename should return Content-Type: application/json
+	renameBody := `{"oldPath":"servers/ARMA3/server.cfg","newPath":"servers/ARMA3/server_renamed.cfg"}`
+	reqRename := httptest.NewRequest(http.MethodPost, "/rename", strings.NewReader(renameBody))
+	rrRename := httptest.NewRecorder()
+	mux.ServeHTTP(rrRename, reqRename)
+
+	if rrRename.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on rename, got %d", rrRename.Code)
+	}
+	if ct := rrRename.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type: application/json on rename, got %q", ct)
+	}
+
+	// 3. Delete should return Content-Type: application/json
+	reqDelete := httptest.NewRequest(http.MethodDelete, "/?path=servers/ARMA3/server_renamed.cfg", nil)
+	rrDelete := httptest.NewRecorder()
+	mux.ServeHTTP(rrDelete, reqDelete)
+
+	if rrDelete.Code != http.StatusOK {
+		t.Fatalf("expected status 200 on delete, got %d", rrDelete.Code)
+	}
+	if ct := rrDelete.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("expected Content-Type: application/json on delete, got %q", ct)
+	}
+}

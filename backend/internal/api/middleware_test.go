@@ -62,7 +62,7 @@ func TestSecurityHeaders(t *testing.T) {
 
 func TestCorsHandler_Sanitization(t *testing.T) {
 	t.Parallel()
-	origin := "https://manager.blacktemplars.it\n"
+	origin := "https://manager.blacktemplars.it/ \r\n"
 	middleware := CorsHandler(origin)
 
 	dummyHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

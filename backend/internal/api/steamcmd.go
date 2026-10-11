@@ -61,43 +61,10 @@ func (r *Router) handleGetSteamAuthStatus(w http.ResponseWriter, req *http.Reque
 	}
 
 	r.json(w, map[string]any{
-		"authenticated": auth.Username != "" || auth.RefreshToken != "",
+		"authenticated": auth.Username != "" && auth.Password != "",
 		"username":      auth.Username,
-		"accountName":   auth.AccountName,
 		"hasPassword":   auth.Password != "",
-		"hasToken":      auth.RefreshToken != "",
 	})
-}
-
-func (r *Router) handleBeginSteamQR(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-	resp, err := r.steamQRService.BeginSession(ctx)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	r.json(w, resp.Response)
-}
-
-func (r *Router) handlePollSteamQR(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
-	var body struct {
-		ClientID  string `json:"client_id"`
-		RequestID string `json:"request_id"`
-	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1048576)).Decode(&body); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	resp, err := r.steamQRService.PollStatus(ctx, body.ClientID, body.RequestID)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	r.json(w, resp.Response)
 }
 
 func (r *Router) handleTestSteamLogin(w http.ResponseWriter, req *http.Request) {

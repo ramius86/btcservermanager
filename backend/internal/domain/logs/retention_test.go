@@ -127,4 +127,30 @@ func TestLogManager_CleanLogs(t *testing.T) {
 			t.Errorf("Expected unprotected old_idle.log to be deleted")
 		}
 	})
+
+	t.Run("Clean game crash logs (.rpt, .adm)", func(t *testing.T) {
+		os.RemoveAll(tmpDir)
+		os.MkdirAll(tmpDir, 0o755)
+
+		createLog("arma3_crash.rpt", 10, 1024)
+		createLog("dayz_admin.adm", 10, 1024)
+		createLog("fresh_crash.rpt", 0, 1024)
+
+		err := m.CleanLogs(t.Context(), 5, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "arma3_crash.rpt")); !os.IsNotExist(err) {
+			t.Errorf("Expected old arma3_crash.rpt to be deleted")
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "dayz_admin.adm")); !os.IsNotExist(err) {
+			t.Errorf("Expected old dayz_admin.adm to be deleted")
+		}
+
+		if _, err := os.Stat(filepath.Join(tmpDir, "fresh_crash.rpt")); err != nil {
+			t.Errorf("Expected fresh_crash.rpt to exist")
+		}
+	})
 }
