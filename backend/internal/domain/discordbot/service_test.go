@@ -478,7 +478,7 @@ func TestRepository_UserGamesAndStatsFilter(t *testing.T) {
 		ChannelID: "chan1",
 		MessageID: "msg1",
 		Title:     "Arma 3 Mission",
-		DateTime:  "2026-10-10T20:00",
+		DateTime:  time.Now().UTC().Add(24 * time.Hour).Format("2006-01-02T15:04"),
 		GameType:  "ArmA III",
 	}
 	idA3, err := repo.SaveEvent(ctx, evArma3)
@@ -490,7 +490,7 @@ func TestRepository_UserGamesAndStatsFilter(t *testing.T) {
 		ChannelID: "chan2",
 		MessageID: "msg2",
 		Title:     "Reforger Conflict",
-		DateTime:  "2026-10-11T20:00",
+		DateTime:  time.Now().UTC().Add(48 * time.Hour).Format("2006-01-02T15:04"),
 		GameType:  "Arma Reforger",
 	}
 	idRef, err := repo.SaveEvent(ctx, evReforger)
@@ -621,7 +621,7 @@ func TestService_ManualParticipationAutoEnableGame(t *testing.T) {
 		ChannelID: "chan2",
 		MessageID: "msg2",
 		Title:     "Reforger Op",
-		DateTime:  "2026-10-12T20:00",
+		DateTime:  time.Now().UTC().Add(24 * time.Hour).Format("2006-01-02T15:04"),
 		GameType:  "Arma Reforger",
 	}
 	eID, err := repo.SaveEvent(ctx, evReforger)
@@ -925,7 +925,7 @@ func TestService_RSVP_Broadcast(t *testing.T) {
 		ChannelID: "chan1",
 		MessageID: "msg1",
 		Title:     "Operation Test",
-		DateTime:  "2026-10-10T20:00",
+		DateTime:  time.Now().UTC().Add(24 * time.Hour).Format("2006-01-02T15:04"),
 		GameType:  "ArmA III",
 	}
 	ctx := t.Context()
