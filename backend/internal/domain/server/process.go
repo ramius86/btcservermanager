@@ -937,7 +937,16 @@ func (m *ProcessManager) broadcastReforgerStats(p *Process, stat *ReforgerStatDt
 	}
 	p.mu.Lock()
 	p.info.LastReforgerStat = stat
+	players := int(stat.Players)
+	playersChanged := !p.exited && !p.stopping && p.info.Players != players
+	if playersChanged {
+		p.info.Players = players
+	}
 	p.mu.Unlock()
+
+	if playersChanged {
+		m.emitStatus(p.serverID, true)
+	}
 
 	if b != nil {
 		b.Broadcast("reforger_stats", ReforgerStatsPayload{

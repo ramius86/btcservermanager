@@ -270,8 +270,8 @@ func (s *Scheduler) queryGameServers() {
 			id = v.ID
 			queryPort = v.QueryPort
 		case *server.ReforgerServer:
-			// Reforger does not support A2S query; stats are tracked via console log parsing
-			continue
+			id = v.ID
+			queryPort = v.QueryPort
 		default:
 			continue
 		}

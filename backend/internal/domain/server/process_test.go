@@ -302,3 +302,93 @@ func TestProcessManager_StopServer_CanceledContext(t *testing.T) {
 	err := pm.StopServer(ctx, 123)
 	assert.NoError(t, err)
 }
+
+func TestProcessManager_BroadcastReforgerStats(t *testing.T) {
+	tempDir := t.TempDir()
+	paths := &dummyPathProvider{tempDir: tempDir}
+	launcher := NewLauncher(paths, []string{})
+	pm := NewProcessManager(paths, launcher, false)
+	broadcaster := &testBroadcaster{}
+	pm.SetBroadcaster(broadcaster)
+
+	p := &Process{
+		serverID: 4,
+		info: &ServerInstanceInfo{
+			Players:    0,
+			MaxPlayers: 32,
+			Map:        "35_Arland",
+		},
+		exited: false,
+	}
+	pm.processes.Store(int64(4), p)
+
+	// 1. Players count changes (0 -> 3): should update p.info.Players and emit both server_status and reforger_stats
+	stat1 := &ReforgerStatDto{
+		Timestamp: "2026-10-11 20:15:00",
+		FPS:       60.0,
+		Players:   3,
+	}
+	pm.broadcastReforgerStats(p, stat1, "raw1", broadcaster)
+	assert.Equal(t, 3, p.info.Players)
+	assert.Equal(t, stat1, p.info.LastReforgerStat)
+	assert.Equal(t, 2, broadcaster.getCount()) // 1 server_status + 1 reforger_stats
+	require.Len(t, broadcaster.payloads, 1)
+	infoPayload, ok := broadcaster.payloads[0]["info"].(*ServerInstanceInfo)
+	require.True(t, ok)
+	assert.Equal(t, 3, infoPayload.Players)
+	assert.Equal(t, "35_Arland", infoPayload.Map)
+
+	// 2. Players count unchanged (3 -> 3): should only emit reforger_stats, not server_status
+	stat2 := &ReforgerStatDto{
+		Timestamp: "2026-10-11 20:15:20",
+		FPS:       59.5,
+		Players:   3,
+	}
+	pm.broadcastReforgerStats(p, stat2, "raw2", broadcaster)
+	assert.Equal(t, 3, p.info.Players)
+	assert.Equal(t, stat2, p.info.LastReforgerStat)
+	assert.Equal(t, 3, broadcaster.getCount()) // only +1 reforger_stats
+	assert.Len(t, broadcaster.payloads, 1)
+
+	// 3. When stopping or exited: should not update Players or emit server_status
+	p.stopping = true
+	stat3 := &ReforgerStatDto{
+		Timestamp: "2026-10-11 20:15:40",
+		FPS:       58.0,
+		Players:   0,
+	}
+	pm.broadcastReforgerStats(p, stat3, "raw3", broadcaster)
+	assert.Equal(t, 3, p.info.Players)
+	assert.Equal(t, 4, broadcaster.getCount())
+	assert.Len(t, broadcaster.payloads, 1)
+
+	p.stopping = false
+	p.exited = true
+	pm.broadcastReforgerStats(p, stat3, "raw4", broadcaster)
+	assert.Equal(t, 3, p.info.Players)
+	assert.Equal(t, 5, broadcaster.getCount())
+	assert.Len(t, broadcaster.payloads, 1)
+
+	// 4. Concurrent execution of UpdateQueryInfo, broadcastReforgerStats, and GetInstanceInfo
+	p.exited = false
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			pm.UpdateQueryInfo(4, i%16, "35_Arland", "Conflict - Arland")
+		}
+	}()
+	for i := 0; i < 100; i++ {
+		st := &ReforgerStatDto{
+			Timestamp: "2026-10-11 20:16:00",
+			FPS:       60.0,
+			Players:   uint16(i % 16),
+		}
+		pm.broadcastReforgerStats(p, st, "raw", broadcaster)
+		_ = pm.GetInstanceInfo(4)
+	}
+	<-done
+	info := pm.GetInstanceInfo(4)
+	require.NotNil(t, info)
+	assert.Equal(t, "35_Arland", info.Map)
+}
