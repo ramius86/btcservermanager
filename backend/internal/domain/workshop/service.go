@@ -2,6 +2,7 @@ package workshop
 
 import (
 	"btcservermanager/internal/domain/server"
+	"btcservermanager/internal/domain/workshop/signature"
 	"context"
 	"database/sql"
 	"errors"
@@ -403,11 +404,103 @@ func (s *Service) finishModInstallationInternal(ctx context.Context, id int64) e
 	}
 
 	if s.installer != nil {
-		return s.installer.InstallMod(ctx, mod)
+		if err := s.installer.InstallMod(ctx, mod); err != nil {
+			return err
+		}
+	} else {
+		mod.InstallationStatus = InstallationFinished
+		if err := s.repo.Save(ctx, mod); err != nil {
+			return err
+		}
 	}
 
-	mod.InstallationStatus = InstallationFinished
-	return s.repo.Save(ctx, mod)
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("mod_signature_checked", map[string]any{
+			"modId":            mod.ID,
+			"signatureStatus":  mod.SignatureStatus,
+			"signatureSummary": mod.SignatureSummary,
+		})
+		s.broadcaster.Broadcast("metadata_updated", mod)
+	}
+
+	return nil
+}
+
+func (s *Service) VerifyModSignatures(ctx context.Context, id int64, autoExtract bool) (*signature.ModSignatureReport, error) {
+	mod, err := s.repo.GetModByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.installer == nil {
+		return nil, errors.New("installer not initialized")
+	}
+
+	modDir := s.installer.paths.GetModInstallationPath(mod.ID, mod.ServerType)
+	serverKeysDir := s.installer.paths.GetServerKeysPath(mod.ServerType)
+
+	report, err := signature.VerifyModSignatures(modDir, serverKeysDir, autoExtract)
+	if err != nil {
+		return nil, err
+	}
+	report.ModID = mod.ID
+	report.ModName = mod.Name
+
+	// Update mod status and summary in database
+	mod.SignatureStatus = string(report.OverallStatus)
+	mod.SignatureSummary = report.Summary
+	if len(report.KeysExtracted) > 0 {
+		for _, k := range report.KeysExtracted {
+			found := false
+			for _, existing := range mod.BiKeys {
+				if strings.EqualFold(existing, k) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				mod.BiKeys = append(mod.BiKeys, k)
+			}
+		}
+	}
+
+	_ = s.repo.Save(ctx, mod)
+
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("mod_signature_checked", map[string]any{
+			"modId":            mod.ID,
+			"signatureStatus":  mod.SignatureStatus,
+			"signatureSummary": mod.SignatureSummary,
+		})
+		s.broadcaster.Broadcast("metadata_updated", mod)
+	}
+
+	return report, nil
+}
+
+func (s *Service) VerifyAllArma3ModSignatures(ctx context.Context, autoExtract bool) ([]*signature.ModSignatureReport, error) {
+	mods, err := s.repo.GetAllMods(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var reports []*signature.ModSignatureReport
+	for _, mod := range mods {
+		if mod.ServerType == server.TypeArma3 && mod.InstallationStatus == InstallationFinished {
+			rep, err := s.VerifyModSignatures(ctx, mod.ID, autoExtract)
+			if err != nil {
+				rep = &signature.ModSignatureReport{
+					ModID:         mod.ID,
+					ModName:       mod.Name,
+					OverallStatus: signature.StatusError,
+					Summary:       err.Error(),
+				}
+			}
+			reports = append(reports, rep)
+		}
+	}
+
+	return reports, nil
 }
 
 func (s *Service) SyncReforgerScenarios(ctx context.Context) error {

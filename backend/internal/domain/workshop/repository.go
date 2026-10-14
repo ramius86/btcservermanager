@@ -19,7 +19,7 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
-	query := `SELECT id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update FROM workshop_mod`
+	query := `SELECT id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update, signature_status, signature_summary FROM workshop_mod`
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
@@ -87,7 +87,7 @@ func (r *Repository) HasModUpdates(ctx context.Context) (bool, error) {
 }
 
 func (r *Repository) GetModByID(ctx context.Context, id int64) (*WorkshopMod, error) {
-	query := `SELECT id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update FROM workshop_mod WHERE id = ?`
+	query := `SELECT id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update, signature_status, signature_summary FROM workshop_mod WHERE id = ?`
 	row := r.db.QueryRowContext(ctx, query, id)
 
 	return r.scanMod(ctx, row)
@@ -119,17 +119,22 @@ func (r *Repository) scanModBasic(scanner interface {
 
 	var lastUpdated sql.NullString
 	var installedAt sql.NullString
-
 	var errorStatus sql.NullString
-
 	var thumbnail sql.NullString
+	var signatureStatus sql.NullString
+	var signatureSummary sql.NullString
 
-	err := scanner.Scan(&m.ID, &m.Name, &thumbnail, &lastUpdated, &installedAt, &m.FileSize, &m.ServerOnly, &m.InstallationStatus, &errorStatus, &m.ServerType, &m.NeedsUpdate)
+	err := scanner.Scan(&m.ID, &m.Name, &thumbnail, &lastUpdated, &installedAt, &m.FileSize, &m.ServerOnly, &m.InstallationStatus, &errorStatus, &m.ServerType, &m.NeedsUpdate, &signatureStatus, &signatureSummary)
 	if err != nil {
 		return nil, err
 	}
 
 	m.Thumbnail = thumbnail.String
+	m.SignatureStatus = signatureStatus.String
+	if m.SignatureStatus == "" {
+		m.SignatureStatus = "NOT_CHECKED"
+	}
+	m.SignatureSummary = signatureSummary.String
 
 	if lastUpdated.Valid {
 		t, err := time.Parse(time.RFC3339, lastUpdated.String)
@@ -211,12 +216,13 @@ func (r *Repository) Save(ctx context.Context, m *WorkshopMod) error {
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	query := `INSERT INTO workshop_mod (id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update)
-	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	query := `INSERT INTO workshop_mod (id, name, thumbnail, last_updated, installed_at, file_size, server_only, installation_status, error_status, server_type, needs_update, signature_status, signature_summary)
+	          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			  ON CONFLICT(id) DO UPDATE SET
 			  name=excluded.name, thumbnail=excluded.thumbnail, last_updated=excluded.last_updated, file_size=excluded.file_size, 
 			  server_only=excluded.server_only, installation_status=excluded.installation_status, 
-			  error_status=excluded.error_status, server_type=excluded.server_type, needs_update=excluded.needs_update`
+			  error_status=excluded.error_status, server_type=excluded.server_type, needs_update=excluded.needs_update,
+			  signature_status=excluded.signature_status, signature_summary=excluded.signature_summary`
 
 	var es sql.NullString
 	if m.ErrorStatus != nil {
@@ -236,7 +242,12 @@ func (r *Repository) Save(ctx context.Context, m *WorkshopMod) error {
 		installedAt.Valid = true
 	}
 
-	_, err = tx.ExecContext(ctx, query, m.ID, m.Name, m.Thumbnail, lastUpdated, installedAt, m.FileSize, m.ServerOnly, m.InstallationStatus, es, m.ServerType, m.NeedsUpdate)
+	sigStatus := m.SignatureStatus
+	if sigStatus == "" {
+		sigStatus = "NOT_CHECKED"
+	}
+
+	_, err = tx.ExecContext(ctx, query, m.ID, m.Name, m.Thumbnail, lastUpdated, installedAt, m.FileSize, m.ServerOnly, m.InstallationStatus, es, m.ServerType, m.NeedsUpdate, sigStatus, m.SignatureSummary)
 	if err != nil {
 		return err
 	}

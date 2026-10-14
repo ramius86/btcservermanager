@@ -44,6 +44,8 @@ type WorkshopMod struct {
 	ServerType         server.Type        `json:"serverType"`
 	BiKeys             []string           `json:"biKeys"`
 	NeedsUpdate        bool               `json:"needsUpdate"`
+	SignatureStatus    string             `json:"signatureStatus"`
+	SignatureSummary   string             `json:"signatureSummary"`
 }
 
 var (

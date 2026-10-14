@@ -15,6 +15,8 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
+const errInvalidModID = "invalid mod ID"
+
 func (r *Router) handleGetAllMods(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	filter := server.Type(req.URL.Query().Get("filter"))
@@ -68,7 +70,7 @@ func (r *Router) handleGetMod(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid mod ID", http.StatusBadRequest)
+		http.Error(w, errInvalidModID, http.StatusBadRequest)
 		return
 	}
 
@@ -278,7 +280,7 @@ func (r *Router) handleSetModServerOnly(w http.ResponseWriter, req *http.Request
 	ctx := req.Context()
 	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 	if err != nil {
-		http.Error(w, "invalid mod ID", http.StatusBadRequest)
+		http.Error(w, errInvalidModID, http.StatusBadRequest)
 		return
 	}
 
@@ -336,6 +338,37 @@ func (r *Router) handleSyncBiKeys(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (r *Router) handleVerifyAllModSignatures(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	autoExtract := req.URL.Query().Get("autoExtract") != "false"
+
+	reports, err := r.workshopService.VerifyAllArma3ModSignatures(ctx, autoExtract)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	r.json(w, reports)
+}
+
+func (r *Router) handleVerifyModSignatures(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
+	if err != nil {
+		http.Error(w, errInvalidModID, http.StatusBadRequest)
+		return
+	}
+
+	autoExtract := req.URL.Query().Get("autoExtract") != "false"
+	report, err := r.workshopService.VerifyModSignatures(ctx, id, autoExtract)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	r.json(w, report)
 }
 
 func (r *Router) handleGetModStatus(w http.ResponseWriter, req *http.Request) {

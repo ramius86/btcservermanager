@@ -5,7 +5,7 @@
  * Context: Used in the 'Workshop Mods' tab of the ModsPage.
  */
 import React from 'react'
-import { Download, Trash2, Calendar, Clock, RefreshCw, KeyRound } from 'lucide-react'
+import { Download, Trash2, Calendar, Clock, RefreshCw, KeyRound, ShieldCheck, AlertTriangle, AlertCircle } from 'lucide-react'
 import { Button, cn } from '../ui/Button'
 import { Badge } from '../ui/Badge'
 import { Card } from '../ui/Card'
@@ -122,7 +122,51 @@ export const ModCard: React.FC<Readonly<ModCardProps>> = ({
             <Badge variant="outline" className="text-[9px] font-mono uppercase tracking-widest h-5 px-2 text-muted-foreground border-muted-foreground/30">
               {mod.serverType}
             </Badge>
-            {hasNoBikey && (
+            {mod.serverType === 'ARMA3' && isInstalled && !inProgress && (
+              <>
+                {mod.signatureStatus === 'VALID' && (
+                  <Badge 
+                    variant="success" 
+                    className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border-emerald-500/30 cursor-help"
+                    title={mod.signatureSummary || "All signatures verified successfully with .bikey"}
+                  >
+                    <ShieldCheck className="w-2.5 h-2.5 shrink-0" />
+                    VERIFIED
+                  </Badge>
+                )}
+                {mod.signatureStatus === 'ERROR' && (
+                  <Badge 
+                    variant="danger" 
+                    className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-rose-500/10 text-rose-500 border-rose-500/30 cursor-help animate-pulse"
+                    title={mod.signatureSummary || "Signature error or corrupted file detected"}
+                  >
+                    <AlertCircle className="w-2.5 h-2.5 shrink-0" />
+                    SIG ERROR
+                  </Badge>
+                )}
+                {(mod.signatureStatus === 'WARNING' || mod.signatureStatus === 'MISSING_SIGNATURES') && (
+                  <Badge 
+                    variant="warning" 
+                    className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-help"
+                    title={mod.signatureSummary || "Missing signatures or public keys"}
+                  >
+                    <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                    SIG WARNING
+                  </Badge>
+                )}
+                {(mod.signatureStatus === 'NO_BIKEY' || (!mod.signatureStatus && hasNoBikey)) && (
+                  <Badge 
+                    variant="warning" 
+                    className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-help"
+                    title={mod.signatureSummary || "Warning: .bikey not found for this mod"}
+                  >
+                    <KeyRound className="w-2.5 h-2.5 shrink-0" />
+                    NO BIKEY
+                  </Badge>
+                )}
+              </>
+            )}
+            {mod.serverType !== 'ARMA3' && hasNoBikey && (
               <Badge 
                 variant="warning" 
                 className="text-[9px] uppercase tracking-widest h-5 px-2 flex items-center gap-1 bg-amber-500/10 text-amber-500 border-amber-500/30 cursor-help"

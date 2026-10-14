@@ -12,6 +12,30 @@ export interface ModDto {
     biKeys: string[];
     thumbnail?: string;
     needsUpdate?: boolean;
+    signatureStatus?: string;
+    signatureSummary?: string;
+}
+
+export interface PboVerificationResultDto {
+    pboPath: string;
+    hasBisign: boolean;
+    bisignFiles: string[];
+    matchingBikey: string;
+    keyExtracted?: boolean;
+    status: 'VALID' | 'WARNING' | 'ERROR' | 'NO_BIKEY' | 'MISSING_SIGNATURES';
+    errorMessage?: string;
+}
+
+export interface ModSignatureReportDto {
+    modId: number;
+    modName: string;
+    overallStatus: 'VALID' | 'WARNING' | 'ERROR' | 'NO_BIKEY' | 'MISSING_SIGNATURES';
+    totalPbos: number;
+    verifiedPbos: number;
+    keysFound: string[];
+    keysExtracted: string[];
+    pboResults: PboVerificationResultDto[];
+    summary: string;
 }
 
 export const IN_PROGRESS_MOD_STATUSES = new Set([

@@ -1,5 +1,5 @@
 import { ServerInstanceInfoDto, CreatorDlcDto, AnyServerDto, ServerInstallationDto, ReforgerCustomNamesPayload } from '../dtos/ServerDto'
-import { ModDto, ModPresetDto, SteamCmdItemInfoDto, WorkshopResponseDto } from '../dtos/ModDto'
+import { ModDto, ModPresetDto, SteamCmdItemInfoDto, WorkshopResponseDto, ModSignatureReportDto } from '../dtos/ModDto'
 import {
   FileListResponseDto,
   FileContentResponseDto,
@@ -39,8 +39,8 @@ export async function fetchApi(path: string, options: RequestInit = {}) {
 
   // Handle Cloudflare Access authentication redirects or HTML responses
   if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-    if (typeof window !== 'undefined' && window.location) {
-      window.location.reload()
+    if (globalThis.window?.location) {
+      globalThis.window.location.reload()
     }
     return null
   }
@@ -111,6 +111,10 @@ export const WorkshopService = {
     }),
   updateAll: (): Promise<void> => fetchApi(`/mod/update`, { method: 'POST' }),
   syncBiKeys: (): Promise<void> => fetchApi(`/mod/sync-bikeys`, { method: 'POST' }),
+  verifySignatures: (autoExtract: boolean = true): Promise<ModSignatureReportDto[]> => 
+    fetchApi(`/mod/verify-signatures?autoExtract=${autoExtract}`, { method: 'POST' }),
+  verifyModSignatures: (id: number, autoExtract: boolean = true): Promise<ModSignatureReportDto> => 
+    fetchApi(`/mod/${id}/verify-signatures?autoExtract=${autoExtract}`, { method: 'POST' }),
   getCreatorDlcs: (): Promise<CreatorDlcDto[]> => fetchApi(`/mod/cdlc`),
   importFromHtml: (file: File, filter: string): Promise<void> => {
     const formData = new FormData()

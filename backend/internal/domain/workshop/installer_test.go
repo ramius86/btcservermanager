@@ -602,15 +602,16 @@ func TestInstaller(t *testing.T) {
 
 	t.Run("Nil context and nil mod safety", func(t *testing.T) {
 		// None of these should panic
-		if err := installer.UninstallMod(nil, nil); err != nil {
+		var nilCtx context.Context
+		if err := installer.UninstallMod(nilCtx, nil); err != nil {
 			t.Errorf("unexpected error for nil mod: %v", err)
 		}
 
-		if err := installer.InstallMod(nil, nil); err == nil {
+		if err := installer.InstallMod(nilCtx, nil); err == nil {
 			t.Errorf("expected error for nil mod in InstallMod, got nil")
 		}
 
-		used, err := repo.IsBiKeyUsedByOtherMods(nil, 1, "test.bikey", server.TypeArma3)
+		used, err := repo.IsBiKeyUsedByOtherMods(nilCtx, 1, "test.bikey", server.TypeArma3)
 		if err != nil {
 			t.Errorf("unexpected error with nil context: %v", err)
 		}

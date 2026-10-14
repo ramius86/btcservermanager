@@ -2,6 +2,8 @@ package workshop
 
 import (
 	"btcservermanager/internal/config"
+	"btcservermanager/internal/domain/server"
+	"btcservermanager/internal/domain/workshop/signature"
 	"context"
 	"errors"
 	"fmt"
@@ -25,12 +27,12 @@ func NewInstaller(paths *config.Paths, repo *Repository) *Installer {
 }
 
 // InstallMod performs a single WalkDir pass over the mod directory to:
-//  1. Collect paths that need to be lowercased (Linux filesystem compat)
-//  2. Identify .bikey files to copy into the server's keys/ folder
-//  3. Calculate total directory size
-//
-// This replaces the previous three separate filepath.Walk calls
-// (directoryToLowercase, updateBiKeys, getDirSize).
+type bikeyEntry struct {
+	srcAfterLower string
+	name          string
+}
+
+// InstallMod installs or updates a workshop mod on disk.
 func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -41,21 +43,35 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 
 	modDir := i.paths.GetModInstallationPath(m.ID, m.ServerType)
 
-	type bikeyEntry struct {
-		// srcAfterLower is the file path after all lowercase renames have been applied.
-		// Computed at walk time as: filepath.Join(modDir, strings.ToLower(rel))
-		srcAfterLower string
-		name          string // already lowercased basename
+	bikeys, size, err := i.scanAndLowercaseModDir(modDir)
+	if err != nil {
+		return err
 	}
 
+	bikeys = i.autoExtractMissingBiKeys(m.ServerType, modDir, bikeys)
+	i.syncBiKeys(ctx, m, bikeys)
+
+	if err := i.createSymlink(m); err != nil {
+		return fmt.Errorf("failed to create symlink: %w", err)
+	}
+
+	i.verifyArma3Signatures(m, modDir)
+
+	m.InstallationStatus = InstallationFinished
+	m.FileSize = size
+	m.NeedsUpdate = false
+
+	return i.repo.Save(ctx, m)
+}
+
+func (i *Installer) scanAndLowercaseModDir(modDir string) ([]bikeyEntry, int64, error) {
 	var (
 		pathsToRename []string
 		bikeys        []bikeyEntry
 		size          int64
 	)
 
-	// Single WalkDir: avoids the os.FileInfo allocation per entry that filepath.Walk creates.
-	if err := filepath.WalkDir(modDir, func(p string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(modDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -65,45 +81,76 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 
 		name := d.Name()
 		lowerName := strings.ToLower(name)
-
 		if lowerName != name {
 			pathsToRename = append(pathsToRename, p)
 		}
 
 		if !d.IsDir() {
-			// Compute the canonical post-rename path for this file.
-			// All path components below modDir will be lowercased after the rename step.
 			rel, relErr := filepath.Rel(modDir, p)
 			if relErr == nil {
 				srcAfterLower := filepath.Join(modDir, strings.ToLower(rel))
-
 				if strings.HasSuffix(lowerName, ".bikey") {
 					bikeys = append(bikeys, bikeyEntry{srcAfterLower: srcAfterLower, name: lowerName})
 				}
 			}
-
 			info, infoErr := d.Info()
 			if infoErr == nil {
 				size += info.Size()
 			}
 		}
-
 		return nil
-	}); err != nil {
-		return fmt.Errorf("failed to scan mod directory: %w", err)
+	})
+	if err != nil {
+		return nil, 0, fmt.Errorf("failed to scan mod directory: %w", err)
 	}
 
-	// Apply renames deepest-first so parent paths remain valid while renaming children.
 	for j := len(pathsToRename) - 1; j >= 0; j-- {
 		p := pathsToRename[j]
 		newPath := filepath.Join(filepath.Dir(p), strings.ToLower(filepath.Base(p)))
 		if err := renameOrMerge(p, newPath); err != nil {
-			return fmt.Errorf("failed to lowercase %s: %w", p, err)
+			return nil, 0, fmt.Errorf("failed to lowercase %s: %w", p, err)
 		}
 	}
 
-	// Remove old bikeys recorded in DB, then copy newly found ones from their
-	// post-rename paths (computed above during the walk).
+	return bikeys, size, nil
+}
+
+func (i *Installer) autoExtractMissingBiKeys(serverType server.Type, modDir string, bikeys []bikeyEntry) []bikeyEntry {
+	if len(bikeys) > 0 || (serverType != server.TypeArma3 && serverType != server.TypeDayZ && serverType != server.TypeDayZExp) {
+		return bikeys
+	}
+
+	seenExtracted := make(map[string]bool)
+	_ = filepath.WalkDir(modDir, func(p string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		lower := strings.ToLower(d.Name())
+		if strings.HasSuffix(lower, ".bisign") {
+			keyName, keyBytes, extErr := signature.ExtractBiKeyFromBiSign(p)
+			if extErr == nil && len(keyBytes) > 0 {
+				cleanKeyName := strings.ToLower(strings.TrimSpace(keyName)) + ".bikey"
+				if !seenExtracted[cleanKeyName] {
+					seenExtracted[cleanKeyName] = true
+					keysFolder := filepath.Join(modDir, "keys")
+					_ = os.MkdirAll(keysFolder, 0o755)
+					destKeyPath := filepath.Join(keysFolder, cleanKeyName)
+					if writeErr := os.WriteFile(destKeyPath, keyBytes, 0o644); writeErr == nil {
+						bikeys = append(bikeys, bikeyEntry{srcAfterLower: destKeyPath, name: cleanKeyName})
+						fmt.Printf("[Installer] Auto-extracted missing bikey %s from signature %s\n", cleanKeyName, p)
+					}
+				}
+			}
+		}
+		return nil
+	})
+	return bikeys
+}
+
+func (i *Installer) syncBiKeys(ctx context.Context, m *WorkshopMod, bikeys []bikeyEntry) {
 	for _, k := range m.BiKeys {
 		if strings.TrimSpace(k) == "" {
 			continue
@@ -139,17 +186,23 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 		}
 		m.BiKeys = append(m.BiKeys, bk.name)
 	}
+}
 
-	// Create symlink in server directory
-	if err := i.createSymlink(m); err != nil {
-		return fmt.Errorf("failed to create symlink: %w", err)
+func (i *Installer) verifyArma3Signatures(m *WorkshopMod, modDir string) {
+	if m.ServerType != server.TypeArma3 {
+		return
 	}
-
-	m.InstallationStatus = InstallationFinished
-	m.FileSize = size
-	m.NeedsUpdate = false
-
-	return i.repo.Save(ctx, m)
+	serverKeysDir := i.paths.GetServerKeysPath(m.ServerType)
+	report, err := signature.VerifyModSignatures(modDir, serverKeysDir, false)
+	if err == nil && report != nil {
+		m.SignatureStatus = string(report.OverallStatus)
+		m.SignatureSummary = report.Summary
+		fmt.Printf("[Installer] Signature verification for mod %d (%s): %s - %s\n", m.ID, m.Name, report.OverallStatus, report.Summary)
+	} else if err != nil {
+		m.SignatureStatus = string(signature.StatusError)
+		m.SignatureSummary = err.Error()
+		fmt.Printf("[Installer] Signature check error for mod %d (%s): %v\n", m.ID, m.Name, err)
+	}
 }
 
 func (i *Installer) UninstallMod(ctx context.Context, m *WorkshopMod) error {

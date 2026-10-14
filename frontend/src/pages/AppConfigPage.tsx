@@ -13,6 +13,7 @@ import { MembersSettingsForm } from '../components/appConfig/MembersSettingsForm
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { Badge } from '../components/ui/Badge'
+import { SignatureVerificationDialog } from '../components/mods/SignatureVerificationDialog'
 
 export function AppConfigPage() {
   const { showToast } = useToast()
@@ -42,6 +43,7 @@ export function AppConfigPage() {
   const [confirmUpdate, setConfirmUpdate] = useState(false)
   const [testingLogin, setTestingLogin] = useState(false)
   const [syncingBiKeys, setSyncingBiKeys] = useState(false)
+  const [showSignatureDialog, setShowSignatureDialog] = useState(false)
 
   useEffect(() => {
     if (sysInfo?.steam_username && !auth.username) {
@@ -264,6 +266,22 @@ export function AppConfigPage() {
                   Fix BiKeys
                 </Button>
               </div>
+
+              <div className="flex flex-col md:flex-row items-center justify-between bg-surface/50 p-5 rounded-lg border border-border gap-6 hover:border-primary/20 transition-colors">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-foreground">Arma 3 Signature Verification</p>
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold">Checks cryptographic .bisign and .bikey consistency, reports corrupted PBOs, and auto-recovers missing keys.</p>
+                </div>
+                <Button 
+                  onClick={() => setShowSignatureDialog(true)} 
+                  variant="secondary"
+                  size="sm"
+                  className="h-9 w-full md:w-auto min-w-[140px] border border-border text-[10px] font-bold uppercase tracking-widest"
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 mr-2 text-primary" />
+                  Verify Signatures
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -330,6 +348,11 @@ export function AppConfigPage() {
         onConfirm={handleForceUpdate}
         confirmLabel="Update Now"
         variant="danger"
+      />
+
+      <SignatureVerificationDialog
+        open={showSignatureDialog}
+        onOpenChange={setShowSignatureDialog}
       />
 
     </div>

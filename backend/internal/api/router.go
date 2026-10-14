@@ -196,6 +196,7 @@ func (r *Router) modRoutes() chi.Router {
 	mux.Delete("/", r.handleUninstallMod) // Simplified plural/single
 	mux.Post("/update", r.handleUpdateAllMods)
 	mux.Post("/sync-bikeys", r.handleSyncBiKeys)
+	mux.Post("/verify-signatures", r.handleVerifyAllModSignatures)
 	mux.Get("/status", r.handleGetModStatus)
 	mux.Get("/needs-update", r.handleGetModNeedsUpdate)
 	mux.Get("/cdlc", r.handleGetCreatorDlcs)
@@ -206,6 +207,7 @@ func (r *Router) modRoutes() chi.Router {
 		mux.Post("/", r.handleInstallOrUpdateMod)
 		mux.Delete("/", r.handleUninstallMod)
 		mux.Patch("/", r.handleSetModServerOnly)
+		mux.Post("/verify-signatures", r.handleVerifyModSignatures)
 	})
 
 	mux.Route("/preset", func(mux chi.Router) {
