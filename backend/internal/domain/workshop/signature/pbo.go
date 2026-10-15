@@ -234,6 +234,10 @@ func FileHash(pbo *PBO, version BISignVersion) ([20]byte, error) {
 	buf := make([]byte, 256*1024)
 
 	for _, h := range pbo.Headers {
+		if h.DataSize == 0 {
+			continue
+		}
+
 		parts := strings.Split(h.Filename, ".")
 		ext := strings.ToLower(parts[len(parts)-1])
 

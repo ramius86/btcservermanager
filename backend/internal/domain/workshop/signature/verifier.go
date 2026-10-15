@@ -9,7 +9,7 @@ import (
 var (
 	ErrPboCorrupted  = errors.New("PBO corrupted: whole-file checksum does not match stored checksum")
 	ErrKeyMismatch   = errors.New("key mismatch: public key does not match signature key")
-	ErrSig1Mismatch  = errors.New("signature mismatch: PBO checksum signature is invalid (sig1)")
+	ErrSig1Mismatch  = errors.New("signature mismatch (sig1): .bisign does not match PBO (mod author published mismatched files or forgot to re-sign after update)")
 	ErrSig2Mismatch  = errors.New("signature mismatch: PBO prefix/name structure altered (sig2)")
 	ErrSig3Mismatch  = errors.New("signature mismatch: PBO script or config content modified (sig3)")
 	ErrMissingBikey  = errors.New("no matching .bikey found for this signature")

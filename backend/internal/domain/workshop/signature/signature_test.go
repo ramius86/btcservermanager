@@ -284,3 +284,45 @@ func TestAutoRecoveryFailsWhenSignatureMismatched(t *testing.T) {
 		t.Errorf("expected 0 files in mod keys folder, found %d", len(modKeyEntries))
 	}
 }
+
+func TestIFA3AndModularInterior(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..", "..")
+	debugDir := filepath.Join(repoRoot, "debug")
+	if _, err := os.Stat(debugDir); os.IsNotExist(err) {
+		t.Skip("debug/ directory not present, skipping")
+	}
+
+	t.Run("IFA3 All PBOs Pass", func(t *testing.T) {
+		ifaDir := filepath.Join(debugDir, "@IFA_A3")
+		if _, err := os.Stat(ifaDir); os.IsNotExist(err) {
+			t.Skip("@IFA_A3 not present")
+		}
+		report, err := VerifyModSignatures(ifaDir, "", false)
+		if err != nil {
+			t.Fatalf("VerifyModSignatures failed: %v", err)
+		}
+		if report.OverallStatus != StatusValid {
+			t.Errorf("expected StatusValid, got %s (summary: %s)", report.OverallStatus, report.Summary)
+		}
+		if report.VerifiedPBOs != report.TotalPBOs || report.TotalPBOs != 4 {
+			t.Errorf("expected 4/4 verified, got %d/%d", report.VerifiedPBOs, report.TotalPBOs)
+		}
+	})
+
+	t.Run("Modular Interior Author Mismatch Detected", func(t *testing.T) {
+		modDir := filepath.Join(debugDir, "@Modular Interior - Office Kit")
+		if _, err := os.Stat(modDir); os.IsNotExist(err) {
+			t.Skip("@Modular Interior not present")
+		}
+		report, err := VerifyModSignatures(modDir, "", true)
+		if err != nil {
+			t.Fatalf("VerifyModSignatures failed: %v", err)
+		}
+		if report.OverallStatus != StatusError {
+			t.Errorf("expected StatusError, got %s", report.OverallStatus)
+		}
+		if len(report.KeysExtractionFailed) == 0 {
+			t.Errorf("expected KeysExtractionFailed to contain feuerex.bikey")
+		}
+	})
+}

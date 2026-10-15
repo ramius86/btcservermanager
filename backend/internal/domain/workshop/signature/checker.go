@@ -366,8 +366,20 @@ func compileOverallStatus(report *ModSignatureReport, errorCount, warningCount i
 			report.Summary = fmt.Sprintf("Missing .bikey: auto-recovery from .bisign failed because signature does not match PBO (%s; %d/%d PBOs failed - author published mismatched files)",
 				strings.Join(report.KeysExtractionFailed, ", "), errorCount, report.TotalPBOs)
 		} else {
-			report.Summary = fmt.Sprintf("%d/%d PBOs verified; %d errors (signature mismatch or corrupted files)",
-				report.VerifiedPBOs, report.TotalPBOs, errorCount)
+			allSig1Mismatches := true
+			for _, r := range report.PboResults {
+				if r.Status == StatusError && !strings.Contains(r.ErrorMessage, "sig1") {
+					allSig1Mismatches = false
+					break
+				}
+			}
+			if allSig1Mismatches && errorCount > 0 {
+				report.Summary = fmt.Sprintf("%d/%d PBOs verified; %d errors (author published mismatched .bisign or forgot to re-sign after update)",
+					report.VerifiedPBOs, report.TotalPBOs, errorCount)
+			} else {
+				report.Summary = fmt.Sprintf("%d/%d PBOs verified; %d errors (signature mismatch or corrupted files)",
+					report.VerifiedPBOs, report.TotalPBOs, errorCount)
+			}
 		}
 	} else if warningCount > 0 {
 		report.OverallStatus = StatusWarning
