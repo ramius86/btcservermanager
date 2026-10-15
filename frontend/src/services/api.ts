@@ -111,6 +111,7 @@ export const WorkshopService = {
     }),
   updateAll: (): Promise<void> => fetchApi(`/mod/update`, { method: 'POST' }),
   syncBiKeys: (): Promise<void> => fetchApi(`/mod/sync-bikeys`, { method: 'POST' }),
+  getSignatures: (): Promise<ModSignatureReportDto[]> => fetchApi(`/mod/signatures`),
   verifySignatures: (autoExtract: boolean = true): Promise<ModSignatureReportDto[]> => 
     fetchApi(`/mod/verify-signatures?autoExtract=${autoExtract}`, { method: 'POST' }),
   verifyModSignatures: (id: number, autoExtract: boolean = true): Promise<ModSignatureReportDto> => 

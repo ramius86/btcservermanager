@@ -22,6 +22,7 @@ export interface PboVerificationResultDto {
     bisignFiles: string[];
     matchingBikey: string;
     keyExtracted?: boolean;
+    keyExtractionFailed?: boolean;
     status: 'VALID' | 'WARNING' | 'ERROR' | 'NO_BIKEY' | 'MISSING_SIGNATURES';
     errorMessage?: string;
 }
@@ -34,6 +35,7 @@ export interface ModSignatureReportDto {
     verifiedPbos: number;
     keysFound: string[];
     keysExtracted: string[];
+    keysExtractionFailed?: string[];
     pboResults: PboVerificationResultDto[];
     summary: string;
 }

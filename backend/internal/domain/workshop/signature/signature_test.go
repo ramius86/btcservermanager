@@ -175,3 +175,112 @@ func TestDebugCBA(t *testing.T) {
 
 	t.Logf("ALL %d PBOs of CBA_A3 VERIFIED SUCCESSFULLY!", report.VerifiedPBOs)
 }
+
+func TestPedagneModVerify(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..", "..")
+	pedagneDir := filepath.Join(repoRoot, "@PedagneMod")
+	if _, err := os.Stat(pedagneDir); os.IsNotExist(err) {
+		t.Skip("@PedagneMod directory not present")
+	}
+
+	report, err := VerifyModSignatures(pedagneDir, "", false)
+	if err != nil {
+		t.Fatalf("VerifyModSignatures failed: %v", err)
+	}
+
+	t.Logf("Pedagne Report: status=%s, total=%d, verified=%d, summary=%s",
+		report.OverallStatus, report.TotalPBOs, report.VerifiedPBOs, report.Summary)
+
+	if report.OverallStatus != StatusValid {
+		for _, res := range report.PboResults {
+			if res.Status != StatusValid {
+				t.Errorf("PBO FAILED: %s -> %s (err: %s)", res.PboPath, res.Status, res.ErrorMessage)
+			}
+		}
+		t.Fatalf("Expected @PedagneMod to be VALID, got %s", report.OverallStatus)
+	}
+
+	if report.VerifiedPBOs != report.TotalPBOs {
+		t.Fatalf("Expected all %d PBOs to be verified, got %d", report.TotalPBOs, report.VerifiedPBOs)
+	}
+}
+
+func TestAutoRecoveryFailsWhenSignatureMismatched(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..", "..")
+	pedagneDir := filepath.Join(repoRoot, "@PedagneMod")
+	if _, err := os.Stat(pedagneDir); os.IsNotExist(err) {
+		t.Skip("@PedagneMod directory not present")
+	}
+
+	// Create temp mod dir with addons/ but NO keys/ dir
+	tempModDir, err := os.MkdirTemp("", "test_mod_no_bikey_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp: %v", err)
+	}
+	defer os.RemoveAll(tempModDir)
+
+	tempAddonsDir := filepath.Join(tempModDir, "addons")
+	_ = os.MkdirAll(tempAddonsDir, 0o755)
+
+	// Copy ASZ_Main_A3.pbo but copy ASZ_Editorpreviews_A3 bisign (mismatched signature!)
+	srcPbo := filepath.Join(pedagneDir, "addons", "ASZ_Main_A3.pbo")
+	dstPbo := filepath.Join(tempAddonsDir, "mismatched.pbo")
+	pboData, err := os.ReadFile(srcPbo)
+	if err != nil {
+		t.Fatalf("ReadFile srcPbo: %v", err)
+	}
+	if err := os.WriteFile(dstPbo, pboData, 0o644); err != nil {
+		t.Fatalf("WriteFile dstPbo: %v", err)
+	}
+
+	srcBisign := filepath.Join(pedagneDir, "addons", "ASZ_Editorpreviews_A3.pbo.Pedagne_Mod_Team.bisign")
+	dstBisign := filepath.Join(tempAddonsDir, "mismatched.pbo.Pedagne_Mod_Team.bisign")
+	bisignData, err := os.ReadFile(srcBisign)
+	if err != nil {
+		t.Fatalf("ReadFile srcBisign: %v", err)
+	}
+	if err := os.WriteFile(dstBisign, bisignData, 0o644); err != nil {
+		t.Fatalf("WriteFile dstBisign: %v", err)
+	}
+
+	tempServerKeysDir, err := os.MkdirTemp("", "test_server_keys_*")
+	if err != nil {
+		t.Fatalf("MkdirTemp server keys: %v", err)
+	}
+	defer os.RemoveAll(tempServerKeysDir)
+
+	// Run with autoExtract = true
+	report, err := VerifyModSignatures(tempModDir, tempServerKeysDir, true)
+	if err != nil {
+		t.Fatalf("VerifyModSignatures failed: %v", err)
+	}
+
+	t.Logf("Report: status=%s, summary=%s", report.OverallStatus, report.Summary)
+
+	// 1. Must be StatusError
+	if report.OverallStatus != StatusError {
+		t.Errorf("expected StatusError, got %s", report.OverallStatus)
+	}
+
+	// 2. KeysExtracted must be EMPTY (no key was verified or confirmed)
+	if len(report.KeysExtracted) != 0 {
+		t.Errorf("expected 0 KeysExtracted, got %d (%v)", len(report.KeysExtracted), report.KeysExtracted)
+	}
+
+	// 3. KeysExtractionFailed must contain the key
+	if len(report.KeysExtractionFailed) == 0 {
+		t.Errorf("expected at least 1 KeysExtractionFailed, got 0")
+	}
+
+	// 4. Server keys folder must remain empty (no invalid key installed)
+	serverKeyEntries, _ := os.ReadDir(tempServerKeysDir)
+	if len(serverKeyEntries) != 0 {
+		t.Errorf("expected 0 files in server keys folder, found %d", len(serverKeyEntries))
+	}
+
+	// 5. Mod keys folder must remain empty
+	modKeyEntries, _ := os.ReadDir(filepath.Join(tempModDir, "keys"))
+	if len(modKeyEntries) != 0 {
+		t.Errorf("expected 0 files in mod keys folder, found %d", len(modKeyEntries))
+	}
+}

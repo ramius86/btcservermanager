@@ -41,6 +41,8 @@ type Service struct {
 	broadcaster         Broadcaster
 	modUpdateListenerMu sync.RWMutex
 	modUpdateListener   ModUpdateListener
+	lastReportsMu       sync.RWMutex
+	lastReports         []*signature.ModSignatureReport
 	stopCh              chan struct{}
 	postInstallQueue    chan int64
 	once                sync.Once
@@ -534,6 +536,54 @@ func (s *Service) VerifyAllArma3ModSignatures(ctx context.Context, autoExtract b
 				"completed": i+1 == total,
 			})
 		}
+	}
+
+	s.lastReportsMu.Lock()
+	s.lastReports = reports
+	s.lastReportsMu.Unlock()
+
+	return reports, nil
+}
+
+// GetSignatureReports returns cached reports if available, or generates initial reports from database status.
+func (s *Service) GetSignatureReports(ctx context.Context) ([]*signature.ModSignatureReport, error) {
+	s.lastReportsMu.RLock()
+	if len(s.lastReports) > 0 {
+		cached := make([]*signature.ModSignatureReport, len(s.lastReports))
+		copy(cached, s.lastReports)
+		s.lastReportsMu.RUnlock()
+		return cached, nil
+	}
+	s.lastReportsMu.RUnlock()
+
+	mods, err := s.repo.GetAllMods(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	var reports []*signature.ModSignatureReport
+	for _, mod := range mods {
+		if mod.ServerType != server.TypeArma3 || mod.InstallationStatus != InstallationFinished {
+			continue
+		}
+
+		status := signature.ModSignatureStatus(mod.SignatureStatus)
+		if status == "" {
+			status = signature.StatusWarning
+		}
+		summary := mod.SignatureSummary
+		if summary == "" {
+			summary = "Verification not yet executed"
+		}
+
+		rep := &signature.ModSignatureReport{
+			ModID:         mod.ID,
+			ModName:       mod.Name,
+			OverallStatus: status,
+			Summary:       summary,
+			KeysFound:     mod.BiKeys,
+		}
+		reports = append(reports, rep)
 	}
 
 	return reports, nil

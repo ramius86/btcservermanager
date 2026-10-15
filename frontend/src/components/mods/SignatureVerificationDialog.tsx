@@ -114,9 +114,20 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
     }
   }
 
+  const loadExistingSignatures = async () => {
+    try {
+      const data = await WorkshopService.getSignatures()
+      if (Array.isArray(data) && data.length > 0) {
+        setReports(data)
+      }
+    } catch (err: any) {
+      console.error('Failed to load existing signature reports:', err)
+    }
+  }
+
   useEffect(() => {
     if (open) {
-      runVerification()
+      loadExistingSignatures()
     }
   }, [open])
 
@@ -183,6 +194,7 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
       const isValid = mod.overallStatus === 'VALID'
       const keysFoundCount = mod.keysFound?.length ?? 0
       const keysExtractedCount = mod.keysExtracted?.length ?? 0
+      const keysExtractionFailedCount = mod.keysExtractionFailed?.length ?? 0
       const pboResultsList = mod.pboResults || []
 
       return (
@@ -224,6 +236,13 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                     <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-4 px-1.5 text-cyan-400 border-cyan-400/40 flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5" />
                       AUTO-RECOVERED KEY
+                    </Badge>
+                  )}
+
+                  {keysExtractionFailedCount > 0 && (
+                    <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-4 px-1.5 text-amber-400 border-amber-400/40 flex items-center gap-1" title="Missing .bikey: public key was recovered from .bisign, but author's signature does not match PBO">
+                      <AlertTriangle className="w-2.5 h-2.5" />
+                      RECOVERY FAILED: AUTHOR MISMATCH
                     </Badge>
                   )}
                 </div>
@@ -272,6 +291,13 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                     <span>Recovered from signature: {mod.keysExtracted?.join(', ')}</span>
                   </div>
                 )}
+
+                {keysExtractionFailedCount > 0 && (
+                  <div className="flex items-center gap-1.5 ml-auto text-amber-400 text-xs" title="Key was extracted from .bisign but signature does not match PBO">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>Failed recovery: {mod.keysExtractionFailed?.join(', ')} (author's .bisign does not match .pbo)</span>
+                  </div>
+                )}
               </div>
 
               <div className="overflow-x-auto rounded border border-border">
@@ -304,6 +330,11 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                               <span className="text-primary font-medium flex items-center gap-1">
                                 {pbo.matchingBikey}
                                 {pbo.keyExtracted && <Sparkles className="w-2.5 h-2.5 text-cyan-400" />}
+                              </span>
+                            ) : pbo.keyExtractionFailed ? (
+                              <span className="text-amber-400 font-medium flex items-center gap-1 text-[10px]" title="Key extracted from signature, but signature is invalid against PBO">
+                                <AlertTriangle className="w-2.5 h-2.5 text-amber-400 shrink-0" />
+                                Mismatched bisign
                               </span>
                             ) : (
                               '-'
@@ -363,7 +394,7 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                 className="text-xs font-bold uppercase tracking-wider h-8"
               >
                 <RefreshCw className={`w-3.5 h-3.5 mr-1.5 ${loading ? 'animate-spin' : ''}`} />
-                {loading ? 'Verifying...' : 'Re-verify All'}
+                {loading ? 'Verifying...' : reports.length > 0 ? 'Re-verify All' : 'Run Verification'}
               </Button>
             </div>
           </div>

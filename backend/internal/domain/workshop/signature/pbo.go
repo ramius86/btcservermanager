@@ -40,6 +40,23 @@ func (p *PBO) Close() error {
 	return nil
 }
 
+// IsObfuscated returns true if the PBO archive was packed with Mikero's obfuscation
+// or contains anti-unpacking dummy headers (e.g. "\t\t", "*.*", "\\\\\\").
+func (p *PBO) IsObfuscated() bool {
+	if p == nil {
+		return false
+	}
+	if _, hasObf := p.HeaderExtensions["obfuscated"]; hasObf {
+		return true
+	}
+	for _, h := range p.Headers {
+		if h.Filename == "\t\t" || h.Filename == "*.*" || h.Filename == `\\\` || h.Filename == `\\\\\\` {
+			return true
+		}
+	}
+	return false
+}
+
 // OpenPBO opens a PBO file for inspection and hash generation.
 // It verifies the whole-file checksum against the stored checksum.
 func OpenPBO(path string) (*PBO, error) {

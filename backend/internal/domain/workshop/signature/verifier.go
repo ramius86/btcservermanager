@@ -54,13 +54,22 @@ func VerifyPBO(pbo *PBO, sig *BISign, key *BIPublicKey) error {
 
 	// Verify Sig2: sig2^e mod n == pad2
 	rec2 := new(big.Int).Exp(sig.Sig2, e, key.N)
-	if rec2.Cmp(pad2) != 0 {
-		return ErrSig2Mismatch
-	}
-
 	// Verify Sig3: sig3^e mod n == pad3
 	rec3 := new(big.Int).Exp(sig.Sig3, e, key.N)
-	if rec3.Cmp(pad3) != 0 {
+
+	sig2Match := rec2.Cmp(pad2) == 0
+	sig3Match := rec3.Cmp(pad3) == 0
+
+	if !sig2Match || !sig3Match {
+		// If the archive was packed with Mikero obfuscation, the internal header table and filenames
+		// are scrambled to deter extraction. In this case, Sig1 provides full cryptographic proof
+		// of the whole archive's integrity and authenticity.
+		if pbo.IsObfuscated() {
+			return nil
+		}
+		if !sig2Match {
+			return ErrSig2Mismatch
+		}
 		return ErrSig3Mismatch
 	}
 

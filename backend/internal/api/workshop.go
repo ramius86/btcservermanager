@@ -340,6 +340,16 @@ func (r *Router) handleSyncBiKeys(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
+func (r *Router) handleGetSignatureReports(w http.ResponseWriter, req *http.Request) {
+	ctx := req.Context()
+	reports, err := r.workshopService.GetSignatureReports(ctx)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	r.json(w, reports)
+}
+
 func (r *Router) handleVerifyAllModSignatures(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	autoExtract := req.URL.Query().Get("autoExtract") != "false"
