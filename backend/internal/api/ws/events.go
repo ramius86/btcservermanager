@@ -15,6 +15,8 @@ const (
 	EvtModDeleted               EventType = "mod_deleted"
 	EvtDiscordEventRsvpUpdated  EventType = "discord_event_rsvp_updated"
 	EvtDiscordEventUpdated      EventType = "discord_event_updated"
+	EvtModSignatureProgress     EventType = "mod_signature_progress"
+	EvtModSignatureChecked      EventType = "mod_signature_checked"
 	EvtHeartbeat                EventType = "heartbeat"
 )
 

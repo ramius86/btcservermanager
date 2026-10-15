@@ -158,12 +158,12 @@ func discoverPBOs(modDir string) []string {
 func findBisignsForPbo(pboPath string) []string {
 	pboDir := filepath.Dir(pboPath)
 	pboBase := filepath.Base(pboPath)
+	bisigns := []string{}
 	entries, err := os.ReadDir(pboDir)
 	if err != nil {
-		return nil
+		return bisigns
 	}
 
-	var bisigns []string
 	prefix := strings.ToLower(pboBase) + "."
 	for _, entry := range entries {
 		ename := entry.Name()

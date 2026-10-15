@@ -25,6 +25,7 @@ import { WorkshopService } from '../../services/api'
 import { ModSignatureReportDto } from '../../dtos/ModDto'
 import { useToast } from '../ui/Toast'
 import { Switch } from '../ui/Switch'
+import { useWebSocket } from '../../contexts/WebSocketContext'
 
 interface SignatureVerificationDialogProps {
   open: boolean
@@ -58,15 +59,48 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
   onOpenChange,
 }) => {
   const { showToast } = useToast()
+  const { subscribe } = useWebSocket()
   const [loading, setLoading] = useState(false)
+  const [progress, setProgress] = useState<{ current: number; total: number; modName: string } | null>(null)
   const [reports, setReports] = useState<ModSignatureReportDto[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ERROR' | 'WARNING' | 'VALID'>('ALL')
   const [autoExtract, setAutoExtract] = useState(true)
   const [expandedMods, setExpandedMods] = useState<Record<number, boolean>>({})
 
+  // WebSocket progress listener
+  useEffect(() => {
+    if (!open) return
+
+    const unsub = subscribe('mod_signature_progress', (e) => {
+      if (!e.payload) return
+      const { current, total, modName, report, completed } = e.payload
+      if (typeof total === 'number' && total > 0) {
+        setProgress({ current: current || 0, total, modName: modName || '' })
+      }
+      if (report && typeof report.modId === 'number') {
+        setReports((prev) => {
+          const idx = prev.findIndex((r) => r.modId === report.modId)
+          if (idx >= 0) {
+            const next = [...prev]
+            next[idx] = report
+            return next
+          }
+          return [...prev, report]
+        })
+      }
+      if (completed) {
+        setLoading(false)
+        setProgress(null)
+      }
+    })
+
+    return () => unsub()
+  }, [open, subscribe])
+
   const runVerification = async () => {
     setLoading(true)
+    setProgress({ current: 0, total: 0, modName: 'Initializing...' })
     try {
       const data = await WorkshopService.verifySignatures(autoExtract)
       setReports(Array.isArray(data) ? data : [])
@@ -76,6 +110,7 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
       showToast('Failed to verify signatures: ' + (err.message || 'Unknown error'), 'error')
     } finally {
       setLoading(false)
+      setProgress(null)
     }
   }
 
@@ -98,8 +133,8 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
     const errors = reports.filter((r) => r.overallStatus === 'ERROR').length
     const warnings = reports.filter((r) => r.overallStatus === 'WARNING' || r.overallStatus === 'NO_BIKEY' || r.overallStatus === 'MISSING_SIGNATURES').length
     const extracted = reports.reduce((acc, r) => acc + (r.keysExtracted?.length || 0), 0)
-    const totalPbos = reports.reduce((acc, r) => acc + r.totalPbos, 0)
-    const verifiedPbos = reports.reduce((acc, r) => acc + r.verifiedPbos, 0)
+    const totalPbos = reports.reduce((acc, r) => acc + (r.totalPbos || 0), 0)
+    const verifiedPbos = reports.reduce((acc, r) => acc + (r.verifiedPbos || 0), 0)
 
     return { total, valid, errors, warnings, extracted, totalPbos, verifiedPbos }
   }, [reports])
@@ -112,10 +147,10 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
 
       if (search.trim()) {
         const query = search.toLowerCase()
-        const matchesName = r.modName.toLowerCase().includes(query)
+        const matchesName = (r.modName || '').toLowerCase().includes(query)
         const matchesId = String(r.modId).includes(query)
-        const matchesKey = r.keysFound?.some((k) => k.toLowerCase().includes(query))
-        return matchesName || matchesId || matchesKey
+        const matchesKey = r.keysFound?.some((k) => (k || '').toLowerCase().includes(query))
+        return matchesName || matchesId || Boolean(matchesKey)
       }
 
       return true
@@ -146,6 +181,9 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
       const isError = mod.overallStatus === 'ERROR'
       const isWarning = mod.overallStatus === 'WARNING' || mod.overallStatus === 'NO_BIKEY' || mod.overallStatus === 'MISSING_SIGNATURES'
       const isValid = mod.overallStatus === 'VALID'
+      const keysFoundCount = mod.keysFound?.length ?? 0
+      const keysExtractedCount = mod.keysExtracted?.length ?? 0
+      const pboResultsList = mod.pboResults || []
 
       return (
         <div
@@ -182,7 +220,7 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                     </Badge>
                   )}
 
-                  {mod.keysExtracted && mod.keysExtracted.length > 0 && (
+                  {keysExtractedCount > 0 && (
                     <Badge variant="outline" className="text-[9px] uppercase tracking-wider h-4 px-1.5 text-cyan-400 border-cyan-400/40 flex items-center gap-1">
                       <Sparkles className="w-2.5 h-2.5" />
                       AUTO-RECOVERED KEY
@@ -197,10 +235,10 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
             <div className="flex items-center gap-3 shrink-0 self-end md:self-center">
               <div className="text-right">
                 <span className="text-xs font-mono font-bold text-foreground">
-                  {mod.verifiedPbos}/{mod.totalPbos} PBOs
+                  {mod.verifiedPbos ?? 0}/{mod.totalPbos ?? 0} PBOs
                 </span>
                 <span className="text-[10px] text-muted-foreground block">
-                  {mod.keysFound.length} bikey{mod.keysFound.length === 1 ? '' : 's'}
+                  {keysFoundCount} bikey{keysFoundCount === 1 ? '' : 's'}
                 </span>
               </div>
               <div className="text-muted-foreground">
@@ -218,8 +256,8 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                   <KeyRound className="w-3.5 h-3.5 text-primary" />
                   <span>Keys in mod:</span>
                 </div>
-                {mod.keysFound.length > 0 ? (
-                  mod.keysFound.map((k) => (
+                {keysFoundCount > 0 ? (
+                  mod.keysFound?.map((k) => (
                     <span key={k} className="px-2 py-0.5 rounded bg-surface border border-border font-mono text-[11px] text-foreground">
                       {k}
                     </span>
@@ -228,10 +266,10 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                   <span className="text-muted-foreground italic text-xs">No .bikey packaged in mod directory</span>
                 )}
 
-                {mod.keysExtracted && mod.keysExtracted.length > 0 && (
+                {keysExtractedCount > 0 && (
                   <div className="flex items-center gap-1.5 ml-auto text-cyan-400 text-xs">
                     <Sparkles className="w-3.5 h-3.5" />
-                    <span>Recovered from signature: {mod.keysExtracted.join(', ')}</span>
+                    <span>Recovered from signature: {mod.keysExtracted?.join(', ')}</span>
                   </div>
                 )}
               </div>
@@ -248,32 +286,38 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/40 font-mono text-[11px]">
-                    {mod.pboResults.map((pbo) => (
-                      <tr key={pbo.pboPath} className="hover:bg-surface/40">
-                        <td className="py-1.5 px-3 font-semibold text-foreground truncate max-w-[180px]" title={pbo.pboPath}>
-                          {pbo.pboPath}
-                        </td>
-                        <td className="py-1.5 px-3 text-muted-foreground truncate max-w-[160px]">
-                          {pbo.bisignFiles.length > 0 ? pbo.bisignFiles.join(', ') : 'None'}
-                        </td>
-                        <td className="py-1.5 px-3 text-muted-foreground">
-                          {pbo.matchingBikey ? (
-                            <span className="text-primary font-medium flex items-center gap-1">
-                              {pbo.matchingBikey}
-                              {pbo.keyExtracted && <Sparkles className="w-2.5 h-2.5 text-cyan-400" />}
-                            </span>
-                          ) : (
-                            '-'
-                          )}
-                        </td>
-                        <td className="py-1.5 px-3">
-                          {getPboStatusLabel(pbo.status)}
-                        </td>
-                        <td className="py-1.5 px-3 text-muted-foreground max-w-[220px] truncate" title={pbo.errorMessage || 'Verified OK'}>
-                          {pbo.errorMessage || <span className="text-emerald-500/80">Signature intact</span>}
-                        </td>
-                      </tr>
-                    ))}
+                    {pboResultsList.map((pbo) => {
+                      const bisignFilesList = pbo.bisignFiles && pbo.bisignFiles.length > 0
+                        ? pbo.bisignFiles.join(', ')
+                        : 'None'
+
+                      return (
+                        <tr key={pbo.pboPath} className="hover:bg-surface/40">
+                          <td className="py-1.5 px-3 font-semibold text-foreground truncate max-w-[180px]" title={pbo.pboPath}>
+                            {pbo.pboPath}
+                          </td>
+                          <td className="py-1.5 px-3 text-muted-foreground truncate max-w-[160px]">
+                            {bisignFilesList}
+                          </td>
+                          <td className="py-1.5 px-3 text-muted-foreground">
+                            {pbo.matchingBikey ? (
+                              <span className="text-primary font-medium flex items-center gap-1">
+                                {pbo.matchingBikey}
+                                {pbo.keyExtracted && <Sparkles className="w-2.5 h-2.5 text-cyan-400" />}
+                              </span>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td className="py-1.5 px-3">
+                            {getPboStatusLabel(pbo.status)}
+                          </td>
+                          <td className="py-1.5 px-3 text-muted-foreground max-w-[220px] truncate" title={pbo.errorMessage || 'Verified OK'}>
+                            {pbo.errorMessage || <span className="text-emerald-500/80">Signature intact</span>}
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -323,6 +367,29 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
               </Button>
             </div>
           </div>
+
+          {/* Live Progress Bar when verifying */}
+          {loading && progress && progress.total > 0 && (
+            <div className="mt-4 p-3 bg-surface/80 border border-primary/30 rounded-lg space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 truncate">
+                  <RefreshCw className="w-3.5 h-3.5 text-primary animate-spin shrink-0" />
+                  <span className="font-semibold text-foreground truncate">
+                    Checking {progress.modName || 'mods'}...
+                  </span>
+                </div>
+                <span className="font-mono text-muted-foreground text-[11px] shrink-0">
+                  {progress.current} / {progress.total} ({Math.round((progress.current / Math.max(progress.total, 1)) * 100)}%)
+                </span>
+              </div>
+              <div className="w-full bg-surface-elevated rounded-full h-2 overflow-hidden border border-border">
+                <div
+                  className="bg-primary h-full transition-all duration-300 rounded-full"
+                  style={{ width: `${Math.min(100, Math.round((progress.current / Math.max(progress.total, 1)) * 100))}%` }}
+                />
+              </div>
+            </div>
+          )}
 
           {/* Stats Bar */}
           <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mt-4">

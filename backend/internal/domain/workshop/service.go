@@ -484,19 +484,55 @@ func (s *Service) VerifyAllArma3ModSignatures(ctx context.Context, autoExtract b
 		return nil, err
 	}
 
-	var reports []*signature.ModSignatureReport
+	var arma3Mods []*WorkshopMod
 	for _, mod := range mods {
 		if mod.ServerType == server.TypeArma3 && mod.InstallationStatus == InstallationFinished {
-			rep, err := s.VerifyModSignatures(ctx, mod.ID, autoExtract)
-			if err != nil {
-				rep = &signature.ModSignatureReport{
-					ModID:         mod.ID,
-					ModName:       mod.Name,
-					OverallStatus: signature.StatusError,
-					Summary:       err.Error(),
-				}
+			arma3Mods = append(arma3Mods, mod)
+		}
+	}
+
+	total := len(arma3Mods)
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("mod_signature_progress", map[string]any{
+			"current":   0,
+			"total":     total,
+			"modName":   "Starting verification...",
+			"completed": false,
+		})
+	}
+
+	var reports []*signature.ModSignatureReport
+	for i, mod := range arma3Mods {
+		if s.broadcaster != nil {
+			s.broadcaster.Broadcast("mod_signature_progress", map[string]any{
+				"current":   i + 1,
+				"total":     total,
+				"modId":     mod.ID,
+				"modName":   mod.Name,
+				"completed": false,
+			})
+		}
+
+		rep, err := s.VerifyModSignatures(ctx, mod.ID, autoExtract)
+		if err != nil {
+			rep = &signature.ModSignatureReport{
+				ModID:         mod.ID,
+				ModName:       mod.Name,
+				OverallStatus: signature.StatusError,
+				Summary:       err.Error(),
 			}
-			reports = append(reports, rep)
+		}
+		reports = append(reports, rep)
+
+		if s.broadcaster != nil {
+			s.broadcaster.Broadcast("mod_signature_progress", map[string]any{
+				"current":   i + 1,
+				"total":     total,
+				"modId":     mod.ID,
+				"modName":   mod.Name,
+				"report":    rep,
+				"completed": i+1 == total,
+			})
 		}
 	}
 

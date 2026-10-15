@@ -67,7 +67,7 @@ func OpenPBO(path string) (*PBO, error) {
 	// 1. Calculate whole-file SHA-1 checksum up to EOF - 21 bytes (before 0x00 and 20-byte checksum)
 	chkHasher := sha1.New()
 	contentSec := io.NewSectionReader(f, 0, stat.Size()-21)
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 256*1024)
 	if _, err := io.CopyBuffer(chkHasher, contentSec, buf); err != nil {
 		_ = f.Close()
 		return nil, fmt.Errorf("hash pbo contents: %w", err)
@@ -201,7 +201,7 @@ func shouldIncludeInFileHash(ext string, version BISignVersion) bool {
 	}
 	if version == VersionV3 {
 		switch ext {
-		case "sqf", "inc", "bikb", "ext", "fsm", "sqm", "hpp", "cfg", "sqs", "h":
+		case "sqf", "sqfc", "inc", "bikb", "ext", "fsm", "sqm", "hpp", "cfg", "sqs", "h":
 			return true
 		default:
 			return false
@@ -214,7 +214,7 @@ func shouldIncludeInFileHash(ext string, version BISignVersion) bool {
 func FileHash(pbo *PBO, version BISignVersion) ([20]byte, error) {
 	hasher := sha1.New()
 	nothing := true
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, 256*1024)
 
 	for _, h := range pbo.Headers {
 		parts := strings.Split(h.Filename, ".")

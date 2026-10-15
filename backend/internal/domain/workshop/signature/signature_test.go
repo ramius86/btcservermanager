@@ -148,3 +148,30 @@ func TestVerifyModSignaturesOnRealMods(t *testing.T) {
 		}
 	})
 }
+
+func TestDebugCBA(t *testing.T) {
+	repoRoot := filepath.Join("..", "..", "..", "..", "..")
+	cbaDir := filepath.Join(repoRoot, "@CBA_A3")
+	if _, err := os.Stat(cbaDir); os.IsNotExist(err) {
+		t.Skip("@CBA_A3 directory not present")
+	}
+
+	report, err := VerifyModSignatures(cbaDir, "", false)
+	if err != nil {
+		t.Fatalf("VerifyModSignatures failed: %v", err)
+	}
+
+	t.Logf("Report: status=%s, total=%d, verified=%d, summary=%s",
+		report.OverallStatus, report.TotalPBOs, report.VerifiedPBOs, report.Summary)
+
+	if report.OverallStatus != StatusValid {
+		for _, res := range report.PboResults {
+			if res.Status != StatusValid {
+				t.Errorf("FAILED: %s -> %s (err: %s)", res.PboPath, res.Status, res.ErrorMessage)
+			}
+		}
+		t.Fatalf("Expected CBA to be completely valid, got %s", report.OverallStatus)
+	}
+
+	t.Logf("ALL %d PBOs of CBA_A3 VERIFIED SUCCESSFULLY!", report.VerifiedPBOs)
+}
