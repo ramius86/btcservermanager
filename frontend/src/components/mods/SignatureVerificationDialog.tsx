@@ -61,6 +61,7 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
   const { showToast } = useToast()
   const { subscribe } = useWebSocket()
   const [loading, setLoading] = useState(false)
+  const [fetchingExisting, setFetchingExisting] = useState(false)
   const [progress, setProgress] = useState<{ current: number; total: number; modName: string } | null>(null)
   const [reports, setReports] = useState<ModSignatureReportDto[]>([])
   const [search, setSearch] = useState('')
@@ -115,6 +116,9 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
   }
 
   const loadExistingSignatures = async () => {
+    if (reports.length === 0) {
+      setFetchingExisting(true)
+    }
     try {
       const data = await WorkshopService.getSignatures()
       if (Array.isArray(data) && data.length > 0) {
@@ -122,6 +126,8 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
       }
     } catch (err: any) {
       console.error('Failed to load existing signature reports:', err)
+    } finally {
+      setFetchingExisting(false)
     }
   }
 
@@ -169,6 +175,15 @@ export const SignatureVerificationDialog: React.FC<SignatureVerificationDialogPr
   }, [reports, statusFilter, search])
 
   const renderContent = () => {
+    if (fetchingExisting && reports.length === 0) {
+      return (
+        <div className="py-16 text-center text-muted-foreground flex flex-col items-center gap-3">
+          <RefreshCw className="w-6 h-6 animate-spin text-primary" />
+          <p className="text-sm">Loading signature verification status...</p>
+        </div>
+      )
+    }
+
     if (loading && reports.length === 0) {
       return (
         <div className="py-16 text-center text-muted-foreground flex flex-col items-center gap-3">

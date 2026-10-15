@@ -5,11 +5,13 @@ import (
 	"btcservermanager/internal/domain/workshop/signature"
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
 	"math/rand/v2"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -542,7 +544,45 @@ func (s *Service) VerifyAllArma3ModSignatures(ctx context.Context, autoExtract b
 	s.lastReports = reports
 	s.lastReportsMu.Unlock()
 
+	s.saveSignatureReportsCache(reports)
+
 	return reports, nil
+}
+
+func (s *Service) saveSignatureReportsCache(reports []*signature.ModSignatureReport) {
+	if s.installer == nil || s.installer.Paths() == nil {
+		return
+	}
+	cachePath := s.installer.Paths().GetSignaturesCachePath()
+	if err := os.MkdirAll(filepath.Dir(cachePath), 0o755); err != nil {
+		log.Printf("[WorkshopService] Failed to create dir for signature cache: %v", err)
+		return
+	}
+	data, err := json.Marshal(reports)
+	if err != nil {
+		log.Printf("[WorkshopService] Failed to marshal signature reports cache: %v", err)
+		return
+	}
+	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+		log.Printf("[WorkshopService] Failed to write signature reports cache: %v", err)
+	}
+}
+
+func (s *Service) loadSignatureReportsCache() []*signature.ModSignatureReport {
+	if s.installer == nil || s.installer.Paths() == nil {
+		return nil
+	}
+	cachePath := s.installer.Paths().GetSignaturesCachePath()
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil
+	}
+	var reports []*signature.ModSignatureReport
+	if err := json.Unmarshal(data, &reports); err != nil {
+		log.Printf("[WorkshopService] Failed to unmarshal signature reports cache: %v", err)
+		return nil
+	}
+	return reports
 }
 
 // GetSignatureReports returns cached reports if available, or generates initial reports from database status.
@@ -555,6 +595,16 @@ func (s *Service) GetSignatureReports(ctx context.Context) ([]*signature.ModSign
 		return cached, nil
 	}
 	s.lastReportsMu.RUnlock()
+
+	// Try reading persistent disk cache first
+	if diskReports := s.loadSignatureReportsCache(); len(diskReports) > 0 {
+		s.lastReportsMu.Lock()
+		s.lastReports = diskReports
+		s.lastReportsMu.Unlock()
+		cached := make([]*signature.ModSignatureReport, len(diskReports))
+		copy(cached, diskReports)
+		return cached, nil
+	}
 
 	mods, err := s.repo.GetAllMods(ctx)
 	if err != nil {

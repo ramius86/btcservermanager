@@ -26,6 +26,14 @@ func NewInstaller(paths *config.Paths, repo *Repository) *Installer {
 	}
 }
 
+// Paths returns the paths configuration used by the installer.
+func (i *Installer) Paths() *config.Paths {
+	if i == nil {
+		return nil
+	}
+	return i.paths
+}
+
 // InstallMod performs a single WalkDir pass over the mod directory to:
 type bikeyEntry struct {
 	srcAfterLower string

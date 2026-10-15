@@ -94,3 +94,7 @@ func (p *Paths) GetSteamCmdExecutable() string {
 func (p *Paths) GetSteamCmdCacheFile() string {
 	return p.config.SteamCmdCachePath
 }
+
+func (p *Paths) GetSignaturesCachePath() string {
+	return filepath.Join(p.config.StoragePath, "data", "signatures_cache.json")
+}
