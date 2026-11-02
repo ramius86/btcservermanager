@@ -7,9 +7,15 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
+
+// startServerTimeout bounds the synchronous part of a start/restart: config
+// rendering, mod name resolution and the launch itself. The game server keeps
+// running after the handler returns, so this is not the process lifetime.
+const startServerTimeout = 60 * time.Second
 
 /*
 This file is part of the API Servers split.
@@ -29,7 +35,13 @@ func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, errInvalidServerID, http.StatusBadRequest)
 		return
 	}
-	if err := r.serverService.StartServer(context.Background(), id); err != nil {
+	// Detached from the request so closing the tab cannot abort a start that is
+	// already launching the process, but bounded: a wedged database or config
+	// render must not hold the handler open forever.
+	ctx, cancel := context.WithTimeout(context.Background(), startServerTimeout)
+	defer cancel()
+
+	if err := r.serverService.StartServer(ctx, id); err != nil {
 		if errors.Is(err, server.ErrServerNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -38,7 +50,7 @@ func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -61,7 +73,7 @@ func (r *Router) handleStopServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -74,7 +86,10 @@ func (r *Router) handleRestartServer(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, errInvalidServerID, http.StatusBadRequest)
 		return
 	}
-	if err := r.serverService.RestartServer(context.Background(), id); err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), startServerTimeout)
+	defer cancel()
+
+	if err := r.serverService.RestartServer(ctx, id); err != nil {
 		if errors.Is(err, server.ErrServerNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
@@ -83,7 +98,7 @@ func (r *Router) handleRestartServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -97,10 +112,12 @@ func (r *Router) handleGetServerStatus(w http.ResponseWriter, req *http.Request)
 		return
 	}
 
+	// One shape for both states. Answering {"status":"Stopped"} for a stopped
+	// server made the response disagree with the DTO the client declares, so
+	// "which fields exist" depended on whether the process was running.
 	info := r.serverService.GetInstanceInfo(id)
 	if info == nil {
-		r.json(w, map[string]any{"status": "Stopped"})
-		return
+		info = &server.ServerInstanceInfo{}
 	}
 
 	r.json(w, info)
@@ -110,7 +127,7 @@ func (r *Router) handleGetAllServerStatuses(w http.ResponseWriter, req *http.Req
 	ctx := req.Context()
 	servers, err := r.serverService.GetAllServers(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -156,7 +173,7 @@ func (r *Router) handleUpdateAutoRestart(w http.ResponseWriter, req *http.Reques
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

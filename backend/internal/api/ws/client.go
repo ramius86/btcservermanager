@@ -58,21 +58,29 @@ func (c *Client) readPump(ctx context.Context, cancel context.CancelFunc) {
 		switch msg.Type {
 		case "subscribe":
 			var sub Subscription
-			if err := json.Unmarshal(msg.Payload, &sub); err == nil {
-				c.hub.subscribe <- clientSub{client: c, sub: sub}
+			if err := json.Unmarshal(msg.Payload, &sub); err != nil {
+				// A malformed payload used to leave the client silently unsubscribed
+				// while it believed the opposite.
+				log.Printf("[WS] ignoring malformed subscribe payload: %v", err)
+				continue
 			}
+
+			c.hub.subscribe <- clientSub{client: c, sub: sub}
 		case "unsubscribe":
 			var unsub struct {
 				Domain   string `json:"domain"`
 				ServerID int64  `json:"server_id,omitempty"`
 			}
 
-			if err := json.Unmarshal(msg.Payload, &unsub); err == nil {
-				c.hub.unsubscribe <- clientUnsub{
-					client:   c,
-					domain:   unsub.Domain,
-					serverID: unsub.ServerID,
-				}
+			if err := json.Unmarshal(msg.Payload, &unsub); err != nil {
+				log.Printf("[WS] ignoring malformed unsubscribe payload: %v", err)
+				continue
+			}
+
+			c.hub.unsubscribe <- clientUnsub{
+				client:   c,
+				domain:   unsub.Domain,
+				serverID: unsub.ServerID,
 			}
 		}
 	}

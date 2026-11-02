@@ -87,7 +87,9 @@ func scanReforgerServerRows(rows *sql.Rows, baseServers map[int64]*Server) ([]*R
 
 		if adminsStr.Valid && adminsStr.String != "" {
 			if err := json.Unmarshal([]byte(adminsStr.String), &s.Admins); err != nil {
-				fmt.Printf("[ReforgerRepo] Error unmarshaling admins: %v\n", err)
+				// Serving an empty list would let the next save overwrite the stored
+				// admins with "[]", silently removing every admin from the server.
+				return nil, fmt.Errorf("decode admins for server %d: %w", id, err)
 			}
 		}
 

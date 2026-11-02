@@ -74,7 +74,7 @@ func (r *Router) handleGetDiscordChannels(w http.ResponseWriter, req *http.Reque
 
 	channels, err := r.discordService.GetChannels()
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -84,7 +84,7 @@ func (r *Router) handleGetDiscordChannels(w http.ResponseWriter, req *http.Reque
 func (r *Router) handleGetDiscordRoles(w http.ResponseWriter, req *http.Request) {
 	roles, err := r.discordService.GetRoles(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -114,7 +114,7 @@ func (r *Router) handleCreateDiscordEvent(w http.ResponseWriter, req *http.Reque
 
 	event, err := r.discordService.CreateEventMessage(req.Context(), payload.ChannelID, payload.Title, payload.DateTime, payload.GameType, payload.ImageBase64, payload.Mentions)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -129,7 +129,7 @@ func (r *Router) handleGetDiscordEvents(w http.ResponseWriter, req *http.Request
 
 	events, err := r.discordService.GetAllEvents(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -155,7 +155,7 @@ func (r *Router) handleGetDiscordEventDetail(w http.ResponseWriter, req *http.Re
 
 	detail, err := r.discordService.GetEvent(req.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -188,7 +188,7 @@ func (r *Router) handleUpdateDiscordEvent(w http.ResponseWriter, req *http.Reque
 
 	event, err := r.discordService.UpdateEventMessage(req.Context(), id, payload.Title, payload.DateTime, payload.GameType)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -209,7 +209,7 @@ func (r *Router) handleDeleteDiscordEvent(w http.ResponseWriter, req *http.Reque
 	}
 
 	if err := r.discordService.DeleteEvent(req.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -224,7 +224,7 @@ func (r *Router) handleGetDiscordEventStats(w http.ResponseWriter, req *http.Req
 
 	stats, err := r.discordService.GetAttendanceStats(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -243,7 +243,7 @@ func (r *Router) handleGetDiscordUsers(w http.ResponseWriter, req *http.Request)
 
 	users, err := r.discordService.GetAllUsersForManagement(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -276,7 +276,7 @@ func (r *Router) handleUpdateDiscordUserActive(w http.ResponseWriter, req *http.
 	}
 
 	if err := r.discordService.SetUserActive(req.Context(), id, payload.Username, payload.Active); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -305,7 +305,7 @@ func (r *Router) handleUpdateDiscordUserGames(w http.ResponseWriter, req *http.R
 	}
 
 	if err := r.discordService.SetUserGames(req.Context(), id, payload.PlaysArma3, payload.PlaysReforger); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -325,7 +325,7 @@ func (r *Router) handleDeleteDiscordUser(w http.ResponseWriter, req *http.Reques
 	}
 
 	if err := r.discordService.DeleteUser(req.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -359,7 +359,7 @@ func (r *Router) handleMergeDiscordUsers(w http.ResponseWriter, req *http.Reques
 	}
 
 	if err := r.discordService.MergeUsers(req.Context(), payload.SourceUserID, payload.TargetUserID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -374,7 +374,7 @@ func (r *Router) handleGetDiscordGuildMembers(w http.ResponseWriter, req *http.R
 
 	members, err := r.discordService.GetGuildMembers(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -411,7 +411,7 @@ func (r *Router) handleUpdateDiscordEventParticipation(w http.ResponseWriter, re
 
 	err = r.discordService.UpdateManualParticipation(req.Context(), id, payload.UserID, payload.Username, payload.Status)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -438,7 +438,7 @@ func (r *Router) handleTestDiscordAlert(w http.ResponseWriter, req *http.Request
 	}
 
 	if err := r.discordService.SendTestAlert(req.Context(), payload.ChannelID); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

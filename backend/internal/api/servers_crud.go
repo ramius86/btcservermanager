@@ -29,7 +29,7 @@ func (r *Router) handleGetAllServers(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	servers, err := r.serverService.GetAllServers(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -58,7 +58,7 @@ func (r *Router) handleReorderServers(w http.ResponseWriter, req *http.Request) 
 	}
 
 	if err := r.serverService.ReorderServers(ctx, orders); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -79,7 +79,7 @@ func (r *Router) handleGetServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusNotFound)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -113,7 +113,7 @@ func (r *Router) handleCreateServer(w http.ResponseWriter, req *http.Request) {
 
 	created, err := r.serverService.CreateServer(ctx, srv)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -178,7 +178,7 @@ func (r *Router) handleUpdateServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (r *Router) handleDeleteServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

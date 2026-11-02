@@ -5,6 +5,7 @@ import (
 	"btcservermanager/internal/domain/workshop"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -25,7 +26,7 @@ func (r *Router) handleGetAllMods(w http.ResponseWriter, req *http.Request) {
 
 	mods, err := r.workshopService.GetAllMods(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -60,7 +61,7 @@ func (r *Router) handleGetModNeedsUpdate(w http.ResponseWriter, req *http.Reques
 	ctx := req.Context()
 	hasUpdates, err := r.workshopService.HasModUpdates(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	r.json(w, map[string]bool{"hasUpdates": hasUpdates})
@@ -93,17 +94,32 @@ func (r *Router) handleInstallOrUpdateMods(w http.ResponseWriter, req *http.Requ
 
 	// In Java: modsFacade.saveAndInstallMods(modIds)
 	modsToInstall := make([]workshop.WorkshopMod, 0, len(modIds))
+	failed := 0
 
 	for _, id := range modIds {
 		// Ensure metadata is fetched/saved first
 		mod, err := r.workshopService.FetchAndSaveMetadata(ctx, id, true)
-		if err == nil && mod != nil {
-			modsToInstall = append(modsToInstall, *mod)
+		if err != nil || mod == nil {
+			failed++
+			log.Printf("[API] Failed to fetch metadata for mod %d: %v", id, err)
+			continue
 		}
+
+		modsToInstall = append(modsToInstall, *mod)
 	}
 
-	if len(modsToInstall) > 0 {
-		r.steamCmdService.InstallOrUpdateWorkshopMods(modsToInstall)
+	// Answering 200 while queueing nothing made the UI report an installation
+	// that had never been created.
+	if len(modsToInstall) == 0 {
+		r.respondInternalError(w, fmt.Errorf("no metadata could be fetched for %d requested mod(s)", failed))
+		return
+	}
+
+	r.steamCmdService.InstallOrUpdateWorkshopMods(modsToInstall)
+
+	if failed > 0 {
+		r.json(w, map[string]int{"queued": len(modsToInstall), "failed": failed})
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
@@ -187,9 +203,12 @@ func (r *Router) handleInstallOrUpdateMod(w http.ResponseWriter, req *http.Reque
 	}
 
 	mod, err := r.workshopService.FetchAndSaveMetadata(ctx, id, true)
-	if err == nil && mod != nil {
-		r.steamCmdService.InstallOrUpdateWorkshopMods([]workshop.WorkshopMod{*mod})
+	if err != nil || mod == nil {
+		r.respondInternalError(w, fmt.Errorf("fetch metadata for mod %d: %w", id, err))
+		return
 	}
+
+	r.steamCmdService.InstallOrUpdateWorkshopMods([]workshop.WorkshopMod{*mod})
 
 	w.WriteHeader(http.StatusOK)
 }
@@ -222,13 +241,18 @@ func (r *Router) handleUninstallMod(w http.ResponseWriter, req *http.Request) {
 
 		err = r.workshopService.DeleteMod(ctx, id)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r.respondInternalError(w, err)
 			return
 		}
 	} else {
 		modIdsStr := req.URL.Query().Get("modIds")
 		if modIdsStr != "" {
 			if err := r.deleteMultipleMods(ctx, modIdsStr); err != nil {
+				if errors.Is(err, errModDeletionFailed) {
+					r.respondInternalError(w, err)
+					return
+				}
+
 				http.Error(w, err.Error(), http.StatusConflict)
 				return
 			}
@@ -257,31 +281,56 @@ func (r *Router) validateModNotActive(ctx context.Context, id int64) error {
 	return nil
 }
 
+// errModDeletionFailed marks a bulk delete where at least one mod could not be
+// removed for a reason other than being in use by a running server.
+var errModDeletionFailed = errors.New("some mods could not be deleted")
+
 func (r *Router) deleteMultipleMods(ctx context.Context, modIdsStr string) error {
-	activeModsErrors := []string{}
+	var (
+		activeModsErrors []string
+		deleteErrors     []string
+	)
+
 	for _, s := range strings.Split(modIdsStr, ",") {
 		id, err := parseModID(s)
-		if err == nil {
-			// Check active servers for this mod
-			activeServers, srvErr := r.serverService.GetActiveServersForMod(ctx, id)
-			if srvErr == nil && len(activeServers) > 0 {
-				var modName string
-				if m, fetchErr := r.workshopService.GetMod(ctx, id); fetchErr == nil && m != nil {
-					modName = m.Name
-				} else {
-					modName = fmt.Sprintf("Mod ID %d", id)
-				}
-				activeModsErrors = append(activeModsErrors, fmt.Sprintf("'%s' is active on running server(s): %s", modName, strings.Join(activeServers, ", ")))
-				continue
+		if err != nil {
+			deleteErrors = append(deleteErrors, fmt.Sprintf("mod %q: invalid id", strings.TrimSpace(s)))
+			continue
+		}
+
+		// Check active servers for this mod
+		activeServers, srvErr := r.serverService.GetActiveServersForMod(ctx, id)
+		if srvErr != nil {
+			log.Printf("[API] Failed to check active servers for mod %d: %v", id, srvErr)
+		}
+
+		if len(activeServers) > 0 {
+			var modName string
+			if m, fetchErr := r.workshopService.GetMod(ctx, id); fetchErr == nil && m != nil {
+				modName = m.Name
+			} else {
+				modName = fmt.Sprintf("Mod ID %d", id)
 			}
 
-			_ = r.workshopService.DeleteMod(ctx, id)
+			activeModsErrors = append(activeModsErrors, fmt.Sprintf("'%s' is active on running server(s): %s", modName, strings.Join(activeServers, ", ")))
+			continue
+		}
+
+		if delErr := r.workshopService.DeleteMod(ctx, id); delErr != nil {
+			// A failed delete used to answer 204 and leave the mod in place.
+			log.Printf("[API] Failed to delete mod %d: %v", id, delErr)
+			deleteErrors = append(deleteErrors, fmt.Sprintf("mod %d", id))
 		}
 	}
 
 	if len(activeModsErrors) > 0 {
 		return fmt.Errorf("some mods could not be deleted because they are active on running servers:\n%s", strings.Join(activeModsErrors, "\n"))
 	}
+
+	if len(deleteErrors) > 0 {
+		return fmt.Errorf("%w: %s", errModDeletionFailed, strings.Join(deleteErrors, ", "))
+	}
+
 	return nil
 }
 
@@ -311,7 +360,7 @@ func (r *Router) handleSetModServerOnly(w http.ResponseWriter, req *http.Request
 
 	mod.ServerOnly = body.ServerOnly
 	if err := r.workshopService.SaveMod(ctx, mod); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -321,7 +370,7 @@ func (r *Router) handleSetModServerOnly(w http.ResponseWriter, req *http.Request
 func (r *Router) handleUpdateAllMods(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	if err := r.workshopService.UpdateAllMods(ctx); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -330,7 +379,7 @@ func (r *Router) handleUpdateAllMods(w http.ResponseWriter, req *http.Request) {
 	// every mod, which takes tens of minutes and re-downloads gigabytes.
 	mods, err := r.workshopService.GetAllMods(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -352,7 +401,7 @@ func (r *Router) handleSyncBiKeys(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	err := r.workshopService.SyncAllBiKeys(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
@@ -362,7 +411,7 @@ func (r *Router) handleGetSignatureReports(w http.ResponseWriter, req *http.Requ
 	ctx := req.Context()
 	reports, err := r.workshopService.GetSignatureReports(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	r.json(w, reports)
@@ -374,7 +423,7 @@ func (r *Router) handleVerifyAllModSignatures(w http.ResponseWriter, req *http.R
 
 	reports, err := r.workshopService.VerifyAllArma3ModSignatures(ctx, autoExtract)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -392,7 +441,7 @@ func (r *Router) handleVerifyModSignatures(w http.ResponseWriter, req *http.Requ
 	autoExtract := req.URL.Query().Get("autoExtract") != "false"
 	report, err := r.workshopService.VerifyModSignatures(ctx, id, autoExtract)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -445,7 +494,7 @@ func (r *Router) handleSearchSteamMods(w http.ResponseWriter, req *http.Request)
 
 	mods, total, err := r.workshopService.SearchSteamMods(ctx, query, appId, page)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -474,7 +523,7 @@ func (r *Router) handleSearchReforgerMods(w http.ResponseWriter, req *http.Reque
 
 	mods, err := r.workshopService.SearchReforgerMods(ctx, query, page)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -487,7 +536,7 @@ func (r *Router) handleGetReforgerModDetails(w http.ResponseWriter, req *http.Re
 
 	details, err := r.workshopService.GetReforgerModDetails(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

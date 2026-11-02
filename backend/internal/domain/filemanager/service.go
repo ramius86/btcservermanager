@@ -401,14 +401,17 @@ func (s *Service) CompressZip(sourceSubpaths []string, destZipSubpath string) er
 }
 
 // StreamZip writes a zip archive of the given source subpaths directly to the given writer.
+// StreamZip writes a zip archive of the requested paths. The central directory
+// is only written when every entry was added: on failure the archive is left
+// incomplete, so the client sees a broken download instead of a "successful"
+// zip that silently misses files.
 func (s *Service) StreamZip(w io.Writer, sourceSubpaths []string) error {
 	zw := zip.NewWriter(w)
-	defer zw.Close()
 
 	for _, subpath := range sourceSubpaths {
 		absPath, cleanRel, _, err := s.ResolvePath(subpath)
 		if err != nil {
-			continue
+			return err
 		}
 
 		baseName := filepath.Base(absPath)
@@ -418,7 +421,7 @@ func (s *Service) StreamZip(w io.Writer, sourceSubpaths []string) error {
 
 		info, err := os.Stat(absPath)
 		if err != nil {
-			continue
+			return err
 		}
 
 		if !info.IsDir() {
@@ -462,7 +465,7 @@ func (s *Service) StreamZip(w io.Writer, sourceSubpaths []string) error {
 		}
 	}
 
-	return nil
+	return zw.Close()
 }
 
 func (s *Service) addFileToZip(zw *zip.Writer, absPath, zipEntryPath string) error {

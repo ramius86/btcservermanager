@@ -50,7 +50,7 @@ func (r *Router) handleGetDiscordEventRoster(w http.ResponseWriter, req *http.Re
 
 	roster, err := r.discordService.GetEventRoster(req.Context(), id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -86,7 +86,7 @@ func (r *Router) handleSaveDiscordEventRoster(w http.ResponseWriter, req *http.R
 	}
 
 	if err := r.discordService.SaveEventRoster(req.Context(), id, payload.Data); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -115,7 +115,7 @@ func (r *Router) handlePublishDiscordEventRoster(w http.ResponseWriter, req *htt
 	}
 
 	if err := r.discordService.PublishRosterMessage(req.Context(), payload.ChannelID, payload.Message, payload.Embed); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -141,7 +141,7 @@ func (r *Router) handleSyncDiscordEventRosterPreview(w http.ResponseWriter, req 
 
 	msgID, err := r.discordService.SyncRosterPreview(req.Context(), payload.ChannelID, payload.MessageID, payload.Message, payload.Embed)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -160,7 +160,7 @@ func (r *Router) handleGetDiscordRosterTemplates(w http.ResponseWriter, req *htt
 
 	templates, err := r.discordService.GetRosterTemplates(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -186,7 +186,7 @@ func (r *Router) handleSaveDiscordRosterTemplate(w http.ResponseWriter, req *htt
 
 	template, err := r.discordService.SaveRosterTemplate(req.Context(), payload.Name, payload.GameType, payload.Structure)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -207,7 +207,7 @@ func (r *Router) handleDeleteDiscordRosterTemplate(w http.ResponseWriter, req *h
 	}
 
 	if err := r.discordService.DeleteRosterTemplate(req.Context(), id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -223,7 +223,7 @@ func (r *Router) handleGetDiscordRosterLearningStats(w http.ResponseWriter, req 
 	gameType := req.URL.Query().Get("gameType")
 	stats, err := r.discordService.GetPlayerRoleStats(req.Context(), gameType)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

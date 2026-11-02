@@ -50,7 +50,7 @@ func (r *Router) handleGetServerLogContent(w http.ResponseWriter, req *http.Requ
 
 	content, truncated, err := logFile.GetLinesFromEndWithStatus(offset, lines)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -310,7 +310,7 @@ func (r *Router) handleGetSteamCmdLogContent(w http.ResponseWriter, req *http.Re
 
 	content, truncated, err := logFile.GetLinesFromEndWithStatus(offset, lines)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

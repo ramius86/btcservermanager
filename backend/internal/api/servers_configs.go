@@ -30,7 +30,7 @@ func (r *Router) handleGetServerConfigs(w http.ResponseWriter, req *http.Request
 
 	configs, err := r.serverService.GetServerConfigs(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -41,7 +41,7 @@ func (r *Router) handleGetCBAPresets(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
 	presets, err := r.serverService.GetCBAPresets(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	r.json(w, presets)
@@ -56,7 +56,7 @@ func (r *Router) handleGetCBAPreset(w http.ResponseWriter, req *http.Request) {
 	}
 	preset, err := r.serverService.GetCBAPreset(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	if preset == nil {
@@ -85,7 +85,7 @@ func (r *Router) handleSaveCBAPreset(w http.ResponseWriter, req *http.Request) {
 
 	saved, err := r.serverService.SaveCBAPreset(ctx, &p)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	r.json(w, saved)
@@ -99,7 +99,7 @@ func (r *Router) handleDeleteCBAPreset(w http.ResponseWriter, req *http.Request)
 		return
 	}
 	if err := r.serverService.DeleteCBAPreset(ctx, id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 	r.json(w, map[string]string{"status": "ok"})

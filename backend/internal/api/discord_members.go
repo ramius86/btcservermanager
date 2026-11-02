@@ -14,13 +14,13 @@ func (r *Router) handleGetClanMembers(w http.ResponseWriter, req *http.Request) 
 
 	settings, err := r.systemService.GetAppSettings(req.Context())
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
 	members, err := r.discordService.GetClanMembers(req.Context(), settings.MemberRoleIDs)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -56,7 +56,7 @@ func (r *Router) handleSaveClanQualifications(w http.ResponseWriter, req *http.R
 	}
 
 	if err := r.discordService.SaveMemberQualifications(req.Context(), payload.UserIDs, payload.Qualifications); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

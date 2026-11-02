@@ -32,13 +32,18 @@ func (r *Router) handleGetAllInstallations(w http.ResponseWriter, req *http.Requ
 	ctx := req.Context()
 	insts, err := r.installationService.GetAllInstallations(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
 	// Fetch all servers once: query ports and running state are shared by every
-	// installation, so this must not be a per-installation query.
-	servers, _ := r.serverService.GetAllServers(ctx)
+	// installation, so this must not be a per-installation query. Without it the
+	// A2S lookup silently degrades and versions stay "Unknown".
+	servers, err := r.serverService.GetAllServers(ctx)
+	if err != nil {
+		r.respondInternalError(w, err)
+		return
+	}
 	typeToQueryPort := r.buildQueryPortMap(servers)
 	runningTypes := r.runningTypes(servers)
 
@@ -293,11 +298,33 @@ func (r *Router) handleSetServerBranch(w http.ResponseWriter, req *http.Request)
 	}
 
 	if err := r.installationService.SetServerBranch(ctx, t, body.Branch); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+// hasConfiguredServers reports whether any configured server uses t.
+func hasConfiguredServers(servers []any, t server.Type) bool {
+	for _, srv := range servers {
+		var sType server.Type
+
+		switch v := srv.(type) {
+		case *server.Arma3Server:
+			sType = v.Type
+		case *server.DayZServer:
+			sType = v.Type
+		case *server.ReforgerServer:
+			sType = v.Type
+		}
+
+		if sType == t {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (r *Router) handleUninstallServer(w http.ResponseWriter, req *http.Request) {
@@ -310,34 +337,21 @@ func (r *Router) handleUninstallServer(w http.ResponseWriter, req *http.Request)
 	}
 
 	// Strict Validation: Ensure there are NO configured server instances for this game type.
+	// Skipping the check when the query fails would delete a game directory while
+	// server configurations still point at it.
 	servers, err := r.serverService.GetAllServers(ctx)
-	if err == nil {
-		hasConfiguredServers := false
-		for _, srv := range servers {
-			var sType server.Type
-			switch v := srv.(type) {
-			case *server.Arma3Server:
-				sType = v.Type
-			case *server.DayZServer:
-				sType = v.Type
-			case *server.ReforgerServer:
-				sType = v.Type
-			}
+	if err != nil {
+		r.respondInternalError(w, err)
+		return
+	}
 
-			if sType == t {
-				hasConfiguredServers = true
-				break
-			}
-		}
-
-		if hasConfiguredServers {
-			http.Error(w, fmt.Sprintf("Cannot uninstall %s because server configurations still exist. Please delete them all first.", t), http.StatusBadRequest)
-			return
-		}
+	if hasConfiguredServers(servers, t) {
+		http.Error(w, fmt.Sprintf("Cannot uninstall %s because server configurations still exist. Please delete them all first.", t), http.StatusBadRequest)
+		return
 	}
 
 	if err := r.steamCmdService.UninstallServer(ctx, t); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

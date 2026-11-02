@@ -20,7 +20,7 @@ func (r *Router) handleGetArma3Scenarios(w http.ResponseWriter, req *http.Reques
 	ctx := req.Context()
 	scenarios, err := r.scenarioService.GetArma3Scenarios(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -33,7 +33,7 @@ func (r *Router) handleGetReforgerScenarios(w http.ResponseWriter, req *http.Req
 	// to ensure discovery works even for unsaved mods.
 	scenarios, err := r.scenarioService.GetReforgerScenarios(ctx, nil)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -73,7 +73,7 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			r.respondInternalError(w, err)
 			return
 		}
 
@@ -135,7 +135,7 @@ func (r *Router) handleDeleteArma3Scenario(w http.ResponseWriter, req *http.Requ
 		return
 	}
 	if err := r.scenarioService.DeleteScenario(ctx, name); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -177,7 +177,7 @@ func (r *Router) handleFetchReforgerScenarios(w http.ResponseWriter, req *http.R
 
 	response, err := r.workshopService.GetReforgerModScenarios(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -204,7 +204,7 @@ func (r *Router) handleSyncReforgerScenarios(w http.ResponseWriter, req *http.Re
 	ctx := req.Context()
 	err := r.workshopService.SyncReforgerScenarios(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

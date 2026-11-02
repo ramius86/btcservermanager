@@ -25,7 +25,7 @@ func (r *Router) handleAddHeadlessClient(w http.ResponseWriter, req *http.Reques
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -48,7 +48,7 @@ func (r *Router) handleRemoveHeadlessClient(w http.ResponseWriter, req *http.Req
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

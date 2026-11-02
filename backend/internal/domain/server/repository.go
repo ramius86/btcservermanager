@@ -201,12 +201,15 @@ func (r *Repository) getBaseServersBatch(ctx context.Context, ids []int64) (map[
 		return nil, err
 	}
 
-	// Load custom launch parameters in bulk
+	// Load custom launch parameters in bulk. Serving the servers with an empty
+	// list would make the next save delete rows the user never touched.
 	paramsMap, err := r.getLaunchParametersBatch(ctx, ids)
-	if err == nil {
-		for id, s := range result {
-			s.CustomLaunchParameters = paramsMap[id]
-		}
+	if err != nil {
+		return nil, err
+	}
+
+	for id, s := range result {
+		s.CustomLaunchParameters = paramsMap[id]
 	}
 
 	return result, nil
@@ -214,11 +217,18 @@ func (r *Repository) getBaseServersBatch(ctx context.Context, ids []int64) (map[
 
 func (r *Repository) getBaseServer(ctx context.Context, id int64) (Server, error) {
 	batch, err := r.getBaseServersBatch(ctx, []int64{id})
-	if err != nil || len(batch) == 0 {
+	if err != nil {
 		return Server{}, err
 	}
 
-	return *batch[id], nil
+	base, ok := batch[id]
+	if !ok {
+		// The row disappeared between the type lookup and this query: returning a
+		// zeroed server let callers save a record that no longer exists.
+		return Server{}, ErrServerNotFound
+	}
+
+	return *base, nil
 }
 
 func (r *Repository) getLaunchParametersBatch(ctx context.Context, serverIDs []int64) (map[int64][]LaunchParameter, error) {

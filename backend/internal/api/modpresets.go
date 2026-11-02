@@ -22,7 +22,7 @@ func (r *Router) handleGetAllPresets(w http.ResponseWriter, req *http.Request) {
 
 	presets, err := r.modPresetService.GetAllPresets(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -63,7 +63,7 @@ func (r *Router) handleCreatePreset(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.modPresetService.SavePreset(ctx, &p); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -111,7 +111,7 @@ func (r *Router) handleUpdatePreset(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.modPresetService.SavePreset(ctx, preset); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -126,7 +126,7 @@ func (r *Router) handleDeletePreset(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	if err := r.modPresetService.DeletePreset(ctx, id); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -162,7 +162,7 @@ func (r *Router) handleUploadLauncherPreset(w http.ResponseWriter, req *http.Req
 
 	preset, err := r.modPresetService.ImportPreset(ctx, file)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -213,7 +213,7 @@ func (r *Router) handleExportLauncherPreset(w http.ResponseWriter, req *http.Req
 
 	content, err := r.modPresetService.ExportPreset(ctx, id)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

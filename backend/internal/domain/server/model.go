@@ -347,6 +347,9 @@ type ReforgerMod struct {
 }
 
 type ServerInstanceInfo struct {
+	// Alive is set for a running instance and left false by the zero value, so a
+	// stopped server and a running one share the same response shape.
+	Alive                bool             `json:"alive"`
 	StartedAt            *time.Time       `json:"startedAt"`
 	MaxPlayers           int              `json:"maxPlayers"`
 	CurrentLogFile       string           `json:"currentLogFile"`

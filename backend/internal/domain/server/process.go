@@ -832,6 +832,8 @@ func (m *ProcessManager) GetInstanceInfo(id int64) *ServerInstanceInfo {
 			infoCopy := *proc.info
 			proc.mu.RUnlock()
 
+			infoCopy.Alive = true
+
 			return &infoCopy
 		}
 	}

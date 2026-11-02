@@ -11,7 +11,7 @@ func (r *Router) handleGetAppSettings(w http.ResponseWriter, req *http.Request) 
 	ctx := req.Context()
 	settings, err := r.systemService.GetAppSettings(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -43,7 +43,7 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 	}
 
 	if err := r.systemService.UpdateAppSettings(ctx, &payload.AppSettings); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

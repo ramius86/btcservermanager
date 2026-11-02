@@ -45,7 +45,7 @@ func (r *Router) handleSteamLogin(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if err := r.steamAuthService.SaveAuthAccount(ctx, &body); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 
@@ -56,7 +56,7 @@ func (r *Router) handleGetSteamAuthStatus(w http.ResponseWriter, req *http.Reque
 	ctx := req.Context()
 	auth, err := r.steamAuthService.GetAuthAccount(ctx)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		r.respondInternalError(w, err)
 		return
 	}
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -84,7 +85,7 @@ func (r *Router) handleFileError(w http.ResponseWriter, err error) {
 		http.Error(w, "file or directory not found", http.StatusNotFound)
 		return
 	}
-	http.Error(w, err.Error(), http.StatusInternalServerError)
+	r.respondInternalError(w, err)
 }
 
 func (r *Router) handleListFiles(w http.ResponseWriter, req *http.Request) {
@@ -291,7 +292,10 @@ func (r *Router) handleDownloadFile(w http.ResponseWriter, req *http.Request) {
 		w.Header().Set(headerContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", url.PathEscape(zipFilename)))
 
 		if err := r.fileManagerService.StreamZip(w, []string{cleanRel}); err != nil {
-			// Headers already sent, log or write error if possible
+			// Headers are already sent: the archive is left without its central
+			// directory, so the client sees a broken download instead of a short one.
+			log.Printf("[API] zip stream for %q aborted: %v", cleanRel, err)
+
 			return
 		}
 		return
@@ -332,6 +336,8 @@ func (r *Router) handleDownloadSelectedZip(w http.ResponseWriter, req *http.Requ
 	w.Header().Set(headerContentDisposition, fmt.Sprintf("attachment; filename=\"%s\"", url.PathEscape(zipName)))
 
 	if err := r.fileManagerService.StreamZip(w, body.Paths); err != nil {
+		log.Printf("[API] zip stream for %d selected path(s) aborted: %v", len(body.Paths), err)
+
 		return
 	}
 }

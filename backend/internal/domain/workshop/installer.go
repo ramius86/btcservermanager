@@ -1,6 +1,7 @@
 package workshop
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"btcservermanager/internal/config"
 	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/workshop/signature"
@@ -9,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -56,8 +58,14 @@ func (i *Installer) InstallMod(ctx context.Context, m *WorkshopMod) error {
 		return err
 	}
 
-	bikeys = i.autoExtractMissingBiKeys(m.ServerType, modDir, bikeys)
-	i.syncBiKeys(ctx, m, bikeys)
+	bikeys, err = i.autoExtractMissingBiKeys(m.ServerType, modDir, bikeys)
+	if err != nil {
+		return err
+	}
+
+	if err := i.syncBiKeys(ctx, m, bikeys); err != nil {
+		return fmt.Errorf("sync bikey files: %w", err)
+	}
 
 	if err := i.createSymlink(m); err != nil {
 		return fmt.Errorf("failed to create symlink: %w", err)
@@ -123,77 +131,114 @@ func (i *Installer) scanAndLowercaseModDir(modDir string) ([]bikeyEntry, int64, 
 	return bikeys, size, nil
 }
 
-func (i *Installer) autoExtractMissingBiKeys(serverType server.Type, modDir string, bikeys []bikeyEntry) []bikeyEntry {
+func (i *Installer) autoExtractMissingBiKeys(serverType server.Type, modDir string, bikeys []bikeyEntry) ([]bikeyEntry, error) {
 	if len(bikeys) > 0 || (serverType != server.TypeArma3 && serverType != server.TypeDayZ && serverType != server.TypeDayZExp) {
-		return bikeys
+		return bikeys, nil
 	}
 
 	seenExtracted := make(map[string]bool)
-	_ = filepath.WalkDir(modDir, func(p string, d fs.DirEntry, err error) error {
+
+	err := filepath.WalkDir(modDir, func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if d.IsDir() {
 			return nil
 		}
-		lower := strings.ToLower(d.Name())
-		if strings.HasSuffix(lower, ".bisign") {
-			keyName, keyBytes, extErr := signature.ExtractBiKeyFromBiSign(p)
-			if extErr == nil && len(keyBytes) > 0 {
-				cleanKeyName := strings.ToLower(strings.TrimSpace(keyName)) + ".bikey"
-				if !seenExtracted[cleanKeyName] {
-					seenExtracted[cleanKeyName] = true
-					keysFolder := filepath.Join(modDir, "keys")
-					_ = os.MkdirAll(keysFolder, 0o755)
-					destKeyPath := filepath.Join(keysFolder, cleanKeyName)
-					if writeErr := os.WriteFile(destKeyPath, keyBytes, 0o644); writeErr == nil {
-						bikeys = append(bikeys, bikeyEntry{srcAfterLower: destKeyPath, name: cleanKeyName})
-						fmt.Printf("[Installer] Auto-extracted missing bikey %s from signature %s\n", cleanKeyName, p)
-					}
+		if !strings.HasSuffix(strings.ToLower(d.Name()), ".bisign") {
+			return nil
+		}
+
+		keyName, keyBytes, extErr := signature.ExtractBiKeyFromBiSign(p)
+		// A .bisign without an embedded key is expected: nothing to extract, and
+		// nothing to report as a failure.
+		if extErr == nil && len(keyBytes) > 0 {
+			cleanKeyName := strings.ToLower(strings.TrimSpace(keyName)) + ".bikey"
+			if !seenExtracted[cleanKeyName] {
+				seenExtracted[cleanKeyName] = true
+
+				keysFolder := filepath.Join(modDir, "keys")
+				if mkErr := os.MkdirAll(keysFolder, 0o755); mkErr != nil {
+					return fmt.Errorf("create keys folder: %w", mkErr)
 				}
+
+				destKeyPath := filepath.Join(keysFolder, cleanKeyName)
+				if writeErr := atomicfile.WriteFile(destKeyPath, keyBytes, 0o644); writeErr != nil {
+					return fmt.Errorf("extract %s from %s: %w", cleanKeyName, p, writeErr)
+				}
+
+				bikeys = append(bikeys, bikeyEntry{srcAfterLower: destKeyPath, name: cleanKeyName})
+				log.Printf("[Installer] Auto-extracted missing bikey %s from signature %s", cleanKeyName, p)
 			}
 		}
+
 		return nil
 	})
-	return bikeys
+	if err != nil {
+		return nil, fmt.Errorf("scan signatures in %s: %w", modDir, err)
+	}
+
+	return bikeys, nil
 }
 
-func (i *Installer) syncBiKeys(ctx context.Context, m *WorkshopMod, bikeys []bikeyEntry) {
-	for _, k := range m.BiKeys {
+// syncBiKeys reconciles the server key directory with the keys found in the mod
+// directory. New keys are written before the old ones are removed, and every
+// write is atomic: a crash, a full volume or a container restart between the two
+// phases must never leave the server without a key it already had.
+func (i *Installer) syncBiKeys(ctx context.Context, m *WorkshopMod, bikeys []bikeyEntry) error {
+	desired := make([]string, 0, len(bikeys))
+	seen := make(map[string]struct{}, len(bikeys))
+
+	for _, bk := range bikeys {
+		if _, duplicate := seen[bk.name]; duplicate {
+			continue
+		}
+		seen[bk.name] = struct{}{}
+
+		dest := i.paths.GetServerKeyPath(bk.name, m.ServerType)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+			return fmt.Errorf("create keys folder for %s: %w", bk.name, err)
+		}
+
+		if err := i.copyFile(bk.srcAfterLower, dest); err != nil {
+			// The previous key list is left untouched: a failed copy aborts the
+			// install instead of silently dropping the key.
+			return fmt.Errorf("copy key %s: %w", bk.name, err)
+		}
+
+		desired = append(desired, bk.name)
+	}
+
+	previous := m.BiKeys
+	m.BiKeys = desired
+
+	for _, k := range previous {
 		if strings.TrimSpace(k) == "" {
+			continue
+		}
+		if _, keep := seen[k]; keep {
 			continue
 		}
 		if i.repo != nil {
 			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
 			if err != nil {
-				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				log.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file", k, err)
 				continue
-			} else if used {
+			}
+
+			if used {
 				continue
 			}
 		}
-		_ = os.Remove(i.paths.GetServerKeyPath(k, m.ServerType))
-	}
-	m.BiKeys = m.BiKeys[:0]
 
-	seenBiKeys := make(map[string]struct{})
-	for _, bk := range bikeys {
-		if _, seen := seenBiKeys[bk.name]; seen {
-			continue
+		if err := os.Remove(i.paths.GetServerKeyPath(k, m.ServerType)); err != nil && !os.IsNotExist(err) {
+			// An extra key does not break signature checks, so a failed removal is
+			// reported but does not fail the installation.
+			log.Printf("[Installer] Failed to remove stale bikey %s: %v", k, err)
 		}
-		seenBiKeys[bk.name] = struct{}{}
-
-		dest := i.paths.GetServerKeyPath(bk.name, m.ServerType)
-		if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-			fmt.Printf("[Installer] Failed to create directory for key %s: %v\n", bk.name, err)
-			continue
-		}
-		if err := i.copyFile(bk.srcAfterLower, dest); err != nil {
-			fmt.Printf("[Installer] Failed to copy bikey %s from %s to %s: %v\n", bk.name, bk.srcAfterLower, dest, err)
-			continue
-		}
-		m.BiKeys = append(m.BiKeys, bk.name)
 	}
+
+	return nil
 }
 
 func (i *Installer) verifyArma3Signatures(m *WorkshopMod, modDir string) {
@@ -338,6 +383,8 @@ func (i *Installer) createSymlink(m *WorkshopMod) error {
 	return os.Symlink(target, link)
 }
 
+// copyFile replaces dst with the contents of src atomically: a crash or a full
+// disk mid-copy leaves the previous key in place instead of a truncated one.
 func (i *Installer) copyFile(src, dst string) error {
 	in, err := os.Open(src)
 	if err != nil {
@@ -345,15 +392,11 @@ func (i *Installer) copyFile(src, dst string) error {
 	}
 	defer in.Close()
 
-	out, err := os.Create(dst)
-	if err != nil {
+	return atomicfile.WriteFileFunc(dst, 0o644, func(f *os.File) error {
+		_, err := io.Copy(f, in)
+
 		return err
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, in)
-
-	return err
+	})
 }
 
 // getDirSize returns the total size in bytes of all files under path.

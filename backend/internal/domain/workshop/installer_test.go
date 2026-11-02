@@ -15,6 +15,52 @@ import (
 	_ "modernc.org/sqlite"
 )
 
+// TestSyncBiKeysCopyFailureKeepsPreviousKey covers the ordering bug: the old
+// implementation deleted the previous key before copying the new one, so a
+// failed copy left the mod without a key and the install still reported
+// FINISHED.
+func TestSyncBiKeysCopyFailureKeepsPreviousKey(t *testing.T) {
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		StoragePath:      tempDir,
+		ServersDirectory: filepath.Join(tempDir, "servers"),
+		ModsDirectory:    filepath.Join(tempDir, "mods"),
+		LogsDirectory:    filepath.Join(tempDir, "logs"),
+	}
+	paths := config.NewPaths(cfg)
+	installer := NewInstaller(paths, nil)
+
+	m := &WorkshopMod{
+		ID:         7001,
+		Name:       "Mod Copy Failure",
+		ServerType: server.TypeArma3,
+		BiKeys:     []string{"existing.bikey"},
+	}
+
+	existingPath := paths.GetServerKeyPath("existing.bikey", server.TypeArma3)
+	if err := os.MkdirAll(filepath.Dir(existingPath), 0o755); err != nil {
+		t.Fatalf("failed to create keys dir: %v", err)
+	}
+	if err := os.WriteFile(existingPath, []byte("existing-key"), 0o644); err != nil {
+		t.Fatalf("failed to write existing key: %v", err)
+	}
+
+	// The source does not exist, so the copy cannot succeed.
+	err := installer.syncBiKeys(context.Background(), m, []bikeyEntry{
+		{srcAfterLower: filepath.Join(tempDir, "missing.bikey"), name: "missing.bikey"},
+	})
+	if err == nil {
+		t.Fatal("expected an error when a key cannot be copied")
+	}
+
+	if _, statErr := os.Stat(existingPath); statErr != nil {
+		t.Errorf("previous key was removed before the new one existed: %v", statErr)
+	}
+	if len(m.BiKeys) != 1 || m.BiKeys[0] != "existing.bikey" {
+		t.Errorf("expected the previous key list to be preserved, got %v", m.BiKeys)
+	}
+}
+
 func TestInstaller(t *testing.T) {
 	tempDir := t.TempDir()
 	cfg := &config.Config{

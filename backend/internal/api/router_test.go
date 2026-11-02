@@ -245,6 +245,21 @@ func testGetServerStatus(t *testing.T, handler http.Handler, id int64) {
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 	assertStatus(t, http.StatusOK, rr.Code)
+
+	// A stopped server answers with the same shape as a running one: the old
+	// {"status":"Stopped"} did not match the DTO the client declares.
+	var body map[string]any
+	if err := json.NewDecoder(rr.Body).Decode(&body); err != nil {
+		t.Fatalf("failed to decode status body: %v", err)
+	}
+
+	if _, hasStatus := body["status"]; hasStatus {
+		t.Errorf("status response still uses the free-form {\"status\":...} shape: %v", body)
+	}
+
+	if alive, ok := body["alive"]; !ok || alive != false {
+		t.Errorf("expected alive=false for a stopped server, got %v (present=%v)", alive, ok)
+	}
 }
 
 func testGetServerConfigs(t *testing.T, handler http.Handler, id int64) {
