@@ -66,7 +66,14 @@ type localIPCache struct {
 	expiresAt time.Time
 }
 
-const localIPTTL = 5 * time.Minute
+const (
+	localIPTTL = 5 * time.Minute
+	// publicIPTTL also covers failed lookups: the attempt is recorded even when
+	// the resolver is unreachable, so the 2 s metrics tick cannot keep paying
+	// the HTTP timeout.
+	publicIPTTL = time.Hour
+	publicIPURL = "https://api.ipify.org"
+)
 
 type Service struct {
 	appSettingsRepo   *appsettings.Repository
@@ -75,9 +82,11 @@ type Service struct {
 	mu                sync.RWMutex
 	lastPublicIP      string
 	lastPublicIPFetch time.Time
-	publicIPFetchMu   sync.Mutex
-	rootPath          string
-	storagePath       string
+	// fetchPublicIP performs the outbound lookup. It is a field so tests can
+	// replace the network call; nil falls back to the real implementation.
+	fetchPublicIP func(ctx context.Context) string
+	rootPath      string
+	storagePath   string
 
 	// Cached static system values (computed once, never change)
 	staticOnce sync.Once
@@ -100,6 +109,7 @@ func NewService(deps ServiceDeps) *Service {
 		steamAuthService: deps.SteamAuth,
 		steamAPIKey:      deps.SteamAPIKey,
 		storagePath:      deps.StoragePath,
+		fetchPublicIP:    fetchPublicIPFromAPI,
 	}
 }
 
@@ -366,7 +376,7 @@ func (s *Service) getLocalIP() string {
 
 func (s *Service) getPublicIP(ctx context.Context) string {
 	s.mu.RLock()
-	if time.Since(s.lastPublicIPFetch) < 1*time.Hour && s.lastPublicIP != "" {
+	if time.Since(s.lastPublicIPFetch) < publicIPTTL {
 		ip := s.lastPublicIP
 		s.mu.RUnlock()
 
@@ -374,52 +384,65 @@ func (s *Service) getPublicIP(ctx context.Context) string {
 	}
 	s.mu.RUnlock()
 
-	s.publicIPFetchMu.Lock()
-	defer s.publicIPFetchMu.Unlock()
-
-	// Double-check after acquiring dedicated fetch lock
-	s.mu.RLock()
-	if time.Since(s.lastPublicIPFetch) < 1*time.Hour && s.lastPublicIP != "" {
+	// Claim the refresh before doing any I/O: only the caller that moves the
+	// attempt timestamp forward performs the lookup, and everyone else returns
+	// the cached value immediately instead of queueing behind network I/O. The
+	// timestamp moves even when the lookup fails, which is what keeps a blocked
+	// resolver from costing every metrics tick the full HTTP timeout.
+	s.mu.Lock()
+	if time.Since(s.lastPublicIPFetch) < publicIPTTL {
 		ip := s.lastPublicIP
-		s.mu.RUnlock()
+		s.mu.Unlock()
 
 		return ip
 	}
-	s.mu.RUnlock()
+	s.lastPublicIPFetch = time.Now()
+	cached := s.lastPublicIP
+	s.mu.Unlock()
 
+	fetch := s.fetchPublicIP
+	if fetch == nil {
+		fetch = fetchPublicIPFromAPI
+	}
+
+	ip := fetch(ctx)
+	if ip == "" {
+		return cached
+	}
+
+	s.mu.Lock()
+	s.lastPublicIP = ip
+	s.mu.Unlock()
+
+	return ip
+}
+
+// fetchPublicIPFromAPI returns the public IP, or an empty string on any
+// failure: callers keep the previously known value.
+func fetchPublicIPFromAPI(ctx context.Context) string {
 	client := http.Client{Timeout: 5 * time.Second}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://api.ipify.org", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, publicIPURL, nil)
 	if err != nil {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		return s.lastPublicIP
+		return ""
 	}
 
 	resp, err := client.Do(req)
 	if err != nil {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		return s.lastPublicIP
+		return ""
 	}
-
 	defer resp.Body.Close()
 
-	bytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		s.mu.RLock()
-		defer s.mu.RUnlock()
-		return s.lastPublicIP
+	if resp.StatusCode != http.StatusOK {
+		return ""
 	}
 
-	ipStr := string(bytes)
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 64))
+	if err != nil {
+		return ""
+	}
 
-	s.mu.Lock()
-	s.lastPublicIP = ipStr
-	s.lastPublicIPFetch = time.Now()
-	s.mu.Unlock()
-
-	return ipStr
+	return strings.TrimSpace(string(body))
 }
 
 func (s *Service) GetAppSettings(ctx context.Context) (*appsettings.AppSettings, error) {

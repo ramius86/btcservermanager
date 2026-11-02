@@ -316,18 +316,6 @@ func (e *Executor) runSteamCMDCommand(job *Job, auth *steamauth.SteamAuth, jobLo
 
 	e.logToConsoleAndFile("Executing: "+e.paths.GetSteamCmdExecutable()+" "+strings.Join(maskedParams, " "), job, jobLogPath)
 
-	scriptFile, err := writeTempScript(params)
-	if err != nil {
-		e.logToConsoleAndFile("Failed to create temporary script: "+err.Error(), job, jobLogPath)
-		errStatus := workshop.ErrorIO
-		job.ErrorStatus = &errStatus
-		if job.OnFailure != nil {
-			job.OnFailure(errStatus)
-		}
-		return "", err
-	}
-	defer os.Remove(scriptFile)
-
 	parentCtx := e.ctx
 	if parentCtx == nil {
 		parentCtx = context.Background()
@@ -345,7 +333,10 @@ func (e *Executor) runSteamCMDCommand(job *Job, auth *steamauth.SteamAuth, jobLo
 	}
 	defer cancel()
 
-	cmd := e.execCommand(jobCtx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
+	cmd := e.execCommand(jobCtx, e.paths.GetSteamCmdExecutable())
+	// Commands and credentials are fed on stdin, so no secret is ever written to
+	// a file that could outlive the process.
+	cmd.Stdin = strings.NewReader(buildScriptContent(params))
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
@@ -378,8 +369,8 @@ func (e *Executor) runSteamCMDCommand(job *Job, auth *steamauth.SteamAuth, jobLo
 	}
 
 	output := e.processOutput(pr, job, jobLogPath)
-	err = cmd.Wait()
-	return output, err
+
+	return output, cmd.Wait()
 }
 
 func (e *Executor) handleAttemptResult(job *Job, output string, cmdErr error, _, _ int, jobLogPath string) bool {
@@ -503,13 +494,11 @@ func (e *Executor) TestLogin(ctx context.Context, username, password, guardToken
 
 	params = append(params, "+quit")
 
-	scriptFile, err := writeTempScript(params)
-	if err != nil {
-		return fmt.Errorf("failed to create login script: %w", err)
-	}
-	defer os.Remove(scriptFile)
-
-	cmd := e.execCommand(loginCtx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
+	// Credentials go through stdin: a script file in the temp directory keeps
+	// the password on disk whenever the process is killed before the deferred
+	// removal runs (OOM, SIGKILL, container stop).
+	cmd := e.execCommand(loginCtx, e.paths.GetSteamCmdExecutable())
+	cmd.Stdin = strings.NewReader(buildScriptContent(params))
 	output, _ := cmd.CombinedOutput() // Ignore direct error to parse output for better messages
 
 	outStr := string(output)
@@ -556,23 +545,10 @@ func (e *Executor) TestLogin(ctx context.Context, username, password, guardToken
 	return errors.New("login failed: unknown error")
 }
 
-func writeTempScript(params []string) (string, error) {
-	lines := buildScriptLines(params)
-	content := strings.Join(lines, "\n") + "\n"
-
-	// Create temp file
-	tmpFile, err := os.CreateTemp("", "steamcmd_script_*.txt")
-	if err != nil {
-		return "", err
-	}
-	defer tmpFile.Close()
-
-	if _, err := tmpFile.WriteString(content); err != nil {
-		os.Remove(tmpFile.Name())
-		return "", err
-	}
-
-	return tmpFile.Name(), nil
+// buildScriptContent renders the commands the way SteamCMD expects them on
+// stdin: one command per line, quoted arguments, and a final quit.
+func buildScriptContent(params []string) string {
+	return strings.Join(buildScriptLines(params), "\n") + "\n"
 }
 
 func buildScriptLines(params []string) []string {

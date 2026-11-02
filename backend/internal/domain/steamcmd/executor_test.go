@@ -5,6 +5,7 @@ import (
 	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/steamauth"
 	"context"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -153,24 +154,45 @@ func TestExecutor_Helper_BuildScriptLines(t *testing.T) {
 	}
 }
 
-func TestExecutor_Helper_WriteTempScript(t *testing.T) {
-	params := []string{"+login", "anonymous"}
-	path, err := writeTempScript(params)
-	if err != nil {
-		t.Fatalf("writeTempScript failed: %v", err)
-	}
-	defer os.Remove(path)
+func TestExecutor_Helper_BuildScriptContent(t *testing.T) {
+	params := []string{"+login", "user", "pa ss", "+app_update", "233780"}
 
-	content, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("failed to read temp script: %v", err)
+	expected := "login user \"pa ss\"\napp_update 233780\nquit\n"
+	if got := buildScriptContent(params); got != expected {
+		t.Errorf("expected %q, got %q", expected, got)
+	}
+}
+
+func TestExecutor_TestLoginFeedsCredentialsOnStdin(t *testing.T) {
+	var lastCmd *exec.Cmd
+
+	e := &Executor{
+		paths: config.NewPaths(&config.Config{StoragePath: t.TempDir()}),
+	}
+	e.execCommand = func(ctx context.Context, name string, arg ...string) *exec.Cmd {
+		lastCmd = exec.CommandContext(ctx, "definitely-not-a-real-steamcmd", arg...)
+
+		return lastCmd
 	}
 
-	expectedContent := "login anonymous\nquit\n"
-	// Normalize line endings to LF for cross-platform comparison
-	normalized := strings.ReplaceAll(string(content), "\r\n", "\n")
-	if normalized != expectedContent {
-		t.Errorf("expected file content %q, got %q", expectedContent, normalized)
+	_ = e.TestLogin(t.Context(), "steamuser", "s3cret", "")
+
+	if lastCmd == nil {
+		t.Fatal("TestLogin did not invoke steamcmd")
+	}
+
+	reader, ok := lastCmd.Stdin.(*strings.Reader)
+	if !ok {
+		t.Fatalf("expected the script on stdin, got %T", lastCmd.Stdin)
+	}
+
+	stdin, err := io.ReadAll(reader)
+	if err != nil {
+		t.Fatalf("reading stdin: %v", err)
+	}
+
+	if !strings.Contains(string(stdin), "login steamuser s3cret") {
+		t.Fatalf("stdin does not carry the login command: %q", stdin)
 	}
 }
 

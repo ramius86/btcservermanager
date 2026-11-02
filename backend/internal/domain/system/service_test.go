@@ -1,6 +1,7 @@
 package system
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -77,13 +78,70 @@ func TestGetSystemInfo(t *testing.T) {
 	assert.Equal(t, "dev", info.AppVersion)
 }
 
-func TestGetPublicIP(t *testing.T) {
+func TestGetPublicIPCachesSuccessfulLookup(t *testing.T) {
+	calls := 0
+
 	s := NewService(ServiceDeps{AppRepo: nil, SteamAuth: nil, SteamAPIKey: ""})
+	s.fetchPublicIP = func(context.Context) string {
+		calls++
+		return "203.0.113.9"
+	}
 
-	// Test caching
-	s.lastPublicIP = "1.2.3.4"
-	s.lastPublicIPFetch = time.Now()
+	assert.Equal(t, "203.0.113.9", s.getPublicIP(t.Context()))
+	assert.Equal(t, "203.0.113.9", s.getPublicIP(t.Context()))
+	assert.Equal(t, 1, calls, "the cached value must not trigger another lookup")
+}
 
-	ip := s.getPublicIP(t.Context())
-	assert.Equal(t, "1.2.3.4", ip)
+func TestGetPublicIPDoesNotRetryAfterAFailedLookup(t *testing.T) {
+	calls := 0
+
+	s := NewService(ServiceDeps{AppRepo: nil, SteamAuth: nil, SteamAPIKey: ""})
+	s.fetchPublicIP = func(context.Context) string {
+		calls++
+		return ""
+	}
+
+	for range 5 {
+		assert.Equal(t, "", s.getPublicIP(t.Context()))
+	}
+
+	// The metrics ticker calls this every 2 s: a failing lookup has to be cached
+	// like a successful one, or every tick pays the HTTP timeout.
+	assert.Equal(t, 1, calls)
+}
+
+func TestGetPublicIPKeepsPreviousValueWhenLookupFails(t *testing.T) {
+	s := NewService(ServiceDeps{AppRepo: nil, SteamAuth: nil, SteamAPIKey: ""})
+	s.lastPublicIP = "198.51.100.4"
+	s.lastPublicIPFetch = time.Now().Add(-2 * publicIPTTL)
+	s.fetchPublicIP = func(context.Context) string { return "" }
+
+	assert.Equal(t, "198.51.100.4", s.getPublicIP(t.Context()))
+}
+
+func TestGetPublicIPDoesNotBlockConcurrentCallers(t *testing.T) {
+	release := make(chan struct{})
+	entered := make(chan struct{}, 1)
+
+	s := NewService(ServiceDeps{AppRepo: nil, SteamAuth: nil, SteamAPIKey: ""})
+	s.fetchPublicIP = func(context.Context) string {
+		entered <- struct{}{}
+		<-release
+		return "203.0.113.10"
+	}
+
+	go s.getPublicIP(t.Context())
+	<-entered
+
+	done := make(chan string, 1)
+	go func() { done <- s.getPublicIP(t.Context()) }()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		close(release)
+		t.Fatal("a second caller waited for the in-flight lookup instead of using the cache")
+	}
+
+	close(release)
 }

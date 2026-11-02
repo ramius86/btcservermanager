@@ -62,15 +62,31 @@ type Service struct {
 	configGenerator ConfigManager
 	modResolver     ModResolver
 	broadcaster     Broadcaster
-	serverLocks     sync.Map
+
+	serverLocksMu sync.Mutex
+	serverLocks   map[int64]*sync.Mutex
 }
 
+// getLock returns the per-server mutex, creating it on first use. The map is
+// typed, so the old runtime type assertion (and its panic, which killed the
+// process and every managed server instead of failing one request) cannot
+// happen at all.
 func (s *Service) getLock(id int64) *sync.Mutex {
-	mu, _ := s.serverLocks.LoadOrStore(id, &sync.Mutex{})
-	if m, ok := mu.(*sync.Mutex); ok {
-		return m
+	s.serverLocksMu.Lock()
+	defer s.serverLocksMu.Unlock()
+
+	if s.serverLocks == nil {
+		s.serverLocks = make(map[int64]*sync.Mutex)
 	}
-	panic(fmt.Sprintf("serverLocks type assertion failed for server %d", id))
+
+	if mu, ok := s.serverLocks[id]; ok {
+		return mu
+	}
+
+	mu := &sync.Mutex{}
+	s.serverLocks[id] = mu
+
+	return mu
 }
 
 func (s *Service) SetBroadcaster(b Broadcaster) {
