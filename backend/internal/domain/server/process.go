@@ -74,6 +74,7 @@ type ProcessManager struct {
 	headlessClients sync.Map // map[int64][]*HeadlessClient
 	hcMu            sync.Mutex
 	startMu         sync.Mutex
+	starting        map[int64]startReservation // guarded by startMu
 	paths           PathProvider
 	launcher        *Launcher
 	debugMode       bool
@@ -169,23 +170,22 @@ func (m *ProcessManager) UpdateQueryInfo(id int64, players int, mapName, mission
 }
 
 func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
-	m.startMu.Lock()
-	defer m.startMu.Unlock()
-
 	id, name, t, maxPlayers, port, queryPort, err := m.parseServerInstance(s)
 	if err != nil {
 		return err
 	}
 
-	if m.isServerAlreadyRunning(id) {
-		m.emitStatus(id, true)
-		return ErrServerAlreadyRunning
-	}
+	// Only the decision is serialized. Holding startMu for the whole start made
+	// starting one server wait on another server's disk I/O, template rendering
+	// and process spawn, and Lock() has no ctx to honour a cancelled request.
+	if err := m.reserveStart(id, port, queryPort); err != nil {
+		if errors.Is(err, ErrServerAlreadyRunning) {
+			m.emitStatus(id, true)
+		}
 
-	// Validate Ports
-	if err := m.checkPortConflict(id, port, queryPort); err != nil {
 		return err
 	}
+	defer m.releaseStart(id)
 
 	fastDLStarted := m.startFastDLIfNeeded(s)
 	cleanupFastDLOnError := func() {
@@ -282,6 +282,54 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	m.handlePostWait(p, logsDone, logFile, statsFile)
 
 	return nil
+}
+
+// startReservation is an in-flight start: it holds the server id and the ports
+// it claims before any Process exists, so a concurrent start cannot slip through
+// the duplicate and port checks in the gap between decision and spawn.
+type startReservation struct {
+	port      int
+	queryPort int
+}
+
+func (m *ProcessManager) reserveStart(id int64, port, queryPort int) error {
+	m.startMu.Lock()
+	defer m.startMu.Unlock()
+
+	if m.isServerAlreadyRunning(id) {
+		return ErrServerAlreadyRunning
+	}
+
+	if _, inFlight := m.starting[id]; inFlight {
+		return ErrServerAlreadyRunning
+	}
+
+	// Validate Ports
+	if err := m.checkPortConflict(id, port, queryPort); err != nil {
+		return err
+	}
+
+	// Ports of a start that is still in flight are taken as well: they are not
+	// in m.processes yet, so checkPortConflict cannot see them.
+	for otherID, res := range m.starting {
+		if res.port == port || res.queryPort == port || res.port == queryPort || res.queryPort == queryPort {
+			return fmt.Errorf("%w: ports %d or %d are already claimed by server ID %d starting now", ErrPortConflict, port, queryPort, otherID)
+		}
+	}
+
+	if m.starting == nil {
+		m.starting = make(map[int64]startReservation)
+	}
+
+	m.starting[id] = startReservation{port: port, queryPort: queryPort}
+
+	return nil
+}
+
+func (m *ProcessManager) releaseStart(id int64) {
+	m.startMu.Lock()
+	delete(m.starting, id)
+	m.startMu.Unlock()
 }
 
 func (m *ProcessManager) isServerAlreadyRunning(id int64) bool {

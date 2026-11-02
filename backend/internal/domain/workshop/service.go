@@ -342,21 +342,93 @@ func (s *Service) updateExistingModMetadata(existing, fetched *WorkshopMod) {
 	}
 }
 
+// modUpdateConcurrency bounds how many mods are refreshed at once. A refresh is
+// dominated by Steam API latency, so the serial loop cost N round-trips; the
+// limit keeps the SQLite writer queue short while still overlapping the network.
+const modUpdateConcurrency = 4
+
+// ModUpdateError reports the mods whose metadata refresh failed. The ones that
+// answered are already saved when it is returned.
+type ModUpdateError struct {
+	Failed  int
+	Total   int
+	Details string
+}
+
+func (e *ModUpdateError) Error() string {
+	return fmt.Sprintf("failed to update %d of %d mods: %s", e.Failed, e.Total, e.Details)
+}
+
 func (s *Service) UpdateAllMods(ctx context.Context) error {
 	mods, err := s.repo.GetAllMods(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, mod := range mods {
-		_, err := s.FetchAndSaveMetadata(ctx, mod.ID, false)
-		if err != nil {
-			// Log error but continue with other mods
-			continue
+	failures := updateConcurrently(ctx, mods, modUpdateConcurrency, func(ctx context.Context, mod *WorkshopMod) error {
+		if _, err := s.FetchAndSaveMetadata(ctx, mod.ID, false); err != nil {
+			log.Printf("[Workshop] Failed to refresh metadata for mod %d: %v", mod.ID, err)
+
+			return fmt.Errorf("mod %d: %w", mod.ID, err)
+		}
+
+		return nil
+	})
+
+	if len(failures) > 0 {
+		messages := make([]string, 0, len(failures))
+		for _, err := range failures {
+			messages = append(messages, err.Error())
+		}
+
+		return &ModUpdateError{
+			Failed:  len(failures),
+			Total:   len(mods),
+			Details: strings.Join(messages, "; "),
 		}
 	}
 
 	return nil
+}
+
+// updateConcurrently runs fn for every item with at most limit goroutines in
+// flight and returns the failures. A cancelled context stops scheduling new
+// work; calls already running observe the cancellation themselves.
+func updateConcurrently[T any](ctx context.Context, items []T, limit int, fn func(context.Context, T) error) []error {
+	if limit < 1 {
+		limit = 1
+	}
+
+	var (
+		wg       sync.WaitGroup
+		mu       sync.Mutex
+		failures []error
+		sem      = make(chan struct{}, limit)
+	)
+
+	for _, item := range items {
+		if ctx.Err() != nil {
+			break
+		}
+
+		wg.Add(1)
+		sem <- struct{}{}
+
+		go func(item T) {
+			defer wg.Done()
+			defer func() { <-sem }()
+
+			if err := fn(ctx, item); err != nil {
+				mu.Lock()
+				failures = append(failures, err)
+				mu.Unlock()
+			}
+		}(item)
+	}
+
+	wg.Wait()
+
+	return failures
 }
 
 func (s *Service) UpdateModStatus(ctx context.Context, id int64, status InstallationStatus) error {

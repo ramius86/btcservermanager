@@ -369,9 +369,19 @@ func (r *Router) handleSetModServerOnly(w http.ResponseWriter, req *http.Request
 
 func (r *Router) handleUpdateAllMods(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
+
+	// A mod that fails to refresh is reported, but the ones that answered are
+	// already saved and are still queued for download.
+	var failed, total int
+
 	if err := r.workshopService.UpdateAllMods(ctx); err != nil {
-		r.respondInternalError(w, err)
-		return
+		var partial *workshop.ModUpdateError
+		if !errors.As(err, &partial) || partial.Failed >= partial.Total {
+			r.respondInternalError(w, err)
+			return
+		}
+
+		failed, total = partial.Failed, partial.Total
 	}
 
 	// Only mods whose metadata check just flagged an update are re-downloaded:
@@ -394,7 +404,13 @@ func (r *Router) handleUpdateAllMods(w http.ResponseWriter, req *http.Request) {
 		r.steamCmdService.InstallOrUpdateWorkshopMods(pending)
 	}
 
-	r.json(w, map[string]int{"queued": len(pending)})
+	response := map[string]int{"queued": len(pending)}
+	if failed > 0 {
+		response["failed"] = failed
+		response["total"] = total
+	}
+
+	r.json(w, response)
 }
 
 func (r *Router) handleSyncBiKeys(w http.ResponseWriter, req *http.Request) {
