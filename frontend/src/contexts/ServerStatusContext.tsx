@@ -77,7 +77,10 @@ export function ServerStatusProvider({ children }: Readonly<{ children: React.Re
             info: info as any
           }
         })
-        setStatuses(prev => ({ ...prev, ...updated }))
+        // The endpoint returns every configured server, so replacing the map
+        // drops entries for servers deleted while this tab was away instead
+        // of keeping them stale forever.
+        setStatuses(updated)
       }
     } catch (err) {
       console.error("Failed to refresh server statuses:", err)

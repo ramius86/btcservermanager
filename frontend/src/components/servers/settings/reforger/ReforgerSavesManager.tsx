@@ -4,15 +4,22 @@ import { useServerStatus } from '../../../../contexts/ServerStatusContext'
 import { useToast } from '../../../ui/Toast'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../../../ui/Card'
 import { Button } from '../../../ui/Button'
+import { ConfirmationDialog } from '../../../ui/ConfirmationDialog'
 import { Trash2, Database, AlertTriangle, RefreshCw } from 'lucide-react'
 
 interface ReforgerSavesManagerProps {
   serverId: number
 }
 
+// pendingDelete holds the name of the save to remove; an empty object means
+// "all saves". ConfirmationDialog replaces window.confirm, which blocks the
+// whole tab and cannot be styled or dismissed with the keyboard consistently.
+type PendingDelete = { name?: string } | null
+
 export function ReforgerSavesManager({ serverId }: Readonly<ReforgerSavesManagerProps>) {
   const [saves, setSaves] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [pendingDelete, setPendingDelete] = useState<PendingDelete>(null)
   const { statuses } = useServerStatus()
   const { showToast } = useToast()
 
@@ -34,15 +41,7 @@ export function ReforgerSavesManager({ serverId }: Readonly<ReforgerSavesManager
     fetchSaves()
   }, [serverId])
 
-  const handleDelete = async (name?: string) => {
-    const message = name 
-      ? `Are you sure you want to delete the save game "${name}"? This cannot be undone.`
-      : `Are you sure you want to delete ALL saved scenarios for this server? This cannot be undone.`;
-    
-    if (!globalThis.confirm(message)) {
-      return
-    }
-
+  const deleteSave = async (name?: string) => {
     try {
       await ServerService.deleteReforgerSave(serverId, name)
       showToast(name ? `Saved scenario deleted successfully` : 'All saved scenarios deleted successfully', 'success')
@@ -91,7 +90,7 @@ export function ReforgerSavesManager({ serverId }: Readonly<ReforgerSavesManager
               variant="danger"
               size="icon"
               disabled={isServerRunning}
-              onClick={() => handleDelete(save.name)}
+              onClick={() => setPendingDelete({ name: save.name })}
               className="h-8 w-8 shrink-0 hover:bg-destructive/20 text-destructive border border-destructive/20 bg-destructive/5"
             >
               <Trash2 className="w-4 h-4" />
@@ -133,7 +132,7 @@ export function ReforgerSavesManager({ serverId }: Readonly<ReforgerSavesManager
               variant="danger"
               size="sm"
               disabled={loading || isServerRunning || saves.length === 0}
-              onClick={() => handleDelete()}
+              onClick={() => setPendingDelete({})}
               className="h-9 shadow-lg shadow-destructive/10 font-bold uppercase tracking-widest text-[9px] gap-2"
             >
               <Trash2 className="w-3.5 h-3.5" />
@@ -165,6 +164,26 @@ export function ReforgerSavesManager({ serverId }: Readonly<ReforgerSavesManager
 
         {renderContent()}
       </CardContent>
+
+      <ConfirmationDialog
+        open={pendingDelete !== null}
+        onOpenChange={open => !open && setPendingDelete(null)}
+        title={pendingDelete?.name ? 'Delete save game?' : 'Delete all saved scenarios?'}
+        description={
+          pendingDelete?.name
+            ? `The save game "${pendingDelete.name}" will be removed permanently.`
+            : 'Every saved scenario for this server will be removed permanently.'
+        }
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          const target = pendingDelete
+          setPendingDelete(null)
+          if (target) {
+            deleteSave(target.name)
+          }
+        }}
+      />
     </Card>
   )
 }

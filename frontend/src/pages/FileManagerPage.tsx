@@ -68,7 +68,6 @@ const EDITABLE_EXTENSIONS = new Set([
   '.yaml',
   '.yml',
   '.properties',
-  '.env',
   '.arma3profile',
 ])
 
@@ -341,10 +340,19 @@ export const FileManagerPage: React.FC = () => {
   }
 
   const handleSelectAll = () => {
-    if (selectedPaths.size === filteredItems.length && filteredItems.length > 0) {
-      setSelectedPaths(new Set())
+    const allFilteredSelected =
+      filteredItems.length > 0 && filteredItems.every((i) => selectedPaths.has(i.path))
+
+    if (allFilteredSelected) {
+      // Deselect only what the filter shows: "select all" must not wipe the
+      // selections made before the filter was applied.
+      const next = new Set(selectedPaths)
+      filteredItems.forEach((i) => next.delete(i.path))
+      setSelectedPaths(next)
     } else {
-      setSelectedPaths(new Set(filteredItems.map((i) => i.path)))
+      // Selecting all only adds the visible rows; selections made before the
+      // filter was applied stay untouched.
+      setSelectedPaths(new Set([...selectedPaths, ...filteredItems.map((i) => i.path)]))
     }
   }
 

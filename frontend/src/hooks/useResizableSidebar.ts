@@ -20,8 +20,8 @@ export function useResizableSidebar(initialWidth = 380) {
   }, [])
 
   const stopResizing = useCallback(() => {
-    document.body.style.cursor = 'default'
-    document.body.style.userSelect = 'auto'
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
     globalThis.removeEventListener('mousemove', handleMouseMove)
     globalThis.removeEventListener('mouseup', stopResizing)
     setSidebarWidth(currentWidthRef.current)
@@ -38,6 +38,10 @@ export function useResizableSidebar(initialWidth = 380) {
     return () => {
       globalThis.removeEventListener('mousemove', handleMouseMove)
       globalThis.removeEventListener('mouseup', stopResizing)
+      // Unmounting mid-drag must not leave the whole app with a resize cursor
+      // and without text selection until the page is reloaded.
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
     }
   }, [handleMouseMove, stopResizing])
 

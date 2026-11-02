@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../ui/Dialog'
 import { Button } from '../ui/Button'
 import { useToast } from '../ui/Toast'
+import { ConfirmationDialog } from '../ui/ConfirmationDialog'
 import { FileManagerService } from '../../services/api'
 import { Save, Maximize2, Minimize2, AlertTriangle, Lock, FileCode, RefreshCw, X } from 'lucide-react'
 
@@ -28,6 +29,7 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [isFullscreen, setIsFullscreen] = useState(false)
+  const [showDiscardDialog, setShowDiscardDialog] = useState(false)
   const [wordWrap, setWordWrap] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const gutterRef = useRef<HTMLDivElement>(null)
@@ -101,9 +103,8 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
 
   const handleClose = () => {
     if (isDirty) {
-      if (!confirm('You have unsaved changes. Are you sure you want to exit without saving?')) {
-        return
-      }
+      setShowDiscardDialog(true)
+      return
     }
     onClose()
   }
@@ -255,6 +256,19 @@ export const FileEditorModal: React.FC<FileEditorModalProps> = ({
             )}
           </div>
         </DialogFooter>
+
+        <ConfirmationDialog
+          open={showDiscardDialog}
+          onOpenChange={setShowDiscardDialog}
+          title="Discard unsaved changes?"
+          description={`${fileName || 'This file'} has changes that were not saved.`}
+          confirmLabel="Discard"
+          variant="danger"
+          onConfirm={() => {
+            setShowDiscardDialog(false)
+            onClose()
+          }}
+        />
       </DialogContent>
     </Dialog>
   )

@@ -1,9 +1,16 @@
 package modpreset
 
 import (
+	"btcservermanager/internal/domain/server"
 	"context"
+	"errors"
 	"io"
 )
+
+// ErrPresetNotExportable is returned when a preset cannot be rendered as an
+// Arma 3 launcher preset. Reforger and DayZ presets have no launcher HTML
+// equivalent, and exporting them would produce a file the launcher rejects.
+var ErrPresetNotExportable = errors.New("only Arma 3 presets can be exported as launcher presets")
 
 type Service struct {
 	repo     *Repository
@@ -43,6 +50,10 @@ func (s *Service) ExportPreset(ctx context.Context, id int64) ([]byte, error) {
 	p, err := s.repo.GetPresetByID(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+
+	if p.Type != server.TypeArma3 {
+		return nil, ErrPresetNotExportable
 	}
 
 	return s.exporter.Export(p)

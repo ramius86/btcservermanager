@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../..
 import { Button } from '../../../ui/Button'
 import { Input } from '../../../ui/Input'
 import { Select } from '../../../ui/Select'
+import { ConfirmationDialog } from '../../../ui/ConfirmationDialog'
 
 interface CBATabProps {
   serverId: number
@@ -20,6 +21,7 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
   const [newPresetName, setNewPresetName] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   const handleSelectAll = () => {
@@ -79,7 +81,6 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
   }
 
   const handleDeletePreset = async (id: number) => {
-    if (!confirm('Are you sure you want to delete this preset? This will affect all servers using it.')) return
     try {
       await CBAPresetService.delete(id)
       setPresets(presets.filter(p => p.id !== id))
@@ -223,7 +224,7 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
                   variant="danger" 
                   size="sm" 
                   className="h-9 px-2.5 sm:px-3 text-xs"
-                  onClick={() => { if (editingPreset.id) handleDeletePreset(editingPreset.id) }}
+                  onClick={() => { if (editingPreset.id) setPendingDeleteId(editingPreset.id) }}
                 >
                   <Trash2 className="w-3.5 h-3.5 sm:mr-1.5" /> <span className="hidden sm:inline">Delete</span>
                 </Button>
@@ -249,6 +250,20 @@ export function CBATab({ serverId, selectedPresetId, onPresetChange }: Readonly<
           </CardContent>
         </Card>
       )}
+
+      <ConfirmationDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => { if (!open) setPendingDeleteId(null) }}
+        title="Delete CBA preset?"
+        description="The preset is removed for every server that currently uses it."
+        confirmLabel="Delete"
+        variant="danger"
+        onConfirm={() => {
+          const id = pendingDeleteId
+          setPendingDeleteId(null)
+          if (id !== null) handleDeletePreset(id)
+        }}
+      />
     </div>
   )
 }

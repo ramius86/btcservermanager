@@ -4,6 +4,7 @@ import (
 	"btcservermanager/internal/db"
 	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/workshop"
+	"errors"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -67,6 +68,27 @@ func TestService_SaveAndGetPreset(t *testing.T) {
 	}
 
 	_ = svc.DeletePreset(t.Context(), p.ID)
+}
+
+func TestService_ExportPresetRejectsNonArma3(t *testing.T) {
+	svc, _, _ := setupPresetService(t)
+
+	p := &ModPreset{
+		Name: "Reforger Preset",
+		Type: server.TypeReforger,
+	}
+	if err := svc.SavePreset(t.Context(), p); err != nil {
+		t.Fatalf("failed to save: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.DeletePreset(t.Context(), p.ID) })
+
+	exported, err := svc.ExportPreset(t.Context(), p.ID)
+	if !errors.Is(err, ErrPresetNotExportable) {
+		t.Fatalf("expected ErrPresetNotExportable, got %v (content %q)", err, exported)
+	}
+	if exported != nil {
+		t.Errorf("expected no content for a rejected export, got %q", exported)
+	}
 }
 
 func TestService_ExportAndImportPreset(t *testing.T) {

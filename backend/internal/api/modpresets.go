@@ -6,6 +6,7 @@ import (
 	"btcservermanager/internal/domain/workshop"
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"strconv"
@@ -212,6 +213,10 @@ func (r *Router) handleExportLauncherPreset(w http.ResponseWriter, req *http.Req
 	}
 
 	content, err := r.modPresetService.ExportPreset(ctx, id)
+	if errors.Is(err, modpreset.ErrPresetNotExportable) {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		r.respondInternalError(w, err)
 		return
