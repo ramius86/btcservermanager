@@ -1,584 +1,8 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1793641559531,
+  "lastUpdate": 1793643882231,
   "repoUrl": "https://github.com/ramius86/btcservermanager",
   "entries": {
     "BTC Server Manager Benchmarks": [
-      {
-        "commit": {
-          "author": {
-            "email": "ramius86@users.noreply.github.com",
-            "name": "Marco",
-            "username": "ramius86"
-          },
-          "committer": {
-            "email": "ramius86@users.noreply.github.com",
-            "name": "Marco",
-            "username": "ramius86"
-          },
-          "distinct": true,
-          "id": "4f89dd8ab286448082a861bc69573e97e9f7141a",
-          "message": "feat(files): add web file manager with editor, zip support, and security guards",
-          "timestamp": "2026-09-15T17:18:03+02:00",
-          "tree_id": "cdabad37de096de021701b566448c978c25fa1d1",
-          "url": "https://github.com/ramius86/btcservermanager/commit/4f89dd8ab286448082a861bc69573e97e9f7141a"
-        },
-        "date": 1789485648382,
-        "tool": "go",
-        "benches": [
-          {
-            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api)",
-            "value": 41702,
-            "unit": "ns/op\t    4282 B/op\t      66 allocs/op",
-            "extra": "28364 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - ns/op",
-            "value": 41702,
-            "unit": "ns/op",
-            "extra": "28364 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - B/op",
-            "value": 4282,
-            "unit": "B/op",
-            "extra": "28364 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - allocs/op",
-            "value": 66,
-            "unit": "allocs/op",
-            "extra": "28364 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api)",
-            "value": 38818,
-            "unit": "ns/op\t    3592 B/op\t      49 allocs/op",
-            "extra": "30916 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - ns/op",
-            "value": 38818,
-            "unit": "ns/op",
-            "extra": "30916 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - B/op",
-            "value": 3592,
-            "unit": "B/op",
-            "extra": "30916 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - allocs/op",
-            "value": 49,
-            "unit": "allocs/op",
-            "extra": "30916 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws)",
-            "value": 19.34,
-            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
-            "extra": "60684136 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - ns/op",
-            "value": 19.34,
-            "unit": "ns/op",
-            "extra": "60684136 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - B/op",
-            "value": 0,
-            "unit": "B/op",
-            "extra": "60684136 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - allocs/op",
-            "value": 0,
-            "unit": "allocs/op",
-            "extra": "60684136 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws)",
-            "value": 286.4,
-            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
-            "extra": "4189285 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - ns/op",
-            "value": 286.4,
-            "unit": "ns/op",
-            "extra": "4189285 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - B/op",
-            "value": 0,
-            "unit": "B/op",
-            "extra": "4189285 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - allocs/op",
-            "value": 0,
-            "unit": "allocs/op",
-            "extra": "4189285 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset)",
-            "value": 115519,
-            "unit": "ns/op\t   63936 B/op\t     948 allocs/op",
-            "extra": "9056 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - ns/op",
-            "value": 115519,
-            "unit": "ns/op",
-            "extra": "9056 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - B/op",
-            "value": 63936,
-            "unit": "B/op",
-            "extra": "9056 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - allocs/op",
-            "value": 948,
-            "unit": "allocs/op",
-            "extra": "9056 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset)",
-            "value": 65914,
-            "unit": "ns/op\t   58040 B/op\t     408 allocs/op",
-            "extra": "18247 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - ns/op",
-            "value": 65914,
-            "unit": "ns/op",
-            "extra": "18247 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - B/op",
-            "value": 58040,
-            "unit": "B/op",
-            "extra": "18247 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - allocs/op",
-            "value": 408,
-            "unit": "allocs/op",
-            "extra": "18247 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario)",
-            "value": 320005,
-            "unit": "ns/op\t   61272 B/op\t     718 allocs/op",
-            "extra": "3684 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - ns/op",
-            "value": 320005,
-            "unit": "ns/op",
-            "extra": "3684 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - B/op",
-            "value": 61272,
-            "unit": "B/op",
-            "extra": "3684 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - allocs/op",
-            "value": 718,
-            "unit": "allocs/op",
-            "extra": "3684 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario)",
-            "value": 4884,
-            "unit": "ns/op\t     505 B/op\t       9 allocs/op",
-            "extra": "237206 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - ns/op",
-            "value": 4884,
-            "unit": "ns/op",
-            "extra": "237206 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - B/op",
-            "value": 505,
-            "unit": "B/op",
-            "extra": "237206 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - allocs/op",
-            "value": 9,
-            "unit": "allocs/op",
-            "extra": "237206 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server)",
-            "value": 34331,
-            "unit": "ns/op\t    6370 B/op\t      85 allocs/op",
-            "extra": "34838 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - ns/op",
-            "value": 34331,
-            "unit": "ns/op",
-            "extra": "34838 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - B/op",
-            "value": 6370,
-            "unit": "B/op",
-            "extra": "34838 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 85,
-            "unit": "allocs/op",
-            "extra": "34838 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server)",
-            "value": 16763,
-            "unit": "ns/op\t    4498 B/op\t      81 allocs/op",
-            "extra": "70969 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - ns/op",
-            "value": 16763,
-            "unit": "ns/op",
-            "extra": "70969 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - B/op",
-            "value": 4498,
-            "unit": "B/op",
-            "extra": "70969 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 81,
-            "unit": "allocs/op",
-            "extra": "70969 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server)",
-            "value": 79061,
-            "unit": "ns/op\t  332152 B/op\t       8 allocs/op",
-            "extra": "15210 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - ns/op",
-            "value": 79061,
-            "unit": "ns/op",
-            "extra": "15210 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - B/op",
-            "value": 332152,
-            "unit": "B/op",
-            "extra": "15210 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 8,
-            "unit": "allocs/op",
-            "extra": "15210 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server)",
-            "value": 5367,
-            "unit": "ns/op\t    3073 B/op\t       1 allocs/op",
-            "extra": "219259 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - ns/op",
-            "value": 5367,
-            "unit": "ns/op",
-            "extra": "219259 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - B/op",
-            "value": 3073,
-            "unit": "B/op",
-            "extra": "219259 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 1,
-            "unit": "allocs/op",
-            "extra": "219259 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server)",
-            "value": 21646,
-            "unit": "ns/op\t    1424 B/op\t      12 allocs/op",
-            "extra": "54831 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - ns/op",
-            "value": 21646,
-            "unit": "ns/op",
-            "extra": "54831 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - B/op",
-            "value": 1424,
-            "unit": "B/op",
-            "extra": "54831 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 12,
-            "unit": "allocs/op",
-            "extra": "54831 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server)",
-            "value": 1988,
-            "unit": "ns/op\t    1608 B/op\t      33 allocs/op",
-            "extra": "589306 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - ns/op",
-            "value": 1988,
-            "unit": "ns/op",
-            "extra": "589306 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - B/op",
-            "value": 1608,
-            "unit": "B/op",
-            "extra": "589306 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 33,
-            "unit": "allocs/op",
-            "extra": "589306 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server)",
-            "value": 600.5,
-            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
-            "extra": "1998958 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - ns/op",
-            "value": 600.5,
-            "unit": "ns/op",
-            "extra": "1998958 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - B/op",
-            "value": 48,
-            "unit": "B/op",
-            "extra": "1998958 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 1,
-            "unit": "allocs/op",
-            "extra": "1998958 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server)",
-            "value": 10.64,
-            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
-            "extra": "100000000 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - ns/op",
-            "value": 10.64,
-            "unit": "ns/op",
-            "extra": "100000000 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - B/op",
-            "value": 0,
-            "unit": "B/op",
-            "extra": "100000000 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - allocs/op",
-            "value": 0,
-            "unit": "allocs/op",
-            "extra": "100000000 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd)",
-            "value": 28157,
-            "unit": "ns/op\t    1597 B/op\t      35 allocs/op",
-            "extra": "42351 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - ns/op",
-            "value": 28157,
-            "unit": "ns/op",
-            "extra": "42351 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - B/op",
-            "value": 1597,
-            "unit": "B/op",
-            "extra": "42351 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - allocs/op",
-            "value": 35,
-            "unit": "allocs/op",
-            "extra": "42351 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd)",
-            "value": 10238,
-            "unit": "ns/op\t     353 B/op\t       7 allocs/op",
-            "extra": "115183 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - ns/op",
-            "value": 10238,
-            "unit": "ns/op",
-            "extra": "115183 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - B/op",
-            "value": 353,
-            "unit": "B/op",
-            "extra": "115183 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - allocs/op",
-            "value": 7,
-            "unit": "allocs/op",
-            "extra": "115183 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd)",
-            "value": 2804,
-            "unit": "ns/op\t     289 B/op\t       7 allocs/op",
-            "extra": "438164 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - ns/op",
-            "value": 2804,
-            "unit": "ns/op",
-            "extra": "438164 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - B/op",
-            "value": 289,
-            "unit": "B/op",
-            "extra": "438164 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - allocs/op",
-            "value": 7,
-            "unit": "allocs/op",
-            "extra": "438164 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd)",
-            "value": 2198,
-            "unit": "ns/op\t     337 B/op\t       7 allocs/op",
-            "extra": "526022 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - ns/op",
-            "value": 2198,
-            "unit": "ns/op",
-            "extra": "526022 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - B/op",
-            "value": 337,
-            "unit": "B/op",
-            "extra": "526022 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - allocs/op",
-            "value": 7,
-            "unit": "allocs/op",
-            "extra": "526022 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd)",
-            "value": 1155,
-            "unit": "ns/op\t     283 B/op\t       7 allocs/op",
-            "extra": "987122 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - ns/op",
-            "value": 1155,
-            "unit": "ns/op",
-            "extra": "987122 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - B/op",
-            "value": 283,
-            "unit": "B/op",
-            "extra": "987122 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - allocs/op",
-            "value": 7,
-            "unit": "allocs/op",
-            "extra": "987122 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop)",
-            "value": 224158,
-            "unit": "ns/op\t   24001 B/op\t    1000 allocs/op",
-            "extra": "5193 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - ns/op",
-            "value": 224158,
-            "unit": "ns/op",
-            "extra": "5193 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - B/op",
-            "value": 24001,
-            "unit": "B/op",
-            "extra": "5193 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - allocs/op",
-            "value": 1000,
-            "unit": "allocs/op",
-            "extra": "5193 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop)",
-            "value": 277.6,
-            "unit": "ns/op\t      64 B/op\t       1 allocs/op",
-            "extra": "4365764 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - ns/op",
-            "value": 277.6,
-            "unit": "ns/op",
-            "extra": "4365764 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - B/op",
-            "value": 64,
-            "unit": "B/op",
-            "extra": "4365764 times\n4 procs"
-          },
-          {
-            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - allocs/op",
-            "value": 1,
-            "unit": "allocs/op",
-            "extra": "4365764 times\n4 procs"
-          }
-        ]
-      },
       {
         "commit": {
           "author": {
@@ -17280,6 +16704,582 @@ window.BENCHMARK_DATA = {
             "value": 1,
             "unit": "allocs/op",
             "extra": "4516335 times\n4 procs"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "ramius86@users.noreply.github.com",
+            "name": "Marco",
+            "username": "ramius86"
+          },
+          "committer": {
+            "email": "ramius86@users.noreply.github.com",
+            "name": "Marco",
+            "username": "ramius86"
+          },
+          "distinct": true,
+          "id": "e1887823553d35cf754a1783f3044d27b94243e1",
+          "message": "fix: keep websocket state and log reads coherent under load\n\nA full outbound buffer now evicts a stale event instead of disconnecting the\nclient, an initial snapshot is dropped when a live event for the same domain\nalready arrived, and GetActiveLogFiles reads instance info under the process\nlock",
+          "timestamp": "2026-11-02T19:22:20+01:00",
+          "tree_id": "8a15f75f7a0f5ecbdf1740419aac7144630d9835",
+          "url": "https://github.com/ramius86/btcservermanager/commit/e1887823553d35cf754a1783f3044d27b94243e1"
+        },
+        "date": 1793643881067,
+        "tool": "go",
+        "benches": [
+          {
+            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api)",
+            "value": 34435,
+            "unit": "ns/op\t    4384 B/op\t      66 allocs/op",
+            "extra": "34239 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - ns/op",
+            "value": 34435,
+            "unit": "ns/op",
+            "extra": "34239 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - B/op",
+            "value": 4384,
+            "unit": "B/op",
+            "extra": "34239 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkCFAccessMiddleware (btcservermanager/internal/api) - allocs/op",
+            "value": 66,
+            "unit": "allocs/op",
+            "extra": "34239 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api)",
+            "value": 32822,
+            "unit": "ns/op\t    3592 B/op\t      49 allocs/op",
+            "extra": "36894 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - ns/op",
+            "value": 32822,
+            "unit": "ns/op",
+            "extra": "36894 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - B/op",
+            "value": 3592,
+            "unit": "B/op",
+            "extra": "36894 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkJWTParsingOnly (btcservermanager/internal/api) - allocs/op",
+            "value": 49,
+            "unit": "allocs/op",
+            "extra": "36894 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws)",
+            "value": 14.35,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "77336877 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - ns/op",
+            "value": 14.35,
+            "unit": "ns/op",
+            "extra": "77336877 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "77336877 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_Match (btcservermanager/internal/api/ws) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "77336877 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws)",
+            "value": 210.9,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "5802466 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - ns/op",
+            "value": 210.9,
+            "unit": "ns/op",
+            "extra": "5802466 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "5802466 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkHub_BroadcastSmall (btcservermanager/internal/api/ws) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "5802466 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset)",
+            "value": 82855,
+            "unit": "ns/op\t   63936 B/op\t     948 allocs/op",
+            "extra": "14414 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - ns/op",
+            "value": 82855,
+            "unit": "ns/op",
+            "extra": "14414 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - B/op",
+            "value": 63936,
+            "unit": "B/op",
+            "extra": "14414 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPresetExtractor (btcservermanager/internal/domain/modpreset) - allocs/op",
+            "value": 948,
+            "unit": "allocs/op",
+            "extra": "14414 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset)",
+            "value": 44697,
+            "unit": "ns/op\t   58040 B/op\t     408 allocs/op",
+            "extra": "26893 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - ns/op",
+            "value": 44697,
+            "unit": "ns/op",
+            "extra": "26893 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - B/op",
+            "value": 58040,
+            "unit": "B/op",
+            "extra": "26893 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkModPreset_ExtractOnly (btcservermanager/internal/domain/modpreset) - allocs/op",
+            "value": 408,
+            "unit": "allocs/op",
+            "extra": "26893 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario)",
+            "value": 237269,
+            "unit": "ns/op\t   61276 B/op\t     718 allocs/op",
+            "extra": "4582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - ns/op",
+            "value": 237269,
+            "unit": "ns/op",
+            "extra": "4582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - B/op",
+            "value": 61276,
+            "unit": "B/op",
+            "extra": "4582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerOutput (btcservermanager/internal/domain/scenario) - allocs/op",
+            "value": 718,
+            "unit": "allocs/op",
+            "extra": "4582 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario)",
+            "value": 3642,
+            "unit": "ns/op\t     505 B/op\t       9 allocs/op",
+            "extra": "318104 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - ns/op",
+            "value": 3642,
+            "unit": "ns/op",
+            "extra": "318104 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - B/op",
+            "value": 505,
+            "unit": "B/op",
+            "extra": "318104 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerLine (btcservermanager/internal/domain/scenario) - allocs/op",
+            "value": 9,
+            "unit": "allocs/op",
+            "extra": "318104 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server)",
+            "value": 24446,
+            "unit": "ns/op\t    6371 B/op\t      85 allocs/op",
+            "extra": "48111 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - ns/op",
+            "value": 24446,
+            "unit": "ns/op",
+            "extra": "48111 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - B/op",
+            "value": 6371,
+            "unit": "B/op",
+            "extra": "48111 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_Execute (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 85,
+            "unit": "allocs/op",
+            "extra": "48111 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server)",
+            "value": 11873,
+            "unit": "ns/op\t    4497 B/op\t      81 allocs/op",
+            "extra": "99722 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - ns/op",
+            "value": 11873,
+            "unit": "ns/op",
+            "extra": "99722 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - B/op",
+            "value": 4497,
+            "unit": "B/op",
+            "extra": "99722 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkConfigGenerator_GenerateReforger (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 81,
+            "unit": "allocs/op",
+            "extra": "99722 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server)",
+            "value": 64771,
+            "unit": "ns/op\t  332152 B/op\t       8 allocs/op",
+            "extra": "20902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - ns/op",
+            "value": 64771,
+            "unit": "ns/op",
+            "extra": "20902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - B/op",
+            "value": 332152,
+            "unit": "B/op",
+            "extra": "20902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkGetLinesFromEnd (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 8,
+            "unit": "allocs/op",
+            "extra": "20902 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server)",
+            "value": 3732,
+            "unit": "ns/op\t    3072 B/op\t       1 allocs/op",
+            "extra": "299672 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - ns/op",
+            "value": 3732,
+            "unit": "ns/op",
+            "extra": "299672 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - B/op",
+            "value": 3072,
+            "unit": "B/op",
+            "extra": "299672 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Marshal (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "299672 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server)",
+            "value": 16102,
+            "unit": "ns/op\t    1424 B/op\t      12 allocs/op",
+            "extra": "74055 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - ns/op",
+            "value": 16102,
+            "unit": "ns/op",
+            "extra": "74055 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - B/op",
+            "value": 1424,
+            "unit": "B/op",
+            "extra": "74055 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkServerJSON_Unmarshal (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 12,
+            "unit": "allocs/op",
+            "extra": "74055 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server)",
+            "value": 1433,
+            "unit": "ns/op\t    1608 B/op\t      33 allocs/op",
+            "extra": "826714 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - ns/op",
+            "value": 1433,
+            "unit": "ns/op",
+            "extra": "826714 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - B/op",
+            "value": 1608,
+            "unit": "B/op",
+            "extra": "826714 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPBOWriter (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 33,
+            "unit": "allocs/op",
+            "extra": "826714 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server)",
+            "value": 445,
+            "unit": "ns/op\t      48 B/op\t       1 allocs/op",
+            "extra": "2670957 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - ns/op",
+            "value": 445,
+            "unit": "ns/op",
+            "extra": "2670957 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - B/op",
+            "value": 48,
+            "unit": "B/op",
+            "extra": "2670957 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "2670957 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server)",
+            "value": 8.603,
+            "unit": "ns/op\t       0 B/op\t       0 allocs/op",
+            "extra": "138646294 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - ns/op",
+            "value": 8.603,
+            "unit": "ns/op",
+            "extra": "138646294 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - B/op",
+            "value": 0,
+            "unit": "B/op",
+            "extra": "138646294 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseReforgerStatLine_IgnoredLine (btcservermanager/internal/domain/server) - allocs/op",
+            "value": 0,
+            "unit": "allocs/op",
+            "extra": "138646294 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd)",
+            "value": 20642,
+            "unit": "ns/op\t    1613 B/op\t      35 allocs/op",
+            "extra": "57754 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - ns/op",
+            "value": 20642,
+            "unit": "ns/op",
+            "extra": "57754 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - B/op",
+            "value": 1613,
+            "unit": "B/op",
+            "extra": "57754 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress (btcservermanager/internal/domain/steamcmd) - allocs/op",
+            "value": 35,
+            "unit": "allocs/op",
+            "extra": "57754 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd)",
+            "value": 7659,
+            "unit": "ns/op\t     353 B/op\t       7 allocs/op",
+            "extra": "156018 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - ns/op",
+            "value": 7659,
+            "unit": "ns/op",
+            "extra": "156018 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - B/op",
+            "value": 353,
+            "unit": "B/op",
+            "extra": "156018 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/AppProgress (btcservermanager/internal/domain/steamcmd) - allocs/op",
+            "value": 7,
+            "unit": "allocs/op",
+            "extra": "156018 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd)",
+            "value": 2002,
+            "unit": "ns/op\t     283 B/op\t       7 allocs/op",
+            "extra": "627061 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - ns/op",
+            "value": 2002,
+            "unit": "ns/op",
+            "extra": "627061 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - B/op",
+            "value": 283,
+            "unit": "B/op",
+            "extra": "627061 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModSuccess (btcservermanager/internal/domain/steamcmd) - allocs/op",
+            "value": 7,
+            "unit": "allocs/op",
+            "extra": "627061 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd)",
+            "value": 1632,
+            "unit": "ns/op\t     336 B/op\t       7 allocs/op",
+            "extra": "713614 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - ns/op",
+            "value": 1632,
+            "unit": "ns/op",
+            "extra": "713614 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - B/op",
+            "value": 336,
+            "unit": "B/op",
+            "extra": "713614 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/SelfUpdate (btcservermanager/internal/domain/steamcmd) - allocs/op",
+            "value": 7,
+            "unit": "allocs/op",
+            "extra": "713614 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd)",
+            "value": 799.1,
+            "unit": "ns/op\t     283 B/op\t       7 allocs/op",
+            "extra": "1514803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - ns/op",
+            "value": 799.1,
+            "unit": "ns/op",
+            "extra": "1514803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - B/op",
+            "value": 283,
+            "unit": "B/op",
+            "extra": "1514803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkParseProgress_Table/ModError (btcservermanager/internal/domain/steamcmd) - allocs/op",
+            "value": 7,
+            "unit": "allocs/op",
+            "extra": "1514803 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop)",
+            "value": 167295,
+            "unit": "ns/op\t   24000 B/op\t    1000 allocs/op",
+            "extra": "6505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - ns/op",
+            "value": 167295,
+            "unit": "ns/op",
+            "extra": "6505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - B/op",
+            "value": 24000,
+            "unit": "B/op",
+            "extra": "6505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkDirectoryToLowercase_Dry (btcservermanager/internal/domain/workshop) - allocs/op",
+            "value": 1000,
+            "unit": "allocs/op",
+            "extra": "6505 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop)",
+            "value": 193,
+            "unit": "ns/op\t      64 B/op\t       1 allocs/op",
+            "extra": "6234699 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - ns/op",
+            "value": 193,
+            "unit": "ns/op",
+            "extra": "6234699 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - B/op",
+            "value": 64,
+            "unit": "B/op",
+            "extra": "6234699 times\n4 procs"
+          },
+          {
+            "name": "BenchmarkPathNormalization (btcservermanager/internal/domain/workshop) - allocs/op",
+            "value": 1,
+            "unit": "allocs/op",
+            "extra": "6234699 times\n4 procs"
           }
         ]
       }
