@@ -1,6 +1,7 @@
 package api
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"fmt"
 	"io"
 	"log"
@@ -102,18 +103,12 @@ func (r *Router) saveArma3ScenarioFile(fileHeader *multipart.FileHeader) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	out, err := os.Create(destPath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer out.Close()
-
-	_, err = io.Copy(out, file)
-	if err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
-	}
-
-	return nil
+	return atomicfile.WriteFileFunc(destPath, 0o644, func(out *os.File) error {
+		if _, err := io.Copy(out, file); err != nil {
+			return fmt.Errorf("failed to save file: %w", err)
+		}
+		return nil
+	})
 }
 
 func (r *Router) handleDeleteArma3Scenario(w http.ResponseWriter, req *http.Request) {

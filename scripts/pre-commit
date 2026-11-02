@@ -52,14 +52,25 @@ cd "$ROOT_DIR/frontend"
 TSC_JS="node_modules/typescript/bin/tsc"
 
 if [ ! -f "$TSC_JS" ]; then
-    echo "frontend/node_modules is missing; skipping TypeScript check (run 'npm ci' first)."
-elif command -v node >/dev/null 2>&1 && node -e "process.exit(0)" >/dev/null 2>&1; then
-    node "$TSC_JS" --noEmit
+    echo "frontend/node_modules is missing; skipping frontend checks (run 'npm ci' first)."
+    exit 0
+fi
+
+NODE_CMD=""
+if command -v node >/dev/null 2>&1 && node -e "process.exit(0)" >/dev/null 2>&1; then
+    NODE_CMD="node"
 elif command -v node.exe >/dev/null 2>&1; then
-    node.exe "$TSC_JS" --noEmit
+    NODE_CMD="node.exe"
 else
-    echo "node not found; cannot run tsc --noEmit." >&2
+    echo "node not found; cannot run the frontend checks." >&2
     exit 1
+fi
+
+"$NODE_CMD" "$TSC_JS" --noEmit
+
+VITEST_JS="node_modules/vitest/vitest.mjs"
+if [ -f "$VITEST_JS" ]; then
+    "$NODE_CMD" "$VITEST_JS" run
 fi
 
 exit 0

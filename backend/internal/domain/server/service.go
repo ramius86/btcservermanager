@@ -36,6 +36,10 @@ type RepositoryInterface interface {
 
 type ConfigManager interface {
 	Generate(ctx context.Context, s any) error
+	// Prepare renders the config without touching the disk and Commit writes
+	// it, so callers can order the database write around the file writes.
+	Prepare(ctx context.Context, s any) (*PreparedConfig, error)
+	Commit(prepared *PreparedConfig) error
 	Delete(ctx context.Context, t Type, id int64) error
 	GetConfigContents(ctx context.Context, s any) (map[string]string, error)
 }
@@ -128,11 +132,21 @@ func (s *Service) CreateServer(ctx context.Context, server any) (any, error) {
 		return nil, err
 	}
 
-	// Generate config files
+	// Render before writing: a broken template must not leave a server row
+	// behind. The row already exists because file names embed its ID, so a
+	// failure compensates by deleting it again.
+	var prepared *PreparedConfig
 	if s.configGenerator != nil {
-		if err := s.configGenerator.Generate(ctx, newServer); err != nil {
+		prepared, err = s.configGenerator.Prepare(ctx, newServer)
+		if err != nil {
+			s.rollbackCreate(ctx, id)
 			return nil, fmt.Errorf(errFailedToGenerateConfigs, err)
 		}
+	}
+
+	if err := s.commitConfig(prepared); err != nil {
+		s.rollbackCreate(ctx, id)
+		return nil, fmt.Errorf(errFailedToGenerateConfigs, err)
 	}
 
 	if s.broadcaster != nil {
@@ -143,6 +157,20 @@ func (s *Service) CreateServer(ctx context.Context, server any) (any, error) {
 	}
 
 	return newServer, nil
+}
+
+func (s *Service) rollbackCreate(ctx context.Context, id int64) {
+	if err := s.repo.Delete(ctx, id); err != nil {
+		log.Printf("[Server] Failed to roll back creation of server %d: %v", id, err)
+	}
+}
+
+func (s *Service) commitConfig(prepared *PreparedConfig) error {
+	if prepared == nil || s.configGenerator == nil {
+		return nil
+	}
+
+	return s.configGenerator.Commit(prepared)
 }
 
 func (s *Service) UpdateServer(ctx context.Context, srv any) (any, error) {
@@ -175,29 +203,57 @@ func (s *Service) UpdateServer(ctx context.Context, srv any) (any, error) {
 	}
 	MergeMaskedPasswords(srv, oldSrv)
 
+	// Render first so a template failure changes neither the database nor the
+	// files, then save, then materialise the files.
+	var prepared *PreparedConfig
+	if s.configGenerator != nil {
+		prepared, err = s.configGenerator.Prepare(ctx, srv)
+		if err != nil {
+			return nil, fmt.Errorf(errFailedToGenerateConfigs, err)
+		}
+	}
+
 	updatedID, err := s.repo.Save(ctx, srv)
 	if err != nil {
 		return nil, err
 	}
 
-	res, err := s.repo.GetServerByID(ctx, updatedID)
-	if err == nil {
-		// Generate config files
-		if s.configGenerator != nil {
-			if err := s.configGenerator.Generate(ctx, res); err != nil {
-				return nil, fmt.Errorf(errFailedToGenerateConfigs, err)
-			}
-		}
-
-		if s.broadcaster != nil {
-			s.broadcaster.Broadcast("server_updated", map[string]any{
-				"id":   id,
-				"type": "updated",
-			})
-		}
+	if err := s.commitConfig(prepared); err != nil {
+		s.restoreConfig(ctx, oldSrv)
+		return nil, fmt.Errorf(errFailedToGenerateConfigs, err)
 	}
 
-	return res, err
+	res, err := s.repo.GetServerByID(ctx, updatedID)
+	if err != nil {
+		return nil, err
+	}
+
+	if s.broadcaster != nil {
+		s.broadcaster.Broadcast("server_updated", map[string]any{
+			"id":   id,
+			"type": "updated",
+		})
+	}
+
+	return res, nil
+}
+
+// restoreConfig re-renders and rewrites the files of the previous server state
+// after a failed commit, so the on-disk config keeps matching the database.
+func (s *Service) restoreConfig(ctx context.Context, srv any) {
+	if s.configGenerator == nil || srv == nil {
+		return
+	}
+
+	prev, err := s.configGenerator.Prepare(ctx, srv)
+	if err != nil {
+		log.Printf("[Server] Failed to re-render previous config: %v", err)
+		return
+	}
+
+	if err := s.configGenerator.Commit(prev); err != nil {
+		log.Printf("[Server] Failed to restore previous config: %v", err)
+	}
 }
 
 func (s *Service) SetAutomaticRestart(ctx context.Context, id int64, enabled bool, restartTime *string) error {

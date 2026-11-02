@@ -1,11 +1,11 @@
 package api
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"btcservermanager/internal/domain/server"
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +23,10 @@ type CustomNameEntry struct {
 type CustomNamesPayload struct {
 	Entries []CustomNameEntry `json:"entries"`
 }
+
+// maxCustomNamesPayloadSize caps the custom names payload. The file is a list
+// of player names, so a few megabytes is already far beyond any legitimate use.
+const maxCustomNamesPayloadSize = 4 << 20
 
 func parseCustomNames(data []byte) (CustomNamesPayload, error) {
 	data = bytes.TrimPrefix(data, []byte("\xef\xbb\xbf"))
@@ -95,6 +99,18 @@ func (r *Router) handleUpdateReforgerCustomNames(w http.ResponseWriter, req *htt
 		return
 	}
 
+	// Enforce the limit before touching the service, so an oversized body is
+	// rejected even when the server ID is wrong.
+	body, err := readLimitedBody(w, req, maxCustomNamesPayloadSize)
+	if err != nil {
+		if isBodyTooLarge(err) {
+			http.Error(w, "Custom names payload exceeds the 4 MB limit", http.StatusRequestEntityTooLarge)
+			return
+		}
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	srv, err := r.serverService.GetServer(ctx, id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
@@ -104,12 +120,6 @@ func (r *Router) handleUpdateReforgerCustomNames(w http.ResponseWriter, req *htt
 	refSrv, ok := srv.(*server.ReforgerServer)
 	if !ok {
 		http.Error(w, "Server is not a Reforger server", http.StatusBadRequest)
-		return
-	}
-
-	body, err := io.ReadAll(req.Body)
-	if err != nil {
-		http.Error(w, "Failed to read request body", http.StatusBadRequest)
 		return
 	}
 
@@ -137,7 +147,7 @@ func (r *Router) handleUpdateReforgerCustomNames(w http.ResponseWriter, req *htt
 	}
 	data = append(data, '\n')
 
-	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(filePath, data, 0o644); err != nil {
 		http.Error(w, fmt.Sprintf("Failed to write file: %v", err), http.StatusInternalServerError)
 		return
 	}

@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
 import { useWebSocket } from './WebSocketContext'
+import { isTerminalInstallStatus } from '../utils/installStatus'
 
 export interface InstallProgress {
   itemId: number
@@ -24,7 +25,7 @@ export function InstallProgressProvider({ children }: Readonly<{ children: React
       const i = e.payload as InstallProgress
       if (!i) return
       setInstallations((prev) => {
-        if (i.status === 'FINISHED' || i.status === 'SUCCESS') {
+        if (isTerminalInstallStatus(i.status)) {
           if (!prev[i.itemId]) return prev
           const next = { ...prev }
           delete next[i.itemId]

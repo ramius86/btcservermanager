@@ -21,6 +21,8 @@ import { LogViewerHeader } from '../components/LogViewerHeader'
 import { useResizableSidebar } from '../hooks/useResizableSidebar'
 import { useServerStatus } from '../contexts/ServerStatusContext'
 import { useInstallProgress } from '../contexts/InstallProgressContext'
+import { LOG_PAGE_SIZE, applyFetchedPage, hasMorePages, initialLogPaging, offsetForNextPage } from '../utils/logPaging'
+import { parseServerLogName, serverLogPrefix } from '../utils/logFiles'
 
 const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | null, sortedFiles: string[]): string | null => {
   if (sortedFiles.length === 0) return null;
@@ -45,14 +47,12 @@ const appendWithFifoLimit = (prev: string[], newLines: string[]): string[] => {
   return combined
 }
 
-const serverIdRegex = /^([A-Z0-9]+)_(\d+)_/
-const prefixRegex = /^([A-Z0-9]+_\d+(?:_HC\d+)?_)/
-
 export const LogExplorerPage: React.FC = () => {
   const [logType, setLogType] = useState<'steamcmd' | 'server'>('steamcmd')
   const [files, setFiles] = useState<string[]>([])
   const [selectedFile, setSelectedFile] = useState<string | null>(null)
   const [lines, setLines] = useState<string[]>([])
+  const [paging, setPaging] = useState(initialLogPaging)
   const [firstItemIndex, setFirstItemIndex] = useState(1000000)
   const [hasMore, setHasMore] = useState(true)
   const [isFetchingMore, setIsFetchingMore] = useState(false)
@@ -98,17 +98,11 @@ export const LogExplorerPage: React.FC = () => {
       const activeIds = new Set(activeServersWithoutLogFile)
       const seenPrefixes = new Set<string>()
       for (const f of files) {
-        const match = serverIdRegex.exec(f)
-        if (!match) continue
+        const info = parseServerLogName(f)
+        if (!info || !activeIds.has(info.serverId)) continue
 
-        const serverId = Number(match[2])
-        if (!activeIds.has(serverId)) continue
-
-        const prefixMatch = prefixRegex.exec(f)
-        if (!prefixMatch) continue
-
-        const prefix = prefixMatch[1]
-        if (seenPrefixes.has(prefix)) continue
+        const prefix = serverLogPrefix(f)
+        if (!prefix || seenPrefixes.has(prefix)) continue
 
         seenPrefixes.add(prefix)
         live.add(f)
@@ -125,11 +119,10 @@ export const LogExplorerPage: React.FC = () => {
       return Object.keys(installations).length > 0 && liveFiles.has(selectedFile)
     }
 
-    const match = serverIdRegex.exec(selectedFile)
-    if (!match) return false
+    const info = parseServerLogName(selectedFile)
+    if (!info) return false
 
-    const serverId = Number(match[2])
-    const status = statuses[serverId]
+    const status = statuses[info.serverId]
     if (!status?.alive) return false
 
     if (status.info?.currentLogFile) {
@@ -152,17 +145,21 @@ export const LogExplorerPage: React.FC = () => {
     if (!selectedFile || !hasMore || isFetchingMore) return
     setIsFetchingMore(true)
     try {
+      // The offset counts only lines fetched over HTTP: streaming appends to the
+      // view, so using lines.length made pages overlap or skip content.
+      const offset = offsetForNextPage(paging)
       const res = logType === 'steamcmd' 
-        ? await LogService.getSteamCmdLog(selectedFile, lines.length, 1000) 
-        : await LogService.getServerLog(selectedFile, lines.length, 1000)
+        ? await LogService.getSteamCmdLog(selectedFile, offset, LOG_PAGE_SIZE) 
+        : await LogService.getServerLog(selectedFile, offset, LOG_PAGE_SIZE)
       
       const newContent = res.content || ''
       const newLines = newContent ? newContent.split('\n') : []
       if (newLines.length > 0) {
         setFirstItemIndex(prev => prev - newLines.length)
         setLines(prev => [...newLines, ...prev])
+        setPaging(prev => applyFetchedPage(prev, newLines.length))
       }
-      setHasMore(newLines.length >= 999)
+      setHasMore(hasMorePages(newLines.length))
     } catch (e) {
       console.error(e)
     } finally {
@@ -182,15 +179,12 @@ export const LogExplorerPage: React.FC = () => {
         })
       }
     } else {
-      const match = serverIdRegex.exec(selectedFile)
-      if (match) {
-        const serverId = Number.parseInt(match[2], 10)
-        if (!Number.isNaN(serverId)) {
-          return subscribe('server_log', (e) => {
-            if (!e?.payload?.message) return
-            setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
-          }, serverId)
-        }
+      const info = parseServerLogName(selectedFile)
+      if (info) {
+        return subscribe('server_log', (e) => {
+          if (!e?.payload?.message) return
+          setLines(prev => appendWithFifoLimit(prev, e.payload.message.split('\n')))
+        }, info.serverId)
       }
     }
   }, [subscribe, logType, selectedFile, isCurrentLog])
@@ -247,16 +241,18 @@ export const LogExplorerPage: React.FC = () => {
       const fetchInitial = async () => {
         try {
           const res = logType === 'steamcmd' 
-            ? await LogService.getSteamCmdLog(selectedFile, 0, 1000) 
-            : await LogService.getServerLog(selectedFile, 0, 1000)
+            ? await LogService.getSteamCmdLog(selectedFile, 0, LOG_PAGE_SIZE) 
+            : await LogService.getServerLog(selectedFile, 0, LOG_PAGE_SIZE)
           const newContent = res.content || ''
           const newLines = newContent ? newContent.split('\n') : []
           setLines(newLines)
           setFirstItemIndex(1000000)
-          setHasMore(newLines.length >= 999)
+          setPaging(applyFetchedPage(initialLogPaging, newLines.length))
+          setHasMore(hasMorePages(newLines.length))
         } catch (e) { 
           console.error('Failed to fetch log content:', e)
-          setLines(['Error loading log.']) 
+          setLines(['Error loading log.'])
+          setPaging(initialLogPaging) 
         }
         finally { setLoading(false) }
       }
@@ -264,6 +260,7 @@ export const LogExplorerPage: React.FC = () => {
       setAutoScroll(true)
     } else {
       setLines([])
+      setPaging(initialLogPaging)
       setHasMore(false)
     }
   }, [selectedFile, logType])

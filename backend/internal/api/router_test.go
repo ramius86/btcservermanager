@@ -40,6 +40,14 @@ func (m *mockConfigManager) Generate(ctx context.Context, s any) error {
 	return nil
 }
 
+func (m *mockConfigManager) Prepare(ctx context.Context, s any) (*server.PreparedConfig, error) {
+	return &server.PreparedConfig{}, nil
+}
+
+func (m *mockConfigManager) Commit(prepared *server.PreparedConfig) error {
+	return nil
+}
+
 func (m *mockConfigManager) Delete(ctx context.Context, t server.Type, id int64) error {
 	return nil
 }

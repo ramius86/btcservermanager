@@ -396,13 +396,20 @@ func removeLogAndStats(f string) {
 func (r *Router) handleDeleteAllLogs(w http.ResponseWriter, req *http.Request) {
 	logType := req.URL.Query().Get("type") // "server", "steamcmd", or "all"
 
-	isSteamCmdDelete := logType == "steamcmd" || logType == queryAll
-	if isSteamCmdDelete {
+	// A missing type used to mean "delete every server log", so a mistyped or
+	// truncated URL wiped the whole directory. Require the scope explicitly.
+	switch logType {
+	case "server", "steamcmd", queryAll:
+	default:
+		http.Error(w, "type must be one of: server, steamcmd, all", http.StatusBadRequest)
+		return
+	}
+
+	if logType == "steamcmd" || logType == queryAll {
 		deleteDirFiles(filepath.Join(r.config.LogsDirectory, "steamcmd"), "steamcmd_*.log")
 	}
 
-	isServerDelete := logType == "server" || logType == queryAll || logType == ""
-	if isServerDelete {
+	if logType == "server" || logType == queryAll {
 		deleteDirFiles(r.config.LogsDirectory, "*.log")
 	}
 

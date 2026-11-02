@@ -231,21 +231,21 @@ func (r *Router) decodeServer(req *http.Request) (any, error) {
 	switch base.Type {
 	case server.TypeArma3:
 		var s server.Arma3Server
-		if err := json.Unmarshal(raw, &s); err != nil {
+		if err := strictUnmarshal(raw, &s); err != nil {
 			return nil, err
 		}
 
 		return &s, nil
 	case server.TypeDayZ, server.TypeDayZExp:
 		var s server.DayZServer
-		if err := json.Unmarshal(raw, &s); err != nil {
+		if err := strictUnmarshal(raw, &s); err != nil {
 			return nil, err
 		}
 
 		return &s, nil
 	case server.TypeReforger:
 		var s server.ReforgerServer
-		if err := json.Unmarshal(raw, &s); err != nil {
+		if err := strictUnmarshal(raw, &s); err != nil {
 			return nil, err
 		}
 

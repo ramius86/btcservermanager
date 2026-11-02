@@ -2,6 +2,7 @@ package filemanager
 
 import (
 	"archive/zip"
+	"btcservermanager/internal/atomicfile"
 	"errors"
 	"fmt"
 	"io"
@@ -203,7 +204,7 @@ func (s *Service) WriteFile(subpath string, content []byte) error {
 		return fmt.Errorf("failed to create parent directories: %w", err)
 	}
 
-	return os.WriteFile(absPath, content, 0o644)
+	return atomicfile.WriteFile(absPath, content, 0o644)
 }
 
 // Create creates an empty file or directory. Blocked if in /data.
@@ -291,17 +292,12 @@ func (s *Service) UploadFile(targetDir, filename string, src io.Reader) error {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	dst, err := os.Create(absPath)
-	if err != nil {
-		return fmt.Errorf("failed to create file: %w", err)
-	}
-	defer dst.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("failed to write uploaded file: %w", err)
-	}
-
-	return nil
+	return atomicfile.WriteFileFunc(absPath, 0o644, func(dst *os.File) error {
+		if _, err := io.Copy(dst, src); err != nil {
+			return fmt.Errorf("failed to write uploaded file: %w", err)
+		}
+		return nil
+	})
 }
 
 // ExtractZip extracts a zip file into a target destination directory with Zip Slip protection.

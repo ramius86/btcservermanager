@@ -1,6 +1,7 @@
 package server
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"bytes"
 	"context"
 	"embed"
@@ -19,10 +20,52 @@ const (
 	tplArma3NetCfg      = "ARMA3_%d_network.cfg"
 	tplArma3ProfileName = "ARMA3_%d"
 	extArma3Profile     = ".Arma3Profile"
+
+	// cbaServerConfigCPP is the boilerplate wrapped around the CBA settings
+	// preset, packaged as a tiny server-side mod.
+	cbaServerConfigCPP = `class CfgPatches {
+    class cba_settings_userconfig {
+        author = "$STR_CBA_Author";
+        name = "$STR_CBA_Settings_Component";
+        url = "$STR_CBA_URL";
+        units[] = {};
+        weapons[] = {};
+        requiredVersion = 1.0;
+        requiredAddons[] = {"cba_settings"};
+        version = 1.0;
+        authors[] = {"commy2"};
+    };
+};
+
+// Uncommenting this will make any changes to "Server" settings be lost upon game restart, applies only to dedicated servers
+// cba_settings_volatile = 1;
+`
 )
 
 //go:embed templates/*.tmpl
 var templatesFS embed.FS
+
+// preparedFile is one rendered file waiting to be committed.
+type preparedFile struct {
+	path string
+	data []byte
+	perm os.FileMode
+}
+
+// PreparedConfig holds fully rendered config files. Nothing touches the disk
+// until Commit is called, so a caller can persist the database first (or drop
+// the result entirely) without leaving half-written files behind.
+type PreparedConfig struct {
+	files []preparedFile
+}
+
+// Len reports how many files would be written by Commit.
+func (p *PreparedConfig) Len() int {
+	if p == nil {
+		return 0
+	}
+	return len(p.files)
+}
 
 type ConfigGenerator struct {
 	paths        PathProvider
@@ -54,32 +97,70 @@ func (g *ConfigGenerator) SetFastDLDomain(domain string) {
 	g.fastDLDomain = domain
 }
 
-func (g *ConfigGenerator) Generate(ctx context.Context, s any) error {
+// Prepare renders every config file for s in memory. It performs no writes, so
+// a template error cannot leave a server with a truncated configuration.
+func (g *ConfigGenerator) Prepare(ctx context.Context, s any) (*PreparedConfig, error) {
 	select {
 	case <-ctx.Done():
-		return ctx.Err()
+		return nil, ctx.Err()
 	default:
 	}
 
-	if err := g.generateBaseConfig(s); err != nil {
-		return err
+	base, err := g.renderBaseConfig(s)
+	if err != nil {
+		return nil, err
 	}
 
+	prepared := &PreparedConfig{files: base}
+
 	if a3, ok := s.(*Arma3Server); ok {
-		if err := g.generateArma3NetworkAndCBA(a3); err != nil {
+		network, err := g.renderArma3NetworkAndCBA(a3)
+		if err != nil {
+			return nil, err
+		}
+		prepared.files = append(prepared.files, network...)
+
+		if a3.DifficultySettings != nil {
+			profile, err := g.renderArma3Profile(a3)
+			if err != nil {
+				return nil, err
+			}
+			prepared.files = append(prepared.files, profile)
+		}
+	}
+
+	return prepared, nil
+}
+
+// Commit writes the prepared files, each one atomically.
+func (g *ConfigGenerator) Commit(prepared *PreparedConfig) error {
+	if prepared == nil {
+		return nil
+	}
+
+	for _, f := range prepared.files {
+		if err := os.MkdirAll(filepath.Dir(f.path), 0o755); err != nil {
 			return err
 		}
-		if a3.DifficultySettings != nil {
-			if err := g.generateArma3Profile(a3); err != nil {
-				return err
-			}
+		if err := atomicfile.WriteFile(f.path, f.data, f.perm); err != nil {
+			return err
 		}
 	}
 
 	return nil
 }
 
-func (g *ConfigGenerator) generateBaseConfig(s any) error {
+// Generate renders and writes the config files in one step.
+func (g *ConfigGenerator) Generate(ctx context.Context, s any) error {
+	prepared, err := g.Prepare(ctx, s)
+	if err != nil {
+		return err
+	}
+
+	return g.Commit(prepared)
+}
+
+func (g *ConfigGenerator) renderBaseConfig(s any) ([]preparedFile, error) {
 	switch v := s.(type) {
 	case *Arma3Server:
 		// Wrap Arma3Server to include FastDLDomain for the template
@@ -90,63 +171,70 @@ func (g *ConfigGenerator) generateBaseConfig(s any) error {
 			Arma3Server:  v,
 			FastDLDomain: g.fastDLDomain,
 		}
-		return g.executeTemplate("arma3_server.tmpl", fmt.Sprintf(tplArma3Cfg, v.ID), v.Type, data)
+		return g.renderConfigFile("arma3_server.tmpl", fmt.Sprintf(tplArma3Cfg, v.ID), v.Type, data)
 	case *DayZServer:
-		return g.executeTemplate("dayz_server.tmpl", fmt.Sprintf(tplDayzCfg, v.ID), v.Type, v)
+		return g.renderConfigFile("dayz_server.tmpl", fmt.Sprintf(tplDayzCfg, v.ID), v.Type, v)
 	case *ReforgerServer:
-		return g.executeTemplate("reforger_server.tmpl", fmt.Sprintf(tplReforgerJson, v.ID), v.Type, v)
+		return g.renderConfigFile("reforger_server.tmpl", fmt.Sprintf(tplReforgerJson, v.ID), v.Type, v)
 	default:
-		return errors.New("unsupported server type for config generation")
+		return nil, errors.New("unsupported server type for config generation")
 	}
 }
 
-func (g *ConfigGenerator) generateArma3NetworkAndCBA(a3 *Arma3Server) error {
+func (g *ConfigGenerator) renderArma3NetworkAndCBA(a3 *Arma3Server) ([]preparedFile, error) {
+	files := make([]preparedFile, 0, 2)
+
 	if a3.CBAPresetID != nil && a3.CBAPreset != nil {
-		if err := g.generateCBAPresetMod(a3); err != nil {
+		cbaFile, err := g.renderCBAPresetMod(a3)
+		if err != nil {
+			// A broken CBA preset must not block the server config itself.
 			fmt.Printf("[Warning] Failed to generate CBA preset mod: %v\n", err)
+		} else {
+			files = append(files, cbaFile)
 		}
 	}
 
 	if a3.NetworkSettings != nil {
 		netFile := fmt.Sprintf(tplArma3NetCfg, a3.ID)
-		if err := g.executeTemplate("arma3_network.tmpl", netFile, TypeArma3, a3.NetworkSettings); err != nil {
-			return err
+		rendered, err := g.renderConfigFile("arma3_network.tmpl", netFile, TypeArma3, a3.NetworkSettings)
+		if err != nil {
+			return nil, err
 		}
+		files = append(files, rendered...)
 	}
-	return nil
+
+	return files, nil
 }
 
-func (g *ConfigGenerator) generateArma3Profile(a3 *Arma3Server) error {
+func (g *ConfigGenerator) renderArma3Profile(a3 *Arma3Server) (preparedFile, error) {
 	profileName := fmt.Sprintf(tplArma3ProfileName, a3.ID)
 	// Path: custom_profiles/Users/<name>/<name>.Arma3Profile
 	profilePath := filepath.Join("Users", profileName, profileName+extArma3Profile)
 
 	var buf bytes.Buffer
 	if err := g.tmpls.ExecuteTemplate(&buf, "arma3_profile.tmpl", a3.DifficultySettings); err != nil {
-		return fmt.Errorf("failed to execute arma3_profile template: %w", err)
+		return preparedFile{}, fmt.Errorf("failed to execute arma3_profile template: %w", err)
 	}
 
-	destPath := filepath.Join(g.paths.GetProfilesDirectoryPath(), profilePath)
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return err
-	}
-
-	return os.WriteFile(destPath, buf.Bytes(), 0o644)
+	return preparedFile{
+		path: filepath.Join(g.paths.GetProfilesDirectoryPath(), profilePath),
+		data: buf.Bytes(),
+		perm: 0o644,
+	}, nil
 }
 
-func (g *ConfigGenerator) executeTemplate(tplName, fileName string, t Type, data any) error {
+func (g *ConfigGenerator) renderConfigFile(tplName, fileName string, t Type, data any) ([]preparedFile, error) {
 	var buf bytes.Buffer
 
 	if err := g.tmpls.ExecuteTemplate(&buf, tplName, data); err != nil {
-		return fmt.Errorf("failed to execute template %s: %w", tplName, err)
+		return nil, fmt.Errorf("failed to execute template %s: %w", tplName, err)
 	}
 
-	destPath := g.paths.GetConfigFilePath(t, fileName)
-	if err := os.MkdirAll(filepath.Dir(destPath), 0o755); err != nil {
-		return err
-	}
-
-	return os.WriteFile(destPath, buf.Bytes(), 0o644)
+	return []preparedFile{{
+		path: g.paths.GetConfigFilePath(t, fileName),
+		data: buf.Bytes(),
+		perm: 0o644,
+	}}, nil
 }
 
 func (g *ConfigGenerator) Delete(ctx context.Context, t Type, id int64) error {
@@ -224,52 +312,27 @@ func (g *ConfigGenerator) readFileContent(path string) string {
 	return string(data)
 }
 
-func (g *ConfigGenerator) generateCBAPresetMod(s *Arma3Server) error {
+func (g *ConfigGenerator) renderCBAPresetMod(s *Arma3Server) (preparedFile, error) {
 	modDir := filepath.Join(g.paths.GetServerPath(s.Type), fmt.Sprintf("@cba_server_%d", s.ID))
 	addonDir := filepath.Join(modDir, "addons")
 
-	if err := os.MkdirAll(addonDir, 0o755); err != nil {
-		return err
-	}
-
-	// 2. config.cpp
-	configCPP := `class CfgPatches {
-    class cba_settings_userconfig {
-        author = "$STR_CBA_Author";
-        name = "$STR_CBA_Settings_Component";
-        url = "$STR_CBA_URL";
-        units[] = {};
-        weapons[] = {};
-        requiredVersion = 1.0;
-        requiredAddons[] = {"cba_settings"};
-        version = 1.0;
-        authors[] = {"commy2"};
-    };
-};
-
-// Uncommenting this will make any changes to "Server" settings be lost upon game restart, applies only to dedicated servers
-// cba_settings_volatile = 1;
-`
-
 	pbo := NewPBOWriter()
 	pbo.Prefix = "cba_settings_userconfig"
-	pbo.AddFile("config.cpp", []byte(configCPP))
+	pbo.AddFile("config.cpp", []byte(cbaServerConfigCPP))
 	pbo.AddFile("cba_settings.sqf", []byte(s.CBAPreset.Content))
 
-	pboPath := filepath.Join(addonDir, "cba_settings.pbo")
-	f, err := os.Create(pboPath)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	if _, err := pbo.WriteTo(f); err != nil {
-		return err
+	var buf bytes.Buffer
+	if _, err := pbo.WriteTo(&buf); err != nil {
+		return preparedFile{}, fmt.Errorf("failed to build CBA preset PBO: %w", err)
 	}
 
-	// Clean up legacy unpacked files if they exist
+	// Clean up legacy unpacked files if they exist; the PBO is authoritative.
 	_ = os.Remove(filepath.Join(addonDir, "config.cpp"))
 	_ = os.Remove(filepath.Join(addonDir, "cba_settings.sqf"))
 
-	return nil
+	return preparedFile{
+		path: filepath.Join(addonDir, "cba_settings.pbo"),
+		data: buf.Bytes(),
+		perm: 0o644,
+	}, nil
 }

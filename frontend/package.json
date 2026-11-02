@@ -7,6 +7,7 @@
     "dev": "node -e \"try { require('../scripts/update-readme.js') } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }\" && vite",
     "build": "node -e \"try { require('../scripts/update-readme.js') } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }\" && tsc && vite build",
     "preview": "vite preview",
+    "test": "vitest run",
     "update-readme": "node ../scripts/update-readme.js"
   },
   "keywords": [],
@@ -24,7 +25,8 @@
     "react-dom": "^19.3.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.1.0"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^18.0.1",

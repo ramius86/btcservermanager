@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -36,6 +37,13 @@ const (
 func isBodyTooLarge(err error) bool {
 	var maxErr *http.MaxBytesError
 	return errors.As(err, &maxErr)
+}
+
+// readLimitedBody enforces a cap on a JSON request body. Handlers that only
+// decode JSON previously trusted the client with an unbounded body.
+func readLimitedBody(w http.ResponseWriter, req *http.Request, limit int64) ([]byte, error) {
+	req.Body = http.MaxBytesReader(w, req.Body, limit)
+	return io.ReadAll(req.Body)
 }
 
 func (r *Router) fileRoutes() chi.Router {
