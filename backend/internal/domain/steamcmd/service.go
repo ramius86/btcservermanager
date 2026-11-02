@@ -103,6 +103,24 @@ func (s *Service) Stop() {
 	close(s.stopCh)
 }
 
+// submit enqueues a job and resolves it locally when the executor queue cannot
+// accept it, so callers waiting on job.Done are never left hanging.
+func (s *Service) submit(job *Job) {
+	if err := s.executor.Submit(job); err != nil {
+		log.Printf("[SteamCMD] Failed to enqueue %s job: %v", job.Type, err)
+
+		status := workshop.ErrorGeneric
+		job.ErrorStatus = &status
+
+		if job.OnFailure != nil {
+			job.OnFailure(status)
+		}
+		if job.Done != nil {
+			close(job.Done)
+		}
+	}
+}
+
 func (s *Service) InstallOrUpdateServer(si *installation.ServerInstallation) *Job {
 	bgCtx := context.Background()
 	serverPath := s.paths.GetServerPath(si.Type)
@@ -155,7 +173,7 @@ func (s *Service) InstallOrUpdateServer(si *installation.ServerInstallation) *Jo
 		}
 	}
 
-	s.executor.Submit(job)
+	s.submit(job)
 
 	return job
 }
@@ -339,7 +357,7 @@ func (s *Service) InstallOrUpdateWorkshopMods(mods []workshop.WorkshopMod) *Job 
 		s.handleModsFailure(bgCtx, mods, job)
 	}
 
-	s.executor.Submit(job)
+	s.submit(job)
 
 	return job
 }
@@ -452,7 +470,7 @@ func (s *Service) UpdateSteamCmd() *Job {
 	job := NewJob(JobUpdateSteamCmd)
 	job.Parameters = builder.Build()
 
-	s.executor.Submit(job)
+	s.submit(job)
 
 	return job
 }

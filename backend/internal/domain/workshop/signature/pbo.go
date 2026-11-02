@@ -301,11 +301,31 @@ func GenerateHashes(pbo *PBO, version BISignVersion, keyLength uint32) (*big.Int
 	hash3 := h3.Sum(nil)
 
 	size := int(keyLength / 8)
-	return PadHash(hash1, size), PadHash(hash2, size), PadHash(hash3, size), nil
+	if size < minSHA1PKCS1Size {
+		return nil, nil, nil, fmt.Errorf("RSA key too small for a SHA-1 signature: %d bits", keyLength)
+	}
+
+	pad1, pad2, pad3 := PadHash(hash1, size), PadHash(hash2, size), PadHash(hash3, size)
+	if pad1 == nil || pad2 == nil || pad3 == nil {
+		return nil, nil, nil, fmt.Errorf("cannot build a PKCS#1 v1.5 block for a %d-byte key", size)
+	}
+
+	return pad1, pad2, pad3, nil
 }
 
+// minSHA1PKCS1Size is the smallest RSASSA-PKCS1-v1_5 block able to carry a
+// SHA-1 DigestInfo: 2 header bytes, at least 8 padding bytes, 1 separator,
+// 15 ASN.1 DigestInfo bytes and the 20 digest bytes.
+const minSHA1PKCS1Size = 46
+
 // PadHash formats a 20-byte SHA-1 digest into standard PKCS#1 v1.5 RSA signature padding.
+// It returns nil when the digest is not SHA-1 or the block is too small for the
+// DigestInfo, so a malformed key length cannot panic the process.
 func PadHash(hash []byte, size int) *big.Int {
+	if len(hash) != sha1.Size || size < minSHA1PKCS1Size {
+		return nil
+	}
+
 	buf := make([]byte, size)
 	buf[0] = 0x00
 	buf[1] = 0x01

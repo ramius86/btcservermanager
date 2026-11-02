@@ -169,16 +169,16 @@ export function ReforgerSettingsForm({ server, setServer, isInstalled = true }: 
               <div className="space-y-6">
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-foreground">Disable AI Spawning</p>
-                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">DISABLES AI WORLD INITIALIZATION ENTIRELY. NO AI WILL FUNCTION ON THIS SERVER.</p>
+                    <p className="text-sm font-bold text-foreground">BattlEye Anti-Cheat</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">ENABLES BATTLEYE ANTI-CHEAT FOR THIS SERVER. DISABLE ONLY FOR PRIVATE TESTING.</p>
                   </div>
                   <Switch checked={server.battlEye} onCheckedChange={(c: boolean) => updateServer({ battlEye: c })} className="" />
                 </div>
 
                 <div className="flex items-center justify-between p-4 bg-muted/30 rounded-xl border border-border/50">
                   <div className="space-y-1">
-                    <p className="text-sm font-bold text-foreground">Fast Integrity Checks</p>
-                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">LIGHTWEIGHT WORLD-STATE VALIDATION ON CLIENT JOIN. ALWAYS KEEP ENABLED ON PUBLIC SERVERS.</p>
+                    <p className="text-sm font-bold text-foreground">Visible in Server Browser</p>
+                    <p className="text-[10px] text-muted-foreground uppercase font-black tracking-widest">LISTS THIS SERVER IN THE PUBLIC SERVER BROWSER.</p>
                   </div>
                   <Switch checked={server.visible} onCheckedChange={(c: boolean) => updateServer({ visible: c })} className="" />
                 </div>

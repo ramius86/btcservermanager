@@ -80,14 +80,56 @@ func TestDryRunService_GetExecutablePath(t *testing.T) {
 		t.Fatalf("failed to create arma directory: %v", err)
 	}
 
-	path, err := svc.getExecutablePath(server.TypeArma3)
-	if err != nil {
-		t.Fatalf("getExecutablePath failed: %v", err)
+	// A missing binary must be reported here instead of surfacing later as an
+	// opaque "failed to start server for dry run".
+	if _, err := svc.getExecutablePath(server.TypeArma3); err == nil {
+		t.Fatal("expected an error when the executable is missing")
 	}
 
 	expectedExec := server.ServerExecutables[server.TypeArma3]
 	if os.PathSeparator == '\\' {
 		expectedExec += ".exe"
+	}
+	if err := os.WriteFile(filepath.Join(armaDir, expectedExec), []byte{}, 0o755); err != nil {
+		t.Fatalf("failed to create dummy executable: %v", err)
+	}
+
+	path, err := svc.getExecutablePath(server.TypeArma3)
+	if err != nil {
+		t.Fatalf("getExecutablePath failed: %v", err)
+	}
+
+	if !strings.HasSuffix(path, expectedExec) {
+		t.Errorf("expected path to end with %s, got %s", expectedExec, path)
+	}
+}
+
+func TestDryRunService_GetExecutablePathFallsBackToX64(t *testing.T) {
+	if os.PathSeparator != '/' {
+		t.Skip("the _x64 fallback only applies to Linux layouts")
+	}
+
+	tempDir := t.TempDir()
+	cfg := &config.Config{
+		StoragePath:      tempDir,
+		ServersDirectory: tempDir,
+		DebugMode:        true,
+	}
+	svc := NewDryRunService(cfg)
+
+	dayzDir := filepath.Join(tempDir, string(server.TypeDayZ))
+	if err := os.MkdirAll(dayzDir, 0o755); err != nil {
+		t.Fatalf("failed to create dayz directory: %v", err)
+	}
+
+	expectedExec := server.ServerExecutables[server.TypeDayZ] + "_x64"
+	if err := os.WriteFile(filepath.Join(dayzDir, expectedExec), []byte{}, 0o755); err != nil {
+		t.Fatalf("failed to create dummy executable: %v", err)
+	}
+
+	path, err := svc.getExecutablePath(server.TypeDayZ)
+	if err != nil {
+		t.Fatalf("getExecutablePath failed: %v", err)
 	}
 	if !strings.HasSuffix(path, expectedExec) {
 		t.Errorf("expected path to end with %s, got %s", expectedExec, path)

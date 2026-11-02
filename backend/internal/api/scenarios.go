@@ -39,8 +39,17 @@ func (r *Router) handleGetReforgerScenarios(w http.ResponseWriter, req *http.Req
 }
 
 func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Request) {
-	err := req.ParseMultipartForm(r.config.MaxScenarioSize)
-	if err != nil {
+	// MAX_SCENARIO_SIZE limits the scenario file itself; the envelope allowance
+	// keeps a file of exactly that size acceptable. MaxBytesReader is what
+	// actually enforces the limit, since ParseMultipartForm only sizes the
+	// in-memory buffer.
+	req.Body = http.MaxBytesReader(w, req.Body, r.config.MaxScenarioSize+multipartEnvelopeAllowance)
+
+	if err := req.ParseMultipartForm(multipartMemoryLimit); err != nil {
+		if isBodyTooLarge(err) {
+			http.Error(w, "Uploaded scenario exceeds MAX_SCENARIO_SIZE", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
 		return
 	}

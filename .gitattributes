@@ -5,3 +5,8 @@
 *.go text eol=lf
 go.mod text eol=lf
 go.sum text eol=lf
+
+# Hook scripts must keep LF: a CRLF shebang or a CRLF after `set -e`
+# breaks the pre-commit hook under Git Bash on Windows with a misleading
+# "no such file or directory" error.
+scripts/pre-commit text eol=lf

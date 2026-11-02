@@ -424,7 +424,7 @@ func (s *Service) finishModInstallationInternal(ctx context.Context, id int64) e
 			"signatureStatus":  mod.SignatureStatus,
 			"signatureSummary": mod.SignatureSummary,
 		})
-		s.broadcaster.Broadcast("metadata_updated", mod)
+		s.broadcaster.Broadcast("mod_metadata_updated", mod)
 	}
 
 	return nil
@@ -476,7 +476,7 @@ func (s *Service) VerifyModSignatures(ctx context.Context, id int64, autoExtract
 			"signatureStatus":  mod.SignatureStatus,
 			"signatureSummary": mod.SignatureSummary,
 		})
-		s.broadcaster.Broadcast("metadata_updated", mod)
+		s.broadcaster.Broadcast("mod_metadata_updated", mod)
 	}
 
 	return report, nil

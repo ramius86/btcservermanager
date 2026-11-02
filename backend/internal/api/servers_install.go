@@ -8,8 +8,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"sync"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -34,25 +36,101 @@ func (r *Router) handleGetAllInstallations(w http.ResponseWriter, req *http.Requ
 		return
 	}
 
-	// Fetch all servers to get query ports for A2S queries
+	// Fetch all servers once: query ports and running state are shared by every
+	// installation, so this must not be a per-installation query.
 	servers, _ := r.serverService.GetAllServers(ctx)
 	typeToQueryPort := r.buildQueryPortMap(servers)
+	runningTypes := r.runningTypes(servers)
 
 	// Inject progress and refresh local versions
-	var wg sync.WaitGroup
+	var (
+		mu      sync.Mutex
+		wg      sync.WaitGroup
+		pending []installationUpdate
+	)
+
 	for _, inst := range insts {
-		inst := inst
 		wg.Add(1)
 
 		go func(inst *installation.ServerInstallation) {
 			defer wg.Done()
-			r.refreshInstallationDetails(inst, typeToQueryPort)
+
+			if upd := r.refreshInstallationDetails(inst, typeToQueryPort, runningTypes); upd != nil {
+				mu.Lock()
+				pending = append(pending, *upd)
+				mu.Unlock()
+			}
 		}(inst)
 	}
 
 	wg.Wait()
 
 	r.json(w, insts)
+
+	// Persistence happens after the response: a GET must not write to the
+	// database while the scheduler and the UI poll concurrently.
+	r.persistInstallationUpdates(pending)
+}
+
+// installationUpdate is a database refresh that a GET only discovered.
+type installationUpdate struct {
+	serverType server.Type
+	buildID    string
+	version    string
+}
+
+// runningTypes returns the server types that currently have a process.
+func (r *Router) runningTypes(servers []any) map[server.Type]bool {
+	running := make(map[server.Type]bool, len(servers))
+
+	for _, srv := range servers {
+		var (
+			t  server.Type
+			id int64
+		)
+
+		switch v := srv.(type) {
+		case *server.Arma3Server:
+			t, id = v.Type, v.ID
+		case *server.DayZServer:
+			t, id = v.Type, v.ID
+		case *server.ReforgerServer:
+			t, id = v.Type, v.ID
+		}
+
+		if t != "" && r.serverService.GetInstanceInfo(id) != nil {
+			running[t] = true
+		}
+	}
+
+	return running
+}
+
+// persistInstallationUpdates writes discovered build IDs and versions without
+// delaying the response or holding the handler on a locked database.
+func (r *Router) persistInstallationUpdates(updates []installationUpdate) {
+	if len(updates) == 0 {
+		return
+	}
+
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		for _, upd := range updates {
+			if upd.buildID != "" {
+				if err := r.installationService.UpdateBuildID(ctx, upd.serverType, upd.buildID); err != nil {
+					log.Printf("[API] Failed to persist build ID for %s: %v", upd.serverType, err)
+				}
+			}
+
+			if upd.version != "" {
+				if err := r.installationService.UpdateVersion(ctx, upd.serverType, upd.version); err != nil {
+					log.Printf("[API] Failed to persist version for %s: %v", upd.serverType, err)
+				}
+			}
+		}
+	}()
 }
 
 func (r *Router) buildQueryPortMap(servers []any) map[server.Type]int {
@@ -91,12 +169,14 @@ func (r *Router) buildQueryPortMap(servers []any) map[server.Type]int {
 	return typeToQueryPort
 }
 
-func (r *Router) refreshInstallationDetails(inst *installation.ServerInstallation, typeToQueryPort map[server.Type]int) {
+func (r *Router) refreshInstallationDetails(inst *installation.ServerInstallation, typeToQueryPort map[server.Type]int, runningTypes map[server.Type]bool) *installationUpdate {
 	if inst.InstallationStatus == workshop.InstallationInProgress {
 		inst.Progress = r.steamCmdService.GetProgress("server:" + string(inst.Type))
 	} else {
 		inst.Progress = 0
 	}
+
+	var upd *installationUpdate
 
 	// Ensure InstalledBuildID is up to date from manifest if we have a finished installation
 	if inst.InstallationStatus == workshop.InstallationFinished {
@@ -104,23 +184,28 @@ func (r *Router) refreshInstallationDetails(inst *installation.ServerInstallatio
 
 		buildID := installation.ReadBuildIDFromManifest(serverPath, server.ServerIDs[inst.Type])
 		if buildID != "" {
+			if buildID != inst.InstalledBuildID {
+				upd = &installationUpdate{serverType: inst.Type, buildID: buildID}
+			}
 			inst.InstalledBuildID = buildID
-			_ = r.installationService.UpdateBuildID(context.Background(), inst.Type, buildID)
 		}
 	}
 
 	// If still unknown, try the "Old Manager" way: A2S Query (UDP)
 	// This works even on Linux where steam.inf is missing, provided the server is running.
 	shouldQueryA2S := (inst.Version == "" || inst.Version == "Unknown") && typeToQueryPort[inst.Type] != 0
-	if shouldQueryA2S {
-		if running, _ := r.hasRunningServerOfType(context.Background(), inst.Type); running {
-			addr := fmt.Sprintf("127.0.0.1:%d", typeToQueryPort[inst.Type])
-			if info, err := system.QueryServerInfo(addr); err == nil && info.Version != "" {
-				inst.Version = info.Version
-				_ = r.installationService.UpdateVersion(context.Background(), inst.Type, info.Version)
+	if shouldQueryA2S && runningTypes[inst.Type] {
+		addr := fmt.Sprintf("127.0.0.1:%d", typeToQueryPort[inst.Type])
+		if info, err := system.QueryServerInfo(addr); err == nil && info.Version != "" {
+			inst.Version = info.Version
+			if upd == nil {
+				upd = &installationUpdate{serverType: inst.Type}
 			}
+			upd.version = info.Version
 		}
 	}
+
+	return upd
 }
 
 func (r *Router) handleGetInstallation(w http.ResponseWriter, req *http.Request) {

@@ -141,8 +141,30 @@ func (e *Executor) run() {
 	}
 }
 
-func (e *Executor) Submit(job *Job) {
-	e.queue <- job
+// ErrQueueFull is returned by Submit when the job queue is saturated.
+var ErrQueueFull = errors.New("steamcmd job queue is full")
+
+// Submit enqueues a job without blocking. Callers must handle ErrQueueFull
+// instead of stalling an HTTP handler until the worker drains the queue.
+func (e *Executor) Submit(job *Job) error {
+	if job == nil {
+		return errors.New("steamcmd: cannot submit a nil job")
+	}
+
+	if e.ctx != nil {
+		select {
+		case <-e.ctx.Done():
+			return errors.New("steamcmd executor is stopped")
+		default:
+		}
+	}
+
+	select {
+	case e.queue <- job:
+		return nil
+	default:
+		return ErrQueueFull
+	}
 }
 
 func (e *Executor) execute(job *Job) {

@@ -275,13 +275,17 @@ const maxConcurrentModFetches = 5
 func (r *Router) syncNewReforgerMods(newMods, oldMods []server.ReforgerMod) {
 	sem := make(chan struct{}, maxConcurrentModFetches)
 	for _, mod := range newMods {
-		if !isModInList(mod.ID, oldMods) {
-			sem <- struct{}{} // acquire slot; blocks if all slots are taken
-			go func(modID string) {
-				defer func() { <-sem }()
-				r.fetchAndSaveScenarios(modID)
-			}(mod.ID)
+		if isModInList(mod.ID, oldMods) {
+			continue
 		}
+
+		// Acquire the slot inside the goroutine: blocking here would hold the
+		// HTTP handler past the server WriteTimeout when many mods are added.
+		go func(modID string) {
+			sem <- struct{}{}
+			defer func() { <-sem }()
+			r.fetchAndSaveScenarios(modID)
+		}(mod.ID)
 	}
 }
 

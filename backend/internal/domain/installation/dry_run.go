@@ -92,8 +92,20 @@ func (s *DryRunService) PerformDryRun(serverType server.Type) (string, error) {
 		return "", fmt.Errorf("failed to start server for dry run: %w", err)
 	}
 
-	// Ensure we kill it at the end
-	defer func() { _ = cmd.Process.Kill() }()
+	// Reap the process in the background so a killed dry-run server never turns
+	// into a zombie holding its stdout/stderr pipes open.
+	waitCh := make(chan error, 1)
+	go func() { waitCh <- cmd.Wait() }()
+
+	defer func() {
+		if cmd.Process != nil {
+			_ = cmd.Process.Kill()
+		}
+		select {
+		case <-waitCh:
+		case <-time.After(5 * time.Second):
+		}
+	}()
 
 	// 4. Query for version (multiple attempts)
 	if s.config.DebugMode {
@@ -102,7 +114,7 @@ func (s *DryRunService) PerformDryRun(serverType server.Type) (string, error) {
 
 	addr := fmt.Sprintf("127.0.0.1:%d", queryPort)
 
-	return s.waitForA2SResponse(cmd, addr, stderr)
+	return s.waitForA2SResponse(addr, stderr, waitCh)
 }
 
 func (s *DryRunService) getExecutablePath(serverType server.Type) (string, error) {
@@ -112,13 +124,19 @@ func (s *DryRunService) getExecutablePath(serverType server.Type) (string, error
 	}
 
 	exePath := filepath.Join(s.config.ServersDirectory, string(serverType), executableName)
-	if _, err := os.Stat(exePath); err != nil {
-		// Try with _x64 suffix if not found (standard for Linux Arma3/DayZ)
-		if os.PathSeparator == '/' && !strings.HasSuffix(executableName, "_x64") {
-			exePath += "_x64"
+	if _, err := os.Stat(exePath); err == nil {
+		return exePath, nil
+	}
+
+	// Arma 3 on Linux ships the server binary with an _x64 suffix.
+	if os.PathSeparator == '/' && !strings.HasSuffix(executableName, "_x64") {
+		altPath := exePath + "_x64"
+		if _, err := os.Stat(altPath); err == nil {
+			return altPath, nil
 		}
 	}
-	return exePath, nil
+
+	return "", fmt.Errorf("%s executable not found in %s", serverType, filepath.Dir(exePath))
 }
 
 func (s *DryRunService) getDryRunArgs(serverType server.Type, port int, configPath string) ([]string, func(), error) {
@@ -141,14 +159,14 @@ func (s *DryRunService) getDryRunArgs(serverType server.Type, port int, configPa
 	}
 }
 
-func (s *DryRunService) waitForA2SResponse(cmd *exec.Cmd, addr string, stderr io.Reader) (string, error) {
+func (s *DryRunService) waitForA2SResponse(addr string, stderr io.Reader, waitCh <-chan error) (string, error) {
 	stderrDone := make(chan struct{})
 	s.scanStderrInBackground(stderr, stderrDone)
 
 	for i := range 30 { // Wait up to 30 seconds
 		time.Sleep(1 * time.Second)
 
-		version, found, err := s.checkDryRunServerStatus(cmd, addr, i)
+		version, found, err := s.checkDryRunServerStatus(addr, i, waitCh)
 		if err != nil {
 			return "", err
 		}
@@ -177,7 +195,7 @@ func (s *DryRunService) scanStderrInBackground(stderr io.Reader, done chan struc
 	}()
 }
 
-func (s *DryRunService) checkDryRunServerStatus(cmd *exec.Cmd, addr string, i int) (string, bool, error) {
+func (s *DryRunService) checkDryRunServerStatus(addr string, i int, waitCh <-chan error) (string, bool, error) {
 	if info, err := system.QueryServerInfo(addr); err == nil && info.Version != "" {
 		fmt.Printf("[DryRun] SUCCESS: Captured version %s\n", info.Version)
 		return info.Version, true, nil
@@ -188,9 +206,15 @@ func (s *DryRunService) checkDryRunServerStatus(cmd *exec.Cmd, addr string, i in
 		fmt.Printf("[DryRun] Still waiting (%ds)... addr: %s\n", i, addr)
 	}
 
-	// Check if process crashed
-	if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
-		return "", false, errors.New("server process exited prematurely during dry run")
+	// A process exit is observed through the background waiter: ProcessState is
+	// only populated by Wait, which the deferred cleanup owns.
+	select {
+	case waitErr := <-waitCh:
+		if waitErr != nil {
+			return "", false, fmt.Errorf("server process exited prematurely during dry run: %w", waitErr)
+		}
+		return "", false, errors.New("server process exited during dry run without reporting a version")
+	default:
 	}
 
 	return "", false, nil

@@ -56,7 +56,7 @@ func ParseBISign(r io.Reader) (*BISign, error) {
 		return nil, fmt.Errorf("read exponent: %w", err)
 	}
 
-	if length == 0 || length > 8192 || length%8 != 0 {
+	if length == 0 || length > maxRSAModulusBits || length%8 != 0 {
 		return nil, fmt.Errorf("invalid RSA bitlength: %d", length)
 	}
 
@@ -72,15 +72,10 @@ func ParseBISign(r io.Reader) (*BISign, error) {
 	n := new(big.Int).SetBytes(reverseBytes(nBytes))
 
 	// Sig 1
-	var sig1Len uint32
-	if err := binary.Read(r, binary.LittleEndian, &sig1Len); err != nil {
-		return nil, fmt.Errorf("read sig1 length: %w", err)
+	sig1, err := readSignature(r, "sig1")
+	if err != nil {
+		return nil, err
 	}
-	sig1Bytes := make([]byte, sig1Len)
-	if _, err := io.ReadFull(r, sig1Bytes); err != nil {
-		return nil, fmt.Errorf("read sig1: %w", err)
-	}
-	sig1 := new(big.Int).SetBytes(reverseBytes(sig1Bytes))
 
 	// Version
 	var version uint32
@@ -92,26 +87,16 @@ func ParseBISign(r io.Reader) (*BISign, error) {
 	}
 
 	// Sig 2
-	var sig2Len uint32
-	if err := binary.Read(r, binary.LittleEndian, &sig2Len); err != nil {
-		return nil, fmt.Errorf("read sig2 length: %w", err)
+	sig2, err := readSignature(r, "sig2")
+	if err != nil {
+		return nil, err
 	}
-	sig2Bytes := make([]byte, sig2Len)
-	if _, err := io.ReadFull(r, sig2Bytes); err != nil {
-		return nil, fmt.Errorf("read sig2: %w", err)
-	}
-	sig2 := new(big.Int).SetBytes(reverseBytes(sig2Bytes))
 
 	// Sig 3
-	var sig3Len uint32
-	if err := binary.Read(r, binary.LittleEndian, &sig3Len); err != nil {
-		return nil, fmt.Errorf("read sig3 length: %w", err)
+	sig3, err := readSignature(r, "sig3")
+	if err != nil {
+		return nil, err
 	}
-	sig3Bytes := make([]byte, sig3Len)
-	if _, err := io.ReadFull(r, sig3Bytes); err != nil {
-		return nil, fmt.Errorf("read sig3: %w", err)
-	}
-	sig3 := new(big.Int).SetBytes(reverseBytes(sig3Bytes))
 
 	return &BISign{
 		Version:  BISignVersion(version),
@@ -123,6 +108,32 @@ func ParseBISign(r io.Reader) (*BISign, error) {
 		Sig2:     sig2,
 		Sig3:     sig3,
 	}, nil
+}
+
+// maxRSAModulusBits caps the modulus declared by a .bisign. 8192 bits is well
+// above the 2048/4096-bit keys Bohemia tooling emits, and keeps a corrupt file
+// from requesting a multi-gigabyte allocation.
+const maxRSAModulusBits uint32 = 8192
+
+// maxSignatureBytes bounds a single length-prefixed signature component.
+const maxSignatureBytes = maxRSAModulusBits / 8
+
+// readSignature reads a length-prefixed RSA component with a hard size cap.
+func readSignature(r io.Reader, name string) (*big.Int, error) {
+	var n uint32
+	if err := binary.Read(r, binary.LittleEndian, &n); err != nil {
+		return nil, fmt.Errorf("read %s length: %w", name, err)
+	}
+	if n == 0 || n > maxSignatureBytes {
+		return nil, fmt.Errorf("invalid %s length: %d", name, n)
+	}
+
+	buf := make([]byte, n)
+	if _, err := io.ReadFull(r, buf); err != nil {
+		return nil, fmt.Errorf("read %s: %w", name, err)
+	}
+
+	return new(big.Int).SetBytes(reverseBytes(buf)), nil
 }
 
 // ParseBISignFile opens and parses a BI signature file (.bisign).

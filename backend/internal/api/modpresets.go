@@ -110,7 +110,12 @@ func (r *Router) handleDeletePreset(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) handleUploadLauncherPreset(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	if err := req.ParseMultipartForm(10 << 20); err != nil {
+	req.Body = http.MaxBytesReader(w, req.Body, maxLauncherPresetUploadSize)
+	if err := req.ParseMultipartForm(multipartMemoryLimit); err != nil {
+		if isBodyTooLarge(err) {
+			http.Error(w, "Preset file exceeds the 10 MB limit", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}

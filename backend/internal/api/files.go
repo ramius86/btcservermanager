@@ -18,7 +18,25 @@ const (
 	errInvalidRequestBody    = "invalid request body"
 	headerContentType        = "Content-Type"
 	headerContentDisposition = "Content-Disposition"
+
+	// multipartMemoryLimit caps how much of a multipart body is buffered in RAM;
+	// larger parts spill to temporary files on disk.
+	multipartMemoryLimit = 32 << 20
+	// multipartEnvelopeAllowance covers multipart boundaries and part headers, so
+	// a file of exactly the configured limit is still accepted.
+	multipartEnvelopeAllowance = 1 << 20
+	// maxFileManagerUploadSize bounds a single file-manager upload request.
+	maxFileManagerUploadSize = 500 << 20
+	// maxLauncherPresetUploadSize bounds a launcher preset (.html) import.
+	maxLauncherPresetUploadSize = 10 << 20
 )
+
+// isBodyTooLarge reports whether err comes from http.MaxBytesReader, which is
+// the only mechanism that actually enforces an upload size limit.
+func isBodyTooLarge(err error) bool {
+	var maxErr *http.MaxBytesError
+	return errors.As(err, &maxErr)
+}
 
 func (r *Router) fileRoutes() chi.Router {
 	mux := chi.NewRouter()
@@ -187,9 +205,14 @@ func (r *Router) handleRenameFileOrDir(w http.ResponseWriter, req *http.Request)
 }
 
 func (r *Router) handleUploadFiles(w http.ResponseWriter, req *http.Request) {
-	// Parse multipart form (up to 500 MB for mod/script archives)
-	maxUploadSize := int64(500 * 1024 * 1024)
-	if err := req.ParseMultipartForm(maxUploadSize); err != nil {
+	// MaxBytesReader enforces the request-body cap: the ParseMultipartForm
+	// argument only controls how much of each part stays in memory.
+	req.Body = http.MaxBytesReader(w, req.Body, maxFileManagerUploadSize)
+	if err := req.ParseMultipartForm(multipartMemoryLimit); err != nil {
+		if isBodyTooLarge(err) {
+			http.Error(w, fmt.Sprintf("upload exceeds the %d MB limit", maxFileManagerUploadSize>>20), http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, fmt.Sprintf("failed to parse multipart form: %v", err), http.StatusBadRequest)
 		return
 	}

@@ -1,7 +1,7 @@
 #!/bin/sh
 set -e
 
-ROOT_DIR=$(pwd)
+ROOT_DIR=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 
 # Backend
 cd "$ROOT_DIR/backend"
@@ -44,6 +44,22 @@ fi
 
 # Frontend
 cd "$ROOT_DIR/frontend"
-npx tsc --noEmit
+
+# Never call the npx/npm shims here: on Windows (nvm4w) the extensionless
+# shims are not executable from the hook shell and fail with
+# "bash: C:/nvm4w/nodejs/npx: No such file or directory".
+# Run the locally installed compiler through node instead.
+TSC_JS="node_modules/typescript/bin/tsc"
+
+if [ ! -f "$TSC_JS" ]; then
+    echo "frontend/node_modules is missing; skipping TypeScript check (run 'npm ci' first)."
+elif command -v node >/dev/null 2>&1 && node -e "process.exit(0)" >/dev/null 2>&1; then
+    node "$TSC_JS" --noEmit
+elif command -v node.exe >/dev/null 2>&1; then
+    node.exe "$TSC_JS" --noEmit
+else
+    echo "node not found; cannot run tsc --noEmit." >&2
+    exit 1
+fi
 
 exit 0
