@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"text/template"
@@ -188,7 +189,7 @@ func (g *ConfigGenerator) renderArma3NetworkAndCBA(a3 *Arma3Server) ([]preparedF
 		cbaFile, err := g.renderCBAPresetMod(a3)
 		if err != nil {
 			// A broken CBA preset must not block the server config itself.
-			fmt.Printf("[Warning] Failed to generate CBA preset mod: %v\n", err)
+			log.Printf("[Warning] Failed to generate CBA preset mod: %v\n", err)
 		} else {
 			files = append(files, cbaFile)
 		}
@@ -259,7 +260,7 @@ func (g *ConfigGenerator) Delete(ctx context.Context, t Type, id int64) error {
 	for _, f := range files {
 		path := g.paths.GetConfigFilePath(t, f)
 		if _, err := os.Stat(path); err == nil {
-			fmt.Printf("[ConfigGenerator] Deleting orphaned config file: %s\n", path)
+			log.Printf("[ConfigGenerator] Deleting orphaned config file: %s\n", path)
 			_ = os.Remove(path)
 		}
 	}

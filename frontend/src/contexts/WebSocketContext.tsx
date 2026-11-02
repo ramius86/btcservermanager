@@ -139,6 +139,9 @@ export function WebSocketProvider({ children }: Readonly<{ children: React.React
   }
 
   useEffect(() => {
+    // Reset on every mount: after a StrictMode/HMR unmount the ref stayed
+    // false and onclose exited early, so the socket never reconnected.
+    isMountedRef.current = true
     connect()
     return () => {
       isMountedRef.current = false

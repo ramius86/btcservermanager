@@ -277,6 +277,10 @@ func (s *Service) SetAutomaticRestart(ctx context.Context, id int64, enabled boo
 		v.RestartAutomatically = enabled
 		v.AutomaticRestartTime = restartTime
 		updated = v
+	default:
+		// Without this the switch left `updated` nil and the repository was
+		// called with a nil entity.
+		return fmt.Errorf("automatic restart is not supported for %T", srv)
 	}
 
 	_, err = s.repo.Save(ctx, updated)
@@ -407,6 +411,10 @@ func getServerName(srv any) string {
 
 func (s *Service) getActiveServerNames(ctx context.Context, serverIDs []int64) []string {
 	activeServerNames := make([]string, 0, len(serverIDs))
+	if s.processManager == nil {
+		return activeServerNames
+	}
+
 	for _, id := range serverIDs {
 		if s.processManager.GetInstanceInfo(id) == nil {
 			continue

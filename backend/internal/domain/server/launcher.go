@@ -185,8 +185,12 @@ func (l *Launcher) getReforgerParameters(s *ReforgerServer) []string {
 	params = append(params, "-profile")
 	params = append(params, filepath.Join(l.paths.GetServerPath(s.Type), fmt.Sprintf("profile_%d", s.ID)))
 	params = append(params, "-addonDownloadDir", filepath.Join(l.paths.GetModsBaseDir(), "reforger"))
-	params = append(params, "-maxFPS")
-	params = append(params, strconv.Itoa(s.MaxFPS))
+	// Reforger treats -maxFPS 0 as a real limit and stops rendering; omit the
+	// flag so an unset value falls back to the engine default.
+	if s.MaxFPS > 0 {
+		params = append(params, "-maxFPS")
+		params = append(params, strconv.Itoa(s.MaxFPS))
+	}
 	params = append(params, "-backendlog")
 	params = append(params, "-logAppend")
 

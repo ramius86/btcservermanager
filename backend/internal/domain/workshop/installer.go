@@ -250,11 +250,11 @@ func (i *Installer) verifyArma3Signatures(m *WorkshopMod, modDir string) {
 	if err == nil && report != nil {
 		m.SignatureStatus = string(report.OverallStatus)
 		m.SignatureSummary = report.Summary
-		fmt.Printf("[Installer] Signature verification for mod %d (%s): %s - %s\n", m.ID, m.Name, report.OverallStatus, report.Summary)
+		log.Printf("[Installer] Signature verification for mod %d (%s): %s - %s\n", m.ID, m.Name, report.OverallStatus, report.Summary)
 	} else if err != nil {
 		m.SignatureStatus = string(signature.StatusError)
 		m.SignatureSummary = err.Error()
-		fmt.Printf("[Installer] Signature check error for mod %d (%s): %v\n", m.ID, m.Name, err)
+		log.Printf("[Installer] Signature check error for mod %d (%s): %v\n", m.ID, m.Name, err)
 	}
 }
 
@@ -278,7 +278,7 @@ func (i *Installer) UninstallMod(ctx context.Context, m *WorkshopMod) error {
 		if i.repo != nil {
 			used, err := i.repo.IsBiKeyUsedByOtherMods(ctx, m.ID, k, m.ServerType)
 			if err != nil {
-				fmt.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
+				log.Printf("[Installer] Failed to check if bikey %s is used by other mods: %v; preserving key file\n", k, err)
 				continue
 			} else if used {
 				continue
@@ -418,7 +418,7 @@ func getDirSize(path string) int64 {
 		return nil
 	})
 	if err != nil && !os.IsNotExist(err) {
-		fmt.Printf("[Installer] Failed to calculate directory size for %s: %v\n", path, err)
+		log.Printf("[Installer] Failed to calculate directory size for %s: %v\n", path, err)
 	}
 
 	return size

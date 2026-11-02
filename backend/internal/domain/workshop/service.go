@@ -674,7 +674,7 @@ func (s *Service) StartReforgerScenariosSyncWorker() {
 		bgCtx := context.Background()
 		fmt.Println("[ScenarioSync] Running initial Reforger scenarios sync...")
 		if err := s.SyncReforgerScenarios(bgCtx); err != nil {
-			fmt.Printf("[ScenarioSync] Initial sync failed: %v\n", err)
+			log.Printf("[ScenarioSync] Initial sync failed: %v\n", err)
 		}
 	}()
 
@@ -690,7 +690,7 @@ func (s *Service) StartReforgerScenariosSyncWorker() {
 				bgCtx := context.Background()
 				fmt.Println("[ScenarioSync] Running periodic Reforger scenarios sync...")
 				if err := s.SyncReforgerScenarios(bgCtx); err != nil {
-					fmt.Printf("[ScenarioSync] Periodic sync failed: %v\n", err)
+					log.Printf("[ScenarioSync] Periodic sync failed: %v\n", err)
 				}
 			case <-s.stopCh:
 				timer.Stop()

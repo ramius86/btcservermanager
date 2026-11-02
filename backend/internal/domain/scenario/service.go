@@ -6,8 +6,8 @@ import (
 	"btcservermanager/internal/domain/workshop"
 	"bufio"
 	"context"
-	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
@@ -85,25 +85,25 @@ func (s *Service) SaveVanillaScenarios(ctx context.Context, scenarios []Reforger
 }
 
 func (s *Service) RefreshReforgerVanillaScenariosIfEmpty(ctx context.Context) error {
-	fmt.Printf("[Scenario] Startup check: checking for vanilla scenarios...\n")
+	log.Printf("[Scenario] Startup check: checking for vanilla scenarios...\n")
 	vanilla, err := s.repo.GetVanillaReforgerScenarios(ctx)
 	if err != nil {
 		return err
 	}
 
 	if len(vanilla) > 0 {
-		fmt.Printf("[Scenario] Startup check: %d vanilla scenarios already in database.\n", len(vanilla))
+		log.Printf("[Scenario] Startup check: %d vanilla scenarios already in database.\n", len(vanilla))
 		return nil
 	}
 
 	// Check if executable exists before trying
 	executable := s.paths.GetServerExecutable(server.TypeReforger)
 	if _, statErr := os.Stat(executable); statErr != nil {
-		fmt.Printf("[Scenario] Startup check: Reforger executable not found at %s. Skipping auto-discovery.\n", executable)
+		log.Printf("[Scenario] Startup check: Reforger executable not found at %s. Skipping auto-discovery.\n", executable)
 		return nil //nolint:nilerr // Executable not found is a safe fallback, not an error
 	}
 
-	fmt.Printf("[Scenario] Startup check: No scenarios in DB but executable found. Refreshing...\n")
+	log.Printf("[Scenario] Startup check: No scenarios in DB but executable found. Refreshing...\n")
 	return s.RefreshReforgerVanillaScenarios(ctx)
 }
 
@@ -113,11 +113,11 @@ func (s *Service) getReforgerScenariosFromExecutable(ctx context.Context) ([]Ref
 	execCtx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
-	fmt.Printf("[Scenario] Executing: %s -listScenarios -logStats 1 -profile <temp>\n", executable)
+	log.Printf("[Scenario] Executing: %s -listScenarios -logStats 1 -profile <temp>\n", executable)
 	// Create a temporary profile for extraction to avoid conflicts
 	profileDir, err := os.MkdirTemp("", "reforger_scenario_extraction_*")
 	if err != nil {
-		fmt.Printf("[Scenario] Failed to create temporary profile dir: %v\n", err)
+		log.Printf("[Scenario] Failed to create temporary profile dir: %v\n", err)
 	}
 	defer os.RemoveAll(profileDir)
 
@@ -127,7 +127,7 @@ func (s *Service) getReforgerScenariosFromExecutable(ctx context.Context) ([]Ref
 	stderr, _ := cmd.StderrPipe()
 
 	if err := cmd.Start(); err != nil {
-		fmt.Printf("[Scenario] Failed to start command: %v\n", err)
+		log.Printf("[Scenario] Failed to start command: %v\n", err)
 		return nil, err
 	}
 
@@ -135,14 +135,14 @@ func (s *Service) getReforgerScenariosFromExecutable(ctx context.Context) ([]Ref
 	// We wrap the pipes in a MultiReader to scan both stdout and stderr
 	version, scenarios := ParseReforgerOutput(io.MultiReader(stdout, stderr))
 	if version != "" {
-		fmt.Printf("[Scenario] Detected version during scenario extraction: %s\n", version)
+		log.Printf("[Scenario] Detected version during scenario extraction: %s\n", version)
 	}
 
 	if err := cmd.Wait(); err != nil {
-		fmt.Printf("[Scenario] Command finished with error: %v\n", err)
+		log.Printf("[Scenario] Command finished with error: %v\n", err)
 	}
 
-	fmt.Printf("[Scenario] Finished extraction. Total found: %d\n", len(scenarios))
+	log.Printf("[Scenario] Finished extraction. Total found: %d\n", len(scenarios))
 	return scenarios, nil
 }
 
@@ -186,7 +186,7 @@ func ParseReforgerOutput(reader io.Reader) (string, []ReforgerScenario) {
 	}
 
 	if err := scanner.Err(); err != nil {
-		fmt.Printf("[Scenario] Error reading Reforger output: %v\n", err)
+		log.Printf("[Scenario] Error reading Reforger output: %v\n", err)
 	}
 
 	return version, scenarios

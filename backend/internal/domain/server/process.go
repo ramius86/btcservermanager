@@ -500,6 +500,18 @@ func (m *ProcessManager) startPipeScanning(stdout, stderr io.ReadCloser, logChan
 	}()
 }
 
+// statsLogPathFor derives the telemetry file next to the server log.
+// Replacing the first ".log" in the whole path also rewrote directory names
+// that happen to contain that sequence (e.g. "/data/logs.archive/...").
+func statsLogPathFor(logFilePath string) string {
+	ext := filepath.Ext(logFilePath)
+	if ext == "" {
+		return logFilePath + ".stats"
+	}
+
+	return strings.TrimSuffix(logFilePath, ext) + ".stats" + ext
+}
+
 func (m *ProcessManager) openStatsLogIfNeeded(s any, params []string, logFilePath string, logFile *os.File) (*os.File, bool, int) {
 	rs, isReforger := s.(*ReforgerServer)
 	if !isReforger {
@@ -528,11 +540,16 @@ func (m *ProcessManager) openStatsLogIfNeeded(s any, params []string, logFilePat
 		return nil, true, statIntervalMs
 	}
 
-	statsLogPath := strings.Replace(logFilePath, ".log", ".stats.log", 1)
+	statsLogPath := statsLogPathFor(logFilePath)
 	statsFile, err := os.OpenFile(statsLogPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		log.Printf("[ProcessManager] Failed to open stats log: %v", err)
-		return logFile, true, statIntervalMs
+		log.Printf("[ProcessManager] Failed to open stats log, telemetry will be dropped: %v", err)
+		// Returning the main log made handleReforgerLogLine treat every
+		// telemetry sample as normal output and mix it into the server log.
+		if devNull, devErr := os.OpenFile(os.DevNull, os.O_WRONLY, 0); devErr == nil {
+			return devNull, true, statIntervalMs
+		}
+		return nil, true, statIntervalMs
 	}
 
 	return statsFile, true, statIntervalMs

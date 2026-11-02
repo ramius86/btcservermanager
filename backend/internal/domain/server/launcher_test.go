@@ -147,7 +147,6 @@ func TestLauncher_GetReforgerParameters(t *testing.T) {
 		"-config", "/config/REFORGER_1.json",
 		"-profile", "profile_1",
 		"-addonDownloadDir", filepath.Join("/mods", "reforger"),
-		"-maxFPS", "0",
 		"-backendlog",
 		"-logAppend",
 		"-logStats", "5000",
@@ -155,6 +154,29 @@ func TestLauncher_GetReforgerParameters(t *testing.T) {
 
 	if !reflect.DeepEqual(params, expectedParams) {
 		t.Errorf("Expected parameters %v, got %v", expectedParams, params)
+	}
+
+	// Reforger honours -maxFPS 0 as a real cap, so an unset value must be
+	// omitted instead of freezing the render loop.
+	for _, p := range params {
+		if p == "-maxFPS" {
+			t.Errorf("-maxFPS must be omitted when unset, got %v", params)
+			break
+		}
+	}
+
+	s.MaxFPS = 60
+	params = launcher.getReforgerParameters(s)
+
+	maxFPSFound := false
+	for i, p := range params {
+		if p == "-maxFPS" && i+1 < len(params) && params[i+1] == "60" {
+			maxFPSFound = true
+			break
+		}
+	}
+	if !maxFPSFound {
+		t.Errorf("-maxFPS 60 not found in parameters: %v", params)
 	}
 
 	// Test sub-second interval

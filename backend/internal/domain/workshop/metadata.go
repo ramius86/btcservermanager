@@ -45,24 +45,24 @@ func (f *MetadataFetcher) FetchMetadata(ctx context.Context, modID int64) (*Work
 
 	resp, err := f.client.Do(req)
 	if err != nil {
-		fmt.Printf("[Metadata] HTTP error for mod %d: %v\n", modID, err)
+		log.Printf("[Metadata] HTTP error for mod %d: %v\n", modID, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		fmt.Printf("[Metadata] Steam API returned status %d for mod %d\n", resp.StatusCode, modID)
+		log.Printf("[Metadata] Steam API returned status %d for mod %d\n", resp.StatusCode, modID)
 		return nil, fmt.Errorf("steam API returned status %d", resp.StatusCode)
 	}
 
 	var apiResp SteamAPIResponse
 	if err := json.NewDecoder(resp.Body).Decode(&apiResp); err != nil {
-		fmt.Printf("[Metadata] JSON decode error for mod %d: %v\n", modID, err)
+		log.Printf("[Metadata] JSON decode error for mod %d: %v\n", modID, err)
 		return nil, err
 	}
 
 	if len(apiResp.Response.PublishedFileDetails) == 0 {
-		fmt.Printf("[Metadata] No details returned by Steam for mod %d\n", modID)
+		log.Printf("[Metadata] No details returned by Steam for mod %d\n", modID)
 		return nil, fmt.Errorf("no details found for mod %d", modID)
 	}
 

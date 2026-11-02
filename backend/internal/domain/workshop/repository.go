@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
@@ -23,7 +24,7 @@ func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
 
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		fmt.Printf("[WorkshopRepo] Error querying mods: %v\n", err)
+		log.Printf("[WorkshopRepo] Error querying mods: %v\n", err)
 		return nil, err
 	}
 
@@ -35,7 +36,7 @@ func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
 	for rows.Next() {
 		m, err := r.scanModBasic(rows)
 		if err != nil {
-			fmt.Printf("[WorkshopRepo] Error scanning mod: %v\n", err)
+			log.Printf("[WorkshopRepo] Error scanning mod: %v\n", err)
 			return nil, err
 		}
 
@@ -44,11 +45,11 @@ func (r *Repository) GetAllMods(ctx context.Context) ([]*WorkshopMod, error) {
 	}
 
 	if err := rows.Err(); err != nil {
-		fmt.Printf("[WorkshopRepo] Rows error: %v\n", err)
+		log.Printf("[WorkshopRepo] Rows error: %v\n", err)
 		return nil, err
 	}
 
-	fmt.Printf("[WorkshopRepo] GetAllMods retrieved %d mods from database\n", len(mods))
+	log.Printf("[WorkshopRepo] GetAllMods retrieved %d mods from database\n", len(mods))
 
 	if len(ids) > 0 {
 		bikeysMap, err := r.getBiKeysBatch(ctx, ids)

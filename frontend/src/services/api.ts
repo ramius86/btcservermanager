@@ -12,15 +12,14 @@ import {
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api'
 
-export async function fetchApi(path: string, options: RequestInit = {}) {
-  // Add cache-busting timestamp to all GET requests
-  let finalPath = path
-  if (!options.method || options.method.toUpperCase() === 'GET') {
-    const separator = path.includes('?') ? '&' : '?'
-    finalPath = `${path}${separator}_t=${Date.now()}`
-  }
+// lastAuthReloadAt debounces reloads triggered by an expired Cloudflare Access
+// session: the login page is served for every request, so reloading again right
+// away cannot help and used to loop forever.
+let lastAuthReloadAt = 0
+const AUTH_RELOAD_COOLDOWN_MS = 10_000
 
-  const res = await fetch(`${API_BASE}${finalPath}`, {
+export async function fetchApi(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     cache: 'no-store',
     headers: {
@@ -39,10 +38,16 @@ export async function fetchApi(path: string, options: RequestInit = {}) {
 
   // Handle Cloudflare Access authentication redirects or HTML responses
   if (contentType.includes('text/html') || text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
-    if (globalThis.window?.location) {
+    const now = Date.now()
+    if (now - lastAuthReloadAt > AUTH_RELOAD_COOLDOWN_MS && globalThis.window?.location) {
+      lastAuthReloadAt = now
       globalThis.window.location.reload()
+      return null
     }
-    return null
+
+    // Second HTML answer within the cooldown: the reload did not restore the
+    // session. Fail loudly instead of reloading in a loop.
+    throw new Error('Session expired: reload the page to sign in through Cloudflare Access')
   }
 
   try {
