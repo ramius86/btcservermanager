@@ -437,10 +437,14 @@ func TestRouterEndpoints(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code)
-			var res map[string]string
+			var res struct {
+				Content   string `json:"content"`
+				Truncated bool   `json:"truncated"`
+			}
 			err := json.NewDecoder(rr.Body).Decode(&res)
 			assert.NoError(t, err)
-			assert.Contains(t, res["content"], "Line 2\nLine 3")
+			assert.Contains(t, res.Content, "Line 2\nLine 3")
+			assert.False(t, res.Truncated, "a small log must not be reported as truncated")
 		}
 
 		// Get Server Stats (Reforger stats parser)
@@ -474,10 +478,14 @@ func TestRouterEndpoints(t *testing.T) {
 			rr := httptest.NewRecorder()
 			handler.ServeHTTP(rr, req)
 			assert.Equal(t, http.StatusOK, rr.Code)
-			var res map[string]string
+			var res struct {
+				Content   string `json:"content"`
+				Truncated bool   `json:"truncated"`
+			}
 			err := json.NewDecoder(rr.Body).Decode(&res)
 			assert.NoError(t, err)
-			assert.Contains(t, res["content"], "Finished!")
+			assert.Contains(t, res.Content, "Finished!")
+			assert.False(t, res.Truncated)
 		}
 
 		// Download Log

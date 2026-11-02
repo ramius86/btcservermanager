@@ -17,6 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '../components/ui/Toast'
 import { useWebSocket } from '../contexts/WebSocketContext'
 import { isModInProgress } from '../dtos/ModDto'
+import { isTerminalInstallStatus } from '../utils/installStatus'
 
 // Modular Components
 import { ModCard } from '../components/mods/ModCard'
@@ -29,13 +30,12 @@ import { Virtuoso } from 'react-virtuoso'
 function applyInstallProgress(mods: any[], itemId: number, status: string, loadData: () => void) {
   return mods.map(mod => {
     if (String(mod.id) === String(itemId)) {
-      if (status === 'FINISHED') {
+      if (isTerminalInstallStatus(status)) {
         setTimeout(loadData, 1000)
+        if (status === 'ERROR') {
+          return { ...mod, installationStatus: status }
+        }
         return { ...mod, installationStatus: status, needsUpdate: false, errorStatus: null }
-      }
-      if (status === 'ERROR') {
-        setTimeout(loadData, 1000)
-        return { ...mod, installationStatus: status }
       }
       return { ...mod, installationStatus: status }
     }
@@ -668,7 +668,7 @@ export function ModsPage() {
     if (!file) return
 
     try {
-      await WorkshopService.importFromHtml(file, filter)
+      await WorkshopService.importFromHtml(file)
       showToast("HTML Mod list imported. Installation queued.", "success")
       loadData()
     } catch (err) {
@@ -679,6 +679,12 @@ export function ModsPage() {
 
   const onDropFiles = async (files: FileList) => {
     const file = files[0]
+    // The parser reads the Arma 3 Launcher export: importing it as DayZ would
+    // create DayZ mods holding Arma 3 Workshop ids.
+    if (filter !== 'ARMA3') {
+      showToast("Mod preset import supports the Arma 3 Launcher format only.", "error")
+      return
+    }
     if (!file.name.endsWith('.html')) {
       showToast("Only HTML mod preset files (.html) are accepted.", "error")
       return
@@ -686,7 +692,7 @@ export function ModsPage() {
 
     setLoading(true)
     try {
-      await WorkshopService.importFromHtml(file, filter)
+      await WorkshopService.importFromHtml(file)
       showToast("HTML Mod list imported successfully.", "success")
       loadData()
     } catch (err) {
@@ -701,10 +707,12 @@ export function ModsPage() {
 
   const handleUpdateAll = async () => {
     setUpdatingAll(true)
-    setMods(prev => prev.map(m => ({ ...m, installationStatus: 'INSTALLATION_IN_PROGRESS' })))
     try {
       await WorkshopService.updateAll()
-      showToast("All mods update check started.", "success")
+      // The backend only re-downloads the mods flagged by the metadata check,
+      // so only those cards get the installing state.
+      setMods(prev => applyOptimisticInProgress(prev, prev.filter(m => m.needsUpdate).map(m => m.id)))
+      showToast("Mods update check started.", "success")
     } catch (err) {
       console.error(err)
       showToast("Failed to update all mods", "error")
@@ -776,7 +784,7 @@ export function ModsPage() {
       className="space-y-10 max-w-7xl mx-auto py-8 px-6 relative min-h-[500px]"
       {...dragProps}
     >
-      {isDragging && (
+      {isDragging && filter === 'ARMA3' && (
         <div className="absolute inset-0 bg-background/80 backdrop-blur-md border-2 border-dashed border-primary rounded-2xl flex flex-col items-center justify-center z-50 transition-all duration-300 animate-in fade-in">
           <div className="flex flex-col items-center gap-4 p-8 bg-surface-elevated/80 border border-border/50 rounded-xl shadow-2xl max-w-md text-center pointer-events-none transform scale-105 transition-transform duration-300">
             <div className="w-16 h-16 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center animate-bounce">
@@ -835,10 +843,12 @@ export function ModsPage() {
             <RefreshCw className={cn("w-4 h-4 mr-2", updatingAll && "animate-spin")} />
             Update All
           </Button>
-          <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="bg-surface-elevated border border-border hover:bg-accent">
-            <Upload className="w-4 h-4 mr-2" />
-            Import
-          </Button>
+          {filter === 'ARMA3' && (
+            <Button variant="secondary" onClick={() => fileInputRef.current?.click()} className="bg-surface-elevated border border-border hover:bg-accent">
+              <Upload className="w-4 h-4 mr-2" />
+              Import
+            </Button>
+          )}
           <Button onClick={() => setInstallDialogOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Install Mod

@@ -205,6 +205,15 @@ func (r *Router) handleUninstallMod(w http.ResponseWriter, req *http.Request) {
 			return
 		}
 
+		// The client scopes the deletion with the mod's game; validate it instead
+		// of ignoring it, so a stale UI cannot delete the same ID of another game.
+		if filter := server.Type(req.URL.Query().Get("serverType")); filter != "" {
+			if mod, getErr := r.workshopService.GetMod(ctx, id); getErr == nil && mod != nil && mod.ServerType != filter {
+				http.Error(w, "mod does not belong to the requested server type", http.StatusConflict)
+				return
+			}
+		}
+
 		// Preemptive validation: check if the mod is active on any running servers
 		if err := r.validateModNotActive(ctx, id); err != nil {
 			http.Error(w, err.Error(), http.StatusConflict)
@@ -311,23 +320,32 @@ func (r *Router) handleSetModServerOnly(w http.ResponseWriter, req *http.Request
 
 func (r *Router) handleUpdateAllMods(w http.ResponseWriter, req *http.Request) {
 	ctx := req.Context()
-	err := r.workshopService.UpdateAllMods(ctx)
+	if err := r.workshopService.UpdateAllMods(ctx); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Only mods whose metadata check just flagged an update are re-downloaded:
+	// queueing the whole catalogue made "Update all" re-install and re-validate
+	// every mod, which takes tens of minutes and re-downloads gigabytes.
+	mods, err := r.workshopService.GetAllMods(ctx)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	// In Java, this also queues SteamCMD. Let's get all mods and queue them.
-	mods, _ := r.workshopService.GetAllMods(ctx)
-	if len(mods) > 0 {
-		workshopMods := []workshop.WorkshopMod{}
-		for _, m := range mods {
-			workshopMods = append(workshopMods, *m)
-		}
 
-		r.steamCmdService.InstallOrUpdateWorkshopMods(workshopMods)
+	pending := make([]workshop.WorkshopMod, 0, len(mods))
+	for _, m := range mods {
+		if m.NeedsUpdate {
+			pending = append(pending, *m)
+		}
 	}
 
-	w.WriteHeader(http.StatusOK)
+	if len(pending) > 0 {
+		r.steamCmdService.InstallOrUpdateWorkshopMods(pending)
+	}
+
+	r.json(w, map[string]int{"queued": len(pending)})
 }
 
 func (r *Router) handleSyncBiKeys(w http.ResponseWriter, req *http.Request) {

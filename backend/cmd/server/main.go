@@ -43,7 +43,11 @@ func run() error {
 	paths := config.NewPaths(cfg)
 
 	if cfg.CFTeamDomain == "" {
-		log.Println("⚠️  WARNING: CF_TEAM_DOMAIN not set. API authentication is DISABLED.")
+		if cfg.DebugMode {
+			log.Println("❌ CRITICAL: DEBUG=true with an empty CF_TEAM_DOMAIN — the whole /api is OPEN to anyone who reaches the tunnel. Set CF_TEAM_DOMAIN or turn DEBUG off.")
+		} else {
+			log.Println("⚠️  WARNING: CF_TEAM_DOMAIN is not set and DEBUG=false — every /api request will be rejected with 401.")
+		}
 	}
 	if cfg.SecretKey == "" {
 		log.Println("❌ CRITICAL: SECRET_KEY is not set! Steam credential encryption is DISABLED. All Steam auth saves will FAIL until this is configured.")

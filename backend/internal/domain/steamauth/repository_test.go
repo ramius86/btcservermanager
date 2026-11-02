@@ -10,7 +10,7 @@ import (
 )
 
 func TestRepository(t *testing.T) {
-	t.Setenv("SECRET_KEY", "dummy-key")
+	t.Setenv("SECRET_KEY", "dummy-key-with-at-least-32-characters")
 
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 

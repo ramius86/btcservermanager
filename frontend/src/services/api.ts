@@ -117,10 +117,11 @@ export const WorkshopService = {
   verifyModSignatures: (id: number, autoExtract: boolean = true): Promise<ModSignatureReportDto> => 
     fetchApi(`/mod/${id}/verify-signatures?autoExtract=${autoExtract}`, { method: 'POST' }),
   getCreatorDlcs: (): Promise<CreatorDlcDto[]> => fetchApi(`/mod/cdlc`),
-  importFromHtml: (file: File, filter: string): Promise<void> => {
+  // Import is Arma 3 Launcher format only: the backend parses "arma:*" meta
+  // tags and app 107410 ids, so no serverType is sent for other tabs.
+  importFromHtml: (file: File): Promise<void> => {
     const formData = new FormData()
     formData.append('file', file)
-    formData.append('serverType', filter)
     return fetch(`${API_BASE}/mod/preset/import`, { method: 'POST', body: formData }).then(async res => {
       if (!res.ok) {
         const errText = await res.text().catch(() => '')
@@ -138,7 +139,9 @@ export const WorkshopService = {
 export const ScenarioService = {
   getArma3: (): Promise<any[]> => fetchApi('/scenarios/arma3').then(res => res?.scenarios || []),
   deleteArma3: (name: string): Promise<void> => fetchApi(`/scenarios/arma3/${name}`, { method: 'DELETE' }),
-  getReforger: (serverId?: number): Promise<any[]> => fetchApi(serverId ? `/scenarios/reforger?serverId=${serverId}` : `/scenarios/reforger`).then(res => res?.scenarios || []),
+  // The endpoint deliberately returns vanilla + every modded scenario in the
+  // DB (discovery must work for mods not yet saved), so no serverId is sent.
+  getReforger: (): Promise<any[]> => fetchApi('/scenarios/reforger').then(res => res?.scenarios || []),
   uploadArma3: async (files: FileList | File[]): Promise<Response> => {
     const formData = new FormData()
     for (const file of Array.from(files)) {

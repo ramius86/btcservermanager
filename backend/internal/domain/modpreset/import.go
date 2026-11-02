@@ -23,6 +23,13 @@ func NewImporter(repo *Repository, wr *workshop.Repository) *Importer {
 	return &Importer{repo: repo, workshopRepo: wr}
 }
 
+// Import reads an Arma 3 Launcher HTML preset export.
+//
+// The parser recognises that format only: the "arma:*" meta tags and the
+// "Arma 3 Mods - " heading, with Workshop ids taken from the ?id= links of
+// app 107410. A file from another catalogue would therefore be filed as Arma 3
+// mods, which is why the HTTP handler refuses a non-Arma 3 serverType instead
+// of guessing from the request.
 func (i *Importer) Import(ctx context.Context, r io.Reader) (*ModPreset, error) {
 	content, err := io.ReadAll(r)
 	if err != nil {

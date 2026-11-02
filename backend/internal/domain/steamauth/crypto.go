@@ -7,20 +7,43 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"io"
-	"log"
 	"os"
+	"strings"
 )
 
+// minSecretKeyLength makes a guessable key impractical: the key is the only
+// thing protecting the stored Steam password once the DB file is copied.
+const minSecretKeyLength = 32
+
+// isPlaceholderSecret catches the values shipped in .env.example and the
+// obvious "I will change it later" ones. Encrypting with a key that is
+// published next to the code is the same as storing the password in clear.
+func isPlaceholderSecret(secret string) bool {
+	lower := strings.ToLower(secret)
+	for _, needle := range []string{"change-me", "changeme", "change_me", "your-secret", "placeholder", "replace-me"} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func deriveKey() ([]byte, error) {
-	secret := os.Getenv("SECRET_KEY")
+	secret := strings.TrimSpace(os.Getenv("SECRET_KEY"))
 
 	if secret == "" {
 		return nil, errors.New("FATAL SECURITY ERROR: SECRET_KEY environment variable must be set to secure Steam credentials")
 	}
 
-	if len(secret) < 16 {
-		log.Printf("⚠️  SECURITY WARNING: SECRET_KEY is shorter than 16 characters. A 32+ character key is strongly recommended.")
+	if isPlaceholderSecret(secret) {
+		return nil, errors.New("FATAL SECURITY ERROR: SECRET_KEY still contains the placeholder from .env.example; generate a unique key with `openssl rand -base64 32`")
+	}
+
+	if len(secret) < minSecretKeyLength {
+		return nil, fmt.Errorf("FATAL SECURITY ERROR: SECRET_KEY must be at least %d characters long (got %d); generate one with `openssl rand -base64 32`", minSecretKeyLength, len(secret))
 	}
 
 	hash := sha256.Sum256([]byte(secret))

@@ -159,7 +159,9 @@ export const LogExplorerPage: React.FC = () => {
         setLines(prev => [...newLines, ...prev])
         setPaging(prev => applyFetchedPage(prev, newLines.length))
       }
-      setHasMore(hasMorePages(newLines.length))
+      // truncated means the backend could not reach further back in the file:
+      // asking for the next page would only return the same lines again.
+      setHasMore(hasMorePages(newLines.length) && !res.truncated)
     } catch (e) {
       console.error(e)
     } finally {
@@ -248,7 +250,7 @@ export const LogExplorerPage: React.FC = () => {
           setLines(newLines)
           setFirstItemIndex(1000000)
           setPaging(applyFetchedPage(initialLogPaging, newLines.length))
-          setHasMore(hasMorePages(newLines.length))
+          setHasMore(hasMorePages(newLines.length) && !res.truncated)
         } catch (e) { 
           console.error('Failed to fetch log content:', e)
           setLines(['Error loading log.'])

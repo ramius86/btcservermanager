@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 )
@@ -77,20 +78,44 @@ func (r *Router) handleUpdatePreset(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	var p modpreset.ModPreset
-	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1048576)).Decode(&p); err != nil {
+	// The client sends partial payloads ({"id": x, "mods": [...]}), so the
+	// fields that are absent must keep their stored value instead of being
+	// overwritten with "" / the zero type.
+	var body struct {
+		Name       *string         `json:"name"`
+		ServerType *server.Type    `json:"serverType"`
+		Mods       json.RawMessage `json:"mods"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1048576)).Decode(&body); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	p.ID = id
+	preset, err := r.modPresetService.GetPreset(ctx, id)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
 
-	if err := r.modPresetService.SavePreset(ctx, &p); err != nil {
+	if body.Name != nil && strings.TrimSpace(*body.Name) != "" {
+		preset.Name = *body.Name
+	}
+	if body.ServerType != nil && *body.ServerType != "" {
+		preset.Type = *body.ServerType
+	}
+	if len(body.Mods) > 0 && string(body.Mods) != "null" {
+		if err := json.Unmarshal(body.Mods, &preset.Mods); err != nil {
+			http.Error(w, "invalid mods payload: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+	}
+
+	if err := r.modPresetService.SavePreset(ctx, preset); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	r.json(w, p)
+	r.json(w, preset)
 }
 
 func (r *Router) handleDeletePreset(w http.ResponseWriter, req *http.Request) {
@@ -126,6 +151,14 @@ func (r *Router) handleUploadLauncherPreset(w http.ResponseWriter, req *http.Req
 		return
 	}
 	defer file.Close()
+
+	// The importer only understands the Arma 3 Launcher HTML export, so a
+	// non-Arma 3 serverType is refused rather than silently filing Arma 3
+	// Workshop ids into another game's catalogue.
+	if rawType := strings.TrimSpace(req.FormValue("serverType")); rawType != "" && server.Type(rawType) != server.TypeArma3 {
+		http.Error(w, "mod preset import supports the Arma 3 Launcher format only", http.StatusBadRequest)
+		return
+	}
 
 	preset, err := r.modPresetService.ImportPreset(ctx, file)
 	if err != nil {

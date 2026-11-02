@@ -1,6 +1,7 @@
 package signature
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"bytes"
 	"encoding/binary"
 	"errors"
@@ -174,7 +175,9 @@ func SaveExtractedBiKey(bisignPath, destDir string) (string, error) {
 		return "", err
 	}
 
-	if err := os.WriteFile(destPath, bikeyBytes, 0o644); err != nil {
+	// A half-written .bikey silently breaks signature checks on the next server
+	// start, so the file is replaced atomically.
+	if err := atomicfile.WriteFile(destPath, bikeyBytes, 0o644); err != nil {
 		return "", err
 	}
 

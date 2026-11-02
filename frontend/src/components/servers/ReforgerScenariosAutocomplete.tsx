@@ -21,7 +21,7 @@ export function ReforgerScenariosAutocomplete({ serverId, value, onChange }: Rea
 
   const loadScenarios = useCallback(() => {
     setLoading(true)
-    ScenarioService.getReforger(serverId)
+    ScenarioService.getReforger()
       .then(data => setScenarios(Array.isArray(data) ? data : (data as any).scenarios || []))
       .catch(() => showToast('Failed to load scenarios', 'error'))
       .finally(() => setLoading(false))

@@ -48,13 +48,13 @@ func (r *Router) handleGetServerLogContent(w http.ResponseWriter, req *http.Requ
 	logPath := filepath.Join(r.config.LogsDirectory, filename)
 	logFile := server.NewLogFile(logPath)
 
-	content, err := logFile.GetLinesFromEnd(offset, lines)
+	content, truncated, err := logFile.GetLinesFromEndWithStatus(offset, lines)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	r.json(w, map[string]string{"content": content})
+	r.json(w, map[string]any{"content": content, "truncated": truncated})
 }
 
 func (r *Router) handleListServerLogs(w http.ResponseWriter, req *http.Request) {
@@ -308,13 +308,13 @@ func (r *Router) handleGetSteamCmdLogContent(w http.ResponseWriter, req *http.Re
 	logPath := filepath.Join(r.config.LogsDirectory, "steamcmd", filename)
 	logFile := server.NewLogFile(logPath)
 
-	content, err := logFile.GetLinesFromEnd(offset, lines)
+	content, truncated, err := logFile.GetLinesFromEndWithStatus(offset, lines)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	r.json(w, map[string]string{"content": content})
+	r.json(w, map[string]any{"content": content, "truncated": truncated})
 }
 
 func (r *Router) handleDownloadLog(w http.ResponseWriter, req *http.Request) {

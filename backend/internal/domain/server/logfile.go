@@ -21,27 +21,38 @@ func (l *LogFile) GetLastLines(n int) (string, error) {
 const maxReadSeekSize = 32 * 1024 * 1024 // 32 MB max seek buffer to prevent container OOM
 
 func (l *LogFile) GetLinesFromEnd(offset, limit int) (string, error) {
+	content, _, err := l.GetLinesFromEndWithStatus(offset, limit)
+	return content, err
+}
+
+// GetLinesFromEndWithStatus is GetLinesFromEnd plus a truncation flag.
+//
+// The reader never buffers more than maxReadSeekSize, so a file whose requested
+// lines fall outside that window returns fewer lines than asked. truncated=true
+// means "there is more content, but it cannot be reached": callers must stop
+// paging instead of silently presenting a partial log as the whole file.
+func (l *LogFile) GetLinesFromEndWithStatus(offset, limit int) (string, bool, error) {
 	if limit <= 0 {
-		return "", nil
+		return "", false, nil
 	}
 
 	file, err := os.Open(l.path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return "", nil
+			return "", false, nil
 		}
-		return "", err
+		return "", false, err
 	}
 	defer file.Close()
 
 	stat, err := file.Stat()
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
 
 	filesize := stat.Size()
 	if filesize == 0 {
-		return "", nil
+		return "", false, nil
 	}
 
 	n := offset + limit
@@ -57,13 +68,19 @@ func (l *LogFile) GetLinesFromEnd(offset, limit int) (string, error) {
 		startPos := filesize - readSize
 		buf, err := readChunkAt(file, startPos, readSize)
 		if err != nil {
-			return "", err
+			return "", false, err
 		}
 
 		lines := strings.Split(string(buf), "\n")
 
-		if len(lines) > n || readSize >= filesize || readSize >= maxReadSeekSize {
-			return formatLinesFromEnd(lines, offset, limit, startPos > 0), nil
+		if len(lines) > n {
+			return formatLinesFromEnd(lines, offset, limit, startPos > 0), false, nil
+		}
+		if readSize >= filesize {
+			return formatLinesFromEnd(lines, offset, limit, false), false, nil
+		}
+		if readSize >= maxReadSeekSize {
+			return formatLinesFromEnd(lines, offset, limit, true), true, nil
 		}
 
 		readSize = doubleReadSize(readSize, filesize)

@@ -1,6 +1,7 @@
 package workshop
 
 import (
+	"btcservermanager/internal/atomicfile"
 	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/workshop/signature"
 	"context"
@@ -563,7 +564,7 @@ func (s *Service) saveSignatureReportsCache(reports []*signature.ModSignatureRep
 		log.Printf("[WorkshopService] Failed to marshal signature reports cache: %v", err)
 		return
 	}
-	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+	if err := atomicfile.WriteFile(cachePath, data, 0o644); err != nil {
 		log.Printf("[WorkshopService] Failed to write signature reports cache: %v", err)
 	}
 }

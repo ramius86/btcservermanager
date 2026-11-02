@@ -39,9 +39,13 @@ export const ModPresetCard: React.FC<Readonly<ModPresetCardProps>> = ({
            <Button variant="ghost" size="sm" onClick={() => onEdit(preset)} className="h-8 text-muted-foreground hover:text-foreground">
              <Edit className="w-3.5 h-3.5 mr-1.5" /> EDIT
            </Button>
-           <Button variant="ghost" size="sm" onClick={() => onExport(preset)} className="h-8 text-muted-foreground hover:text-foreground">
-             <Share className="w-3.5 h-3.5 mr-1.5" /> EXPORT
-           </Button>
+           {/* The export writes the Arma 3 Launcher HTML format (arma:* meta
+               tags, Workshop app 107410), so it makes no sense for DayZ presets. */}
+           {preset.serverType === 'ARMA3' && (
+             <Button variant="ghost" size="sm" onClick={() => onExport(preset)} className="h-8 text-muted-foreground hover:text-foreground">
+               <Share className="w-3.5 h-3.5 mr-1.5" /> EXPORT
+             </Button>
+           )}
            <Button 
              variant="ghost" 
              size="icon" 

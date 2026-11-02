@@ -11,6 +11,7 @@ import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
 import { useToast } from '../components/ui/Toast'
 import { useServerStatus } from '../contexts/ServerStatusContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
+import { isTerminalInstallStatus } from '../utils/installStatus'
 import { AnyServerDto, isArma3Server } from '../dtos/ServerDto'
 import { 
   DropdownMenu, 
@@ -686,7 +687,7 @@ export function ServersPage() {
       // If it's a server update (not a mod)
       if (gameType) {
         setInstallingGames(prev => {
-          if (status === 'FINISHED' || status === 'SUCCESS') {
+          if (isTerminalInstallStatus(status)) {
             const next = { ...prev }
             delete next[gameType]
             setTimeout(loadServers, 1000)

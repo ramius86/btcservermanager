@@ -198,6 +198,9 @@ Create a `.env` file in the root directory using the template below.
 STEAM_API_KEY=your_steam_web_api_key
 
 # --- SECURITY & CORS ---
+# Must be at least 32 random characters (generate: openssl rand -base64 32).
+# The backend refuses to start saving Steam credentials with a shorter or
+# placeholder key: it is what encrypts the stored Steam password.
 SECRET_KEY=use_a_secure_32_character_random_string
 # WARNING: In production, ALLOWED_ORIGIN must be the exact domain of the panel (e.g., https://panel.yourdomain.com)
 ALLOWED_ORIGIN=http://localhost:5173

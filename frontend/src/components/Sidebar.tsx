@@ -6,6 +6,7 @@ import { useTheme } from '../hooks/useTheme'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { WorkshopService } from '../services/api'
 import { useWebSocket } from '../contexts/WebSocketContext'
+import { isTerminalInstallStatus } from '../utils/installStatus'
 
 const navItems = [
   { icon: LayoutDashboard, label: 'Dashboard', href: '/' },
@@ -73,7 +74,7 @@ export function Sidebar() {
     })
 
     const unsubInstall = subscribe('install_progress', (e) => {
-      if (e.payload?.status === 'FINISHED') {
+      if (isTerminalInstallStatus(e.payload?.status)) {
         // Re-check global status since one finished, there might be 0 left
         checkUpdates()
       }

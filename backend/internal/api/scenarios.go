@@ -2,6 +2,7 @@ package api
 
 import (
 	"btcservermanager/internal/atomicfile"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -68,6 +69,10 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 
 	for _, fileHeader := range files {
 		if err := r.saveArma3ScenarioFile(fileHeader); err != nil {
+			if errors.Is(err, errUnsupportedScenarioFile) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -86,10 +91,12 @@ func (r *Router) handleUploadArma3Scenario(w http.ResponseWriter, req *http.Requ
 	w.WriteHeader(http.StatusOK)
 }
 
+var errUnsupportedScenarioFile = errors.New("only .pbo scenario files are supported")
+
 func (r *Router) saveArma3ScenarioFile(fileHeader *multipart.FileHeader) error {
 	filename := filepath.Base(fileHeader.Filename)
 	if !strings.HasSuffix(strings.ToLower(filename), ".pbo") {
-		return nil
+		return fmt.Errorf("%w: %s", errUnsupportedScenarioFile, filename)
 	}
 
 	file, err := fileHeader.Open()
