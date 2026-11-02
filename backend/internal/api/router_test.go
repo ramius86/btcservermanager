@@ -52,8 +52,8 @@ func (m *mockConfigManager) Delete(ctx context.Context, t server.Type, id int64)
 	return nil
 }
 
-func (m *mockConfigManager) GetConfigContents(ctx context.Context, s any) (map[string]string, error) {
-	return map[string]string{"server.cfg": "mock config content"}, nil
+func (m *mockConfigManager) GetConfigContents(ctx context.Context, s any) (*server.ConfigPreviews, error) {
+	return &server.ConfigPreviews{Files: map[string]string{"server.cfg": "mock config content"}}, nil
 }
 
 func TestRouterInit(t *testing.T) {
@@ -171,7 +171,9 @@ func testGetSettings(t *testing.T, handler http.Handler) {
 }
 
 func testPutSettings(t *testing.T, handler http.Handler) {
-	body := `{"logRetentionDays": 45, "logMaxTotalSizeMB": 512}`
+	// qualificationNames is required: without it the handler cannot tell
+	// "no qualifications" from "field omitted" and must reject the payload.
+	body := `{"logRetentionDays": 45, "logMaxTotalSizeMB": 512, "qualificationNames": []}`
 	req, _ := http.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	rr := httptest.NewRecorder()

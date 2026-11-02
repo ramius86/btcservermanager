@@ -35,6 +35,7 @@ type Executor struct {
 	logBuffer     []string // Recent logs for real-time view
 	logMutex      sync.Mutex
 	logFile       *os.File
+	lastLogSync   time.Time
 	broadcasterMu sync.RWMutex
 	broadcaster   Broadcaster
 	ctx           context.Context
@@ -63,10 +64,7 @@ func NewExecutor(paths *config.Paths, auth *steamauth.AuthService) *Executor {
 	e.writeLog("SteamCMD Executor initialized", true, "")
 
 	e.logMutex.Lock()
-	if e.logFile != nil {
-		_ = e.logFile.Close()
-		e.logFile = nil
-	}
+	e.closeLogFileLocked()
 	e.logMutex.Unlock()
 
 	e.wg.Add(1)
@@ -95,10 +93,7 @@ func (e *Executor) run() {
 	defer e.wg.Done()
 	defer func() {
 		e.logMutex.Lock()
-		if e.logFile != nil {
-			e.logFile.Close()
-			e.logFile = nil
-		}
+		e.closeLogFileLocked()
 		e.logMutex.Unlock()
 	}()
 
@@ -113,10 +108,7 @@ func (e *Executor) run() {
 
 			// Clean up and release the log file lock once job is done
 			e.logMutex.Lock()
-			if e.logFile != nil {
-				_ = e.logFile.Close()
-				e.logFile = nil
-			}
+			e.closeLogFileLocked()
 			e.logMutex.Unlock()
 
 			now := time.Now()
@@ -495,7 +487,15 @@ func (e *Executor) ClearItemInfo(key string) {
 	e.itemInfo.Delete(key)
 }
 
+// loginTestTimeout bounds the login probe. SteamCMD can sit on an interactive
+// prompt forever, and the HTTP request that triggers the probe has no deadline
+// of its own (WriteTimeout only bounds writing the response).
+const loginTestTimeout = 60 * time.Second
+
 func (e *Executor) TestLogin(ctx context.Context, username, password, guardToken string) error {
+	loginCtx, cancel := context.WithTimeout(ctx, loginTestTimeout)
+	defer cancel()
+
 	params := []string{"+@NoPromptForPassword", "1", "+login", username, password}
 	if guardToken != "" {
 		params = append(params, guardToken)
@@ -509,7 +509,7 @@ func (e *Executor) TestLogin(ctx context.Context, username, password, guardToken
 	}
 	defer os.Remove(scriptFile)
 
-	cmd := e.execCommand(ctx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
+	cmd := e.execCommand(loginCtx, e.paths.GetSteamCmdExecutable(), "+runscript", scriptFile)
 	output, _ := cmd.CombinedOutput() // Ignore direct error to parse output for better messages
 
 	outStr := string(output)

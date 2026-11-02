@@ -41,7 +41,7 @@ type ConfigManager interface {
 	Prepare(ctx context.Context, s any) (*PreparedConfig, error)
 	Commit(prepared *PreparedConfig) error
 	Delete(ctx context.Context, t Type, id int64) error
-	GetConfigContents(ctx context.Context, s any) (map[string]string, error)
+	GetConfigContents(ctx context.Context, s any) (*ConfigPreviews, error)
 }
 
 type ServerManager interface {
@@ -108,7 +108,7 @@ func (s *Service) GetServer(ctx context.Context, id int64) (any, error) {
 	return s.repo.GetServerByID(ctx, id)
 }
 
-func (s *Service) GetServerConfigs(ctx context.Context, id int64) (map[string]string, error) {
+func (s *Service) GetServerConfigs(ctx context.Context, id int64) (*ConfigPreviews, error) {
 	srv, err := s.repo.GetServerByID(ctx, id)
 	if err != nil {
 		return nil, err

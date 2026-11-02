@@ -5,13 +5,20 @@ import { Card, CardContent } from '../../../ui/Card'
 import { Button } from '../../../ui/Button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../../../ui/Tabs'
 
+interface ConfigPreviews {
+  files: Record<string, string>
+  missing: string[]
+}
+
 interface ConfigViewerTabProps {
   serverId: number
   serverType?: string
 }
 
+const EMPTY_PREVIEWS: ConfigPreviews = { files: {}, missing: [] }
+
 export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
-  const [configs, setConfigs] = useState<Record<string, string>>({})
+  const [previews, setPreviews] = useState<ConfigPreviews>(EMPTY_PREVIEWS)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activeFile, setActiveFile] = useState<string | null>(null)
@@ -21,8 +28,8 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
     setError(null)
     try {
       const data = await ServerService.getConfigs(serverId)
-      setConfigs(data)
-      const filenames = Object.keys(data)
+      setPreviews(data)
+      const filenames = [...Object.keys(data.files), ...data.missing]
       if (filenames.length > 0 && !activeFile) {
         setActiveFile(filenames[0])
       }
@@ -62,7 +69,9 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
     )
   }
 
-  if (loading && Object.keys(configs).length === 0) {
+  const filenames = [...Object.keys(previews.files), ...previews.missing]
+
+  if (loading && filenames.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-20 space-y-4">
         <RefreshCw className="w-8 h-8 text-primary animate-spin" />
@@ -87,8 +96,6 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
       </Card>
     )
   }
-
-  const filenames = Object.keys(configs)
 
   if (filenames.length === 0) {
     return (
@@ -125,6 +132,15 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
         </div>
       </div>
 
+      {previews.missing.length > 0 && (
+        <div className="flex items-start gap-2 p-4 bg-amber-500/5 border border-amber-500/20 rounded-xl">
+          <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="text-[10px] font-bold text-amber-500/90 uppercase tracking-widest text-left">
+            Not on disk yet: {previews.missing.join(', ')}. Save the configuration and start the server once to generate them.
+          </p>
+        </div>
+      )}
+
       <Card className="border-border/50 bg-surface-elevated/20 overflow-hidden backdrop-blur-sm">
         <div className="h-1 bg-primary" />
         <Tabs value={activeFile || ''} onValueChange={setActiveFile} className="w-full">
@@ -147,18 +163,28 @@ export function ConfigViewerTab({ serverId }: Readonly<ConfigViewerTabProps>) {
 
           {filenames.map(name => (
             <TabsContent key={name} value={name} className="mt-0 outline-none">
-              <div className="relative group">
-                <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
-                  <div className="bg-muted/80 backdrop-blur border border-border rounded-md px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
-                    Read-Only
+              {previews.missing.includes(name) ? (
+                <div className="p-10 flex flex-col items-center text-center space-y-3 bg-muted/20">
+                  <FileText className="w-10 h-10 text-muted-foreground/40" />
+                  <h3 className="text-sm font-bold text-muted-foreground">Not Generated Yet</h3>
+                  <p className="text-xs text-muted-foreground/80 max-w-md">
+                    {name} is expected on disk but is not there. It is written when the configuration is saved and the server is started.
+                  </p>
+                </div>
+              ) : (
+                <div className="relative group">
+                  <div className="absolute top-3 right-3 sm:top-4 sm:right-4 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2 z-10">
+                    <div className="bg-muted/80 backdrop-blur border border-border rounded-md px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                      Read-Only
+                    </div>
+                  </div>
+                  <div className="p-0 overflow-auto max-h-[600px] bg-muted/50 custom-scrollbar text-left">
+                    <pre className="p-4 sm:p-6 text-[11px] font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap break-all">
+                      <code>{previews.files[name]}</code>
+                    </pre>
                   </div>
                 </div>
-                <div className="p-0 overflow-auto max-h-[600px] bg-muted/50 custom-scrollbar text-left">
-                  <pre className="p-4 sm:p-6 text-[11px] font-mono leading-relaxed text-foreground/90 whitespace-pre-wrap break-all">
-                    <code>{configs[name]}</code>
-                  </pre>
-                </div>
-              </div>
+              )}
             </TabsContent>
           ))}
         </Tabs>

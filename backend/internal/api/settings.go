@@ -3,6 +3,7 @@ package api
 import (
 	"btcservermanager/internal/domain/appsettings"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 )
@@ -27,8 +28,28 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 			NewName string `json:"newName"`
 		} `json:"renames"`
 	}
-	if err := json.NewDecoder(http.MaxBytesReader(w, req.Body, 1048576)).Decode(&payload); err != nil {
+	body, err := io.ReadAll(http.MaxBytesReader(w, req.Body, 1048576))
+	if err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+
+	if err := json.Unmarshal(body, &payload); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// An absent "qualificationNames" decodes into an empty slice, and an empty
+	// slice makes CleanupOrphanedQualifications delete every row. Requiring the
+	// field keeps "no qualifications" an explicit statement from the client and
+	// stops a partial payload from erasing member data.
+	var provided map[string]json.RawMessage
+	if err := json.Unmarshal(body, &provided); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if _, ok := provided["qualificationNames"]; !ok {
+		http.Error(w, `"qualificationNames" is required: an absent field is not an empty list, and an empty list deletes every member qualification`, http.StatusBadRequest)
 		return
 	}
 
@@ -54,6 +75,8 @@ func (r *Router) handleUpdateAppSettings(w http.ResponseWriter, req *http.Reques
 		r.steamCmdService.UpdateCheckInterval(payload.GameUpdateCheckIntervalMinutes)
 	}
 
+	// Reached only when the client sent qualificationNames explicitly, so the
+	// empty-slice branch of CleanupOrphanedQualifications is always intentional.
 	if r.discordService != nil {
 		if err := r.discordService.CleanupOrphanedQualifications(ctx, payload.QualificationNames); err != nil {
 			log.Printf("Warning: failed to cleanup orphaned qualifications: %v", err)

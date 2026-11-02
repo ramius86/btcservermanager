@@ -15,6 +15,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -54,6 +55,11 @@ type Process struct {
 	stopping            bool
 	fastDownloadEnabled bool
 	stopFastDLSync      sync.Once
+
+	// droppedLogLines counts lines discarded by startPipeScanning because the
+	// log channel was full. They are reported to the log stream instead of
+	// disappearing.
+	droppedLogLines atomic.Int64
 }
 
 func (p *Process) IsAlive() bool {
@@ -245,7 +251,7 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	}
 
 	logChan := make(chan *bytes.Buffer, 1000)
-	m.startPipeScanning(stdout, stderr, logChan)
+	m.startPipeScanning(stdout, stderr, logChan, &p.droppedLogLines)
 
 	statsFile, isReforger, statIntervalMs := m.openStatsLogIfNeeded(s, params, logFilePath, logFile)
 
@@ -460,7 +466,7 @@ func (m *ProcessManager) ensureReforgerModsDir() error {
 	return nil
 }
 
-func (m *ProcessManager) startPipeScanning(stdout, stderr io.ReadCloser, logChan chan *bytes.Buffer) {
+func (m *ProcessManager) startPipeScanning(stdout, stderr io.ReadCloser, logChan chan *bytes.Buffer, dropped *atomic.Int64) {
 	go func() {
 		var wg sync.WaitGroup
 		wg.Add(2)
@@ -482,7 +488,10 @@ func (m *ProcessManager) startPipeScanning(stdout, stderr io.ReadCloser, logChan
 					select {
 					case logChan <- buf:
 					default:
-						// Buffer full, drop to prevent backpressure on game server process
+						// Buffer full, drop to prevent backpressure on the game server
+						// process. The count is reported later instead of losing the
+						// fact silently.
+						dropped.Add(1)
 						bufferPool.Put(buf)
 					}
 				}
@@ -884,15 +893,17 @@ func (m *ProcessManager) handleServerLogs(p *Process, logChan <-chan *bytes.Buff
 	}
 
 	for buf := range logChan {
+		m.broadcasterMu.RLock()
+		b := m.broadcaster
+		m.broadcasterMu.RUnlock()
+
+		m.emitDroppedLogNotice(p, b, mainLog)
+
 		bLine := buf.Bytes()
 		// trim \r (scanner already strips \n)
 		if len(bLine) > 0 && bLine[len(bLine)-1] == '\r' {
 			bLine = bLine[:len(bLine)-1]
 		}
-
-		m.broadcasterMu.RLock()
-		b := m.broadcaster
-		m.broadcasterMu.RUnlock()
 
 		if isReforger {
 			m.handleReforgerLogLine(p, bLine, b, mainLog, statsLog, tracker)
@@ -901,6 +912,31 @@ func (m *ProcessManager) handleServerLogs(p *Process, logChan <-chan *bytes.Buff
 		}
 
 		bufferPool.Put(buf)
+	}
+
+	// The last lines can be dropped while the pipes are closing, after which no
+	// further line arrives to trigger the report.
+	m.broadcasterMu.RLock()
+	b := m.broadcaster
+	m.broadcasterMu.RUnlock()
+	m.emitDroppedLogNotice(p, b, mainLog)
+}
+
+// emitDroppedLogNotice reports lines that startPipeScanning had to discard.
+// Dropping is deliberate (the game server must never block on log I/O), but a
+// silently truncated log made the reader believe the server printed nothing else.
+func (m *ProcessManager) emitDroppedLogNotice(p *Process, b Broadcaster, mainLog *os.File) {
+	dropped := p.droppedLogLines.Swap(0)
+	if dropped == 0 {
+		return
+	}
+
+	message := fmt.Sprintf("[manager] %d log line(s) were dropped: output arrived faster than it could be persisted", dropped)
+	if b != nil {
+		b.Broadcast("server_log", LogPayload{ServerID: p.serverID, Message: message})
+	}
+	if mainLog != nil {
+		_, _ = mainLog.WriteString(message + "\n")
 	}
 }
 

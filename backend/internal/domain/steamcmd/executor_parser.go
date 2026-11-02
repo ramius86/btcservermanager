@@ -282,26 +282,46 @@ func (e *Executor) handleResult(output string, job *Job) {
 		return
 	}
 
-	// For non-mod jobs (server installs, updates), keep existing coarse-grained logic
+	// For non-mod jobs (server installs, updates), keep coarse-grained scanning,
+	// but only on the markers SteamCMD actually uses for a failure. A bare
+	// "Error" substring also appears in informational output, and treating that
+	// as a failed install cost ten retries.
 	cleanOut := stripANSI(output)
 
-	hasErrorMarker := strings.Contains(cleanOut, "Error") || strings.Contains(cleanOut, "FAILED") || strings.Contains(cleanOut, "timed out")
-	if hasErrorMarker {
-		errStatus := parseJobErrorCode(cleanOut)
-		job.ErrorStatus = &errStatus
+	if !hasSteamCMDError(cleanOut) {
 		return
 	}
+
+	errStatus := parseJobErrorCode(cleanOut)
+	job.ErrorStatus = &errStatus
+}
+
+// steamCMDErrorMarkers are the failure strings SteamCMD prints. Matching is
+// case-insensitive.
+var steamCMDErrorMarkers = []string{"error!", "failed", "timed out"}
+
+func hasSteamCMDError(output string) bool {
+	lower := strings.ToLower(output)
+	for _, marker := range steamCMDErrorMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func parseJobErrorCode(cleanOut string) workshop.ErrorStatus {
+	lower := strings.ToLower(cleanOut)
+
 	switch {
-	case strings.Contains(cleanOut, "Invalid Password") || strings.Contains(cleanOut, "Login Failed"):
+	case strings.Contains(lower, "invalid password") || strings.Contains(lower, "login failed"):
 		return workshop.ErrorWrongAuth
-	case strings.Contains(cleanOut, "Disk space"):
+	case strings.Contains(lower, "disk space"):
 		return workshop.ErrorIO
-	case strings.Contains(cleanOut, "Rate Limit Exceeded") || strings.Contains(cleanOut, "Too Many Requests"):
+	case strings.Contains(lower, "rate limit exceeded") || strings.Contains(lower, "too many requests"):
 		return workshop.ErrorRateLimit
-	case strings.Contains(cleanOut, "timed out") || strings.Contains(cleanOut, "Timeout"):
+	case strings.Contains(lower, "timed out") || strings.Contains(lower, "timeout"):
 		return workshop.ErrorTimeout
 	default:
 		return workshop.ErrorGeneric
@@ -361,6 +381,35 @@ func (e *Executor) handleModResult(job *Job) {
 	}
 }
 
+// transientFailureMarkers describe conditions that can clear on their own. A
+// generic failure is retried only when one of them appears in the output.
+var transientFailureMarkers = []string{
+	"connection closed",
+	"connection reset",
+	"service unavailable",
+	"temporarily unavailable",
+	"try again later",
+	"timed out",
+	"timeout",
+	"rate limit",
+	"too many requests",
+	"network",
+	"502",
+	"503",
+	"504",
+}
+
+func hasTransientFailureMarker(output string) bool {
+	lower := strings.ToLower(output)
+	for _, marker := range transientFailureMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+
+	return false
+}
+
 func (e *Executor) isRetriable(status *workshop.ErrorStatus, output string) bool {
 	if status == nil {
 		return true
@@ -372,16 +421,10 @@ func (e *Executor) isRetriable(status *workshop.ErrorStatus, output string) bool
 	case workshop.ErrorRateLimit, workshop.ErrorTimeout, workshop.ErrorPartialFailure:
 		return true
 	case workshop.ErrorGeneric:
-		// Check for specific substrings that might be retriable but marked as generic
-		lowerOutput := strings.ToLower(output)
-		if strings.Contains(lowerOutput, "connection closed") ||
-			strings.Contains(lowerOutput, "service unavailable") ||
-			strings.Contains(lowerOutput, "try again later") {
-			return true
-		}
-
-		return true // Default to retrying generic errors
+		// Ten attempts with backoff (~4 minutes) on a deterministic error only
+		// delays the report the operator needs.
+		return hasTransientFailureMarker(output)
 	default:
-		return true
+		return false
 	}
 }

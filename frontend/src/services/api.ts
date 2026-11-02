@@ -82,7 +82,7 @@ export const ServerService = {
   removeHeadlessClient: (id: number): Promise<void> => fetchApi(`/server/${id}/hc/stop`, { method: 'DELETE' }),
   reorder: (payload: { id: number; sortOrder: number }[]): Promise<void> =>
     fetchApi('/server/reorder', { method: 'PUT', body: JSON.stringify(payload) }),
-  getConfigs: (id: number): Promise<Record<string, string>> => fetchApi(`/server/${id}/configs`),
+  getConfigs: (id: number): Promise<{ files: Record<string, string>; missing: string[] }> => fetchApi(`/server/${id}/configs`),
   getReforgerSaves: (id: number): Promise<any[]> => fetchApi(`/server/${id}/reforger/saves`),
   deleteReforgerSave: (id: number, name?: string): Promise<void> => {
     const query = name ? '?name=' + encodeURIComponent(name) : ''

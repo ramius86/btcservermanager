@@ -18,6 +18,11 @@ Other files in this repository:
 - executor_parser.go: SteamCMD stdout parsing and progress tracking.
 */
 
+// logSyncInterval throttles fsync on the SteamCMD log. The OS keeps the page
+// cache across a process crash; only a host power loss can lose the last second,
+// which is not worth an fsync per output line during a multi-GB download.
+const logSyncInterval = time.Second
+
 func (e *Executor) emitLog(message string) {
 	e.broadcasterMu.RLock()
 	b := e.broadcaster
@@ -67,8 +72,12 @@ func (e *Executor) writeLog(message string, toSystemLog bool, overrideLogPath st
 
 	if e.logFile != nil {
 		_, _ = e.logFile.WriteString(formattedLine + "\n")
-		// Sync the file to ensure it's written to disk
-		_ = e.logFile.Sync()
+		// fsync at most once per second: the line is already in the page cache,
+		// and rotation/close flush the remainder.
+		if time.Since(e.lastLogSync) >= logSyncInterval {
+			_ = e.logFile.Sync()
+			e.lastLogSync = time.Now()
+		}
 	}
 
 	e.logBuffer = append(e.logBuffer, formattedLine)
@@ -93,9 +102,8 @@ func (e *Executor) ensureLogFileLocked(overrideLogPath string) {
 			return
 		}
 
-		// Day changed, close old log file
-		_ = e.logFile.Close()
-		e.logFile = nil
+		// Day changed, flush and close the old log file.
+		e.closeLogFileLocked()
 	}
 
 	// Open/Create the log file
@@ -104,6 +112,19 @@ func (e *Executor) ensureLogFileLocked(overrideLogPath string) {
 	if err == nil {
 		e.logFile = file
 	}
+}
+
+// closeLogFileLocked flushes and closes the current log file. It MUST be called
+// with e.logMutex held, like ensureLogFileLocked.
+func (e *Executor) closeLogFileLocked() {
+	if e.logFile == nil {
+		return
+	}
+
+	_ = e.logFile.Sync()
+	_ = e.logFile.Close()
+	e.logFile = nil
+	e.lastLogSync = time.Time{}
 }
 
 func (e *Executor) GetRecentLogs() string {

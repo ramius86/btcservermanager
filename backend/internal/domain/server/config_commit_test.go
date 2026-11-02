@@ -108,7 +108,7 @@ func (f *fakeConfigManager) Commit(*server.PreparedConfig) error {
 
 func (f *fakeConfigManager) Delete(context.Context, server.Type, int64) error { return nil }
 
-func (f *fakeConfigManager) GetConfigContents(context.Context, any) (map[string]string, error) {
+func (f *fakeConfigManager) GetConfigContents(context.Context, any) (*server.ConfigPreviews, error) {
 	return nil, nil
 }
 

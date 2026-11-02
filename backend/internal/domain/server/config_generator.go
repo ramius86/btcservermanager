@@ -268,49 +268,52 @@ func (g *ConfigGenerator) Delete(ctx context.Context, t Type, id int64) error {
 	return nil
 }
 
-func (g *ConfigGenerator) GetConfigContents(ctx context.Context, s any) (map[string]string, error) {
-	configs := make(map[string]string)
+// ConfigPreviews is what the Config tab renders. Files holds the on-disk content
+// of every file that exists; Missing lists the expected files that are not there
+// yet. Keeping the two apart is what stops "not generated yet" from being shown
+// as if it were the file content.
+type ConfigPreviews struct {
+	Files   map[string]string `json:"files"`
+	Missing []string          `json:"missing"`
+}
+
+func (g *ConfigGenerator) GetConfigContents(_ context.Context, s any) (*ConfigPreviews, error) {
+	previews := &ConfigPreviews{Files: make(map[string]string)}
 
 	switch v := s.(type) {
 	case *Arma3Server:
-		mainFile := fmt.Sprintf(tplArma3Cfg, v.ID)
-		configs[mainFile] = g.readFileIfExists(v.Type, mainFile)
-
-		netFile := fmt.Sprintf(tplArma3NetCfg, v.ID)
-		configs[netFile] = g.readFileIfExists(v.Type, netFile)
+		g.collectConfigFile(previews, v.Type, fmt.Sprintf(tplArma3Cfg, v.ID))
+		g.collectConfigFile(previews, v.Type, fmt.Sprintf(tplArma3NetCfg, v.ID))
 
 		profileName := fmt.Sprintf(tplArma3ProfileName, v.ID)
 		profilePath := filepath.Join("Users", profileName, profileName+extArma3Profile)
-		fullProfilePath := filepath.Join(g.paths.GetProfilesDirectoryPath(), profilePath)
-		configs[profileName+extArma3Profile] = g.readFileContent(fullProfilePath)
+		g.collectConfigPath(previews, profileName+extArma3Profile, filepath.Join(g.paths.GetProfilesDirectoryPath(), profilePath))
 
 	case *DayZServer:
-		fileName := fmt.Sprintf(tplDayzCfg, v.ID)
-		configs[fileName] = g.readFileIfExists(v.Type, fileName)
+		g.collectConfigFile(previews, v.Type, fmt.Sprintf(tplDayzCfg, v.ID))
 
 	case *ReforgerServer:
-		fileName := fmt.Sprintf(tplReforgerJson, v.ID)
-		configs[fileName] = g.readFileIfExists(v.Type, fileName)
+		g.collectConfigFile(previews, v.Type, fmt.Sprintf(tplReforgerJson, v.ID))
 
 	default:
 		return nil, errors.New("unsupported server type for config preview")
 	}
 
-	return configs, nil
+	return previews, nil
 }
 
-func (g *ConfigGenerator) readFileIfExists(t Type, fileName string) string {
-	path := g.paths.GetConfigFilePath(t, fileName)
-	return g.readFileContent(path)
+func (g *ConfigGenerator) collectConfigFile(previews *ConfigPreviews, t Type, fileName string) {
+	g.collectConfigPath(previews, fileName, g.paths.GetConfigFilePath(t, fileName))
 }
 
-func (g *ConfigGenerator) readFileContent(path string) string {
+func (g *ConfigGenerator) collectConfigPath(previews *ConfigPreviews, name, path string) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Sprintf("Error reading file: %v\n(File might not exist yet. Try saving and starting the server first.)", err)
+		previews.Missing = append(previews.Missing, name)
+		return
 	}
 
-	return string(data)
+	previews.Files[name] = string(data)
 }
 
 func (g *ConfigGenerator) renderCBAPresetMod(s *Arma3Server) (preparedFile, error) {
