@@ -85,12 +85,58 @@ func (h *Hub) sendToClient(client *Client, event Event) {
 		}
 	}()
 
+	if h.enqueue(client, event, domainForEvent(event.Type)) == enqueueOverflow {
+		h.Unregister(client)
+	}
+}
+
+type enqueueResult int
+
+const (
+	enqueueOK enqueueResult = iota
+	// enqueueDropped means the event was discarded on purpose (high-frequency
+	// traffic while the buffer is full). The client stays connected.
+	enqueueDropped
+	// enqueueOverflow means the client could not accept a state change even
+	// after stale traffic was evicted: it is disconnected so that it can
+	// reconnect and resubscribe instead of being fed stale state forever.
+	enqueueOverflow
+)
+
+// enqueue places event in the client's outbound buffer. The hub loop is
+// single-threaded and must never block on a slow peer, so every write is
+// non-blocking: high-frequency events (logs, stats) are dropped when the
+// buffer is full, while a state change evicts the oldest queued event rather
+// than being lost or costing the client its connection.
+func (h *Hub) enqueue(client *Client, event Event, domain string) enqueueResult {
+	client.sendMu.Lock()
+	defer client.sendMu.Unlock()
+
 	select {
 	case client.send <- event:
+		client.domainDeliveries(domain).Add(1)
+		return enqueueOK
 	default:
-		if !isHighFrequencyEvent(event.Type) {
-			h.Unregister(client)
-		}
+	}
+
+	if isHighFrequencyEvent(event.Type) {
+		return enqueueDropped
+	}
+
+	// Make room by discarding the oldest queued event: during a log burst the
+	// head of the queue is stale telemetry, not the state change we are about
+	// to deliver.
+	select {
+	case <-client.send:
+	default:
+	}
+
+	select {
+	case client.send <- event:
+		client.domainDeliveries(domain).Add(1)
+		return enqueueOK
+	default:
+		return enqueueOverflow
 	}
 }
 
@@ -145,54 +191,91 @@ func (h *Hub) handleSubscribe(sub clientSub) {
 		}
 	}
 
-	h.clients.Store(sub.client, append(sList, sub.sub))
+	client := sub.client
+	domain := sub.sub.Domain
+
+	h.clients.Store(client, append(sList, sub.sub))
+
+	// Capture the counter before computing the snapshot: if a live event for
+	// the same domain is queued in the meantime it is newer than the snapshot,
+	// which is then dropped instead of overwriting it.
+	seq := client.domainDeliveries(domain).Load()
 
 	go func() {
 		select {
 		case <-h.stop:
 			return
 		default:
-			h.sendInitialStatus(sub)
+			h.sendInitialStatus(sub, seq)
 		}
 	}()
 }
 
-func (h *Hub) sendInitialStatus(sub clientSub) {
+func (h *Hub) sendInitialStatus(sub clientSub, seq uint64) {
+	domain := sub.sub.Domain
+
 	h.statusProviderMu.RLock()
 	provider := h.serverStatusProvider
 	allProvider := h.allServerStatusesProvider
 	sysProvider := h.systemInfoProvider
 	h.statusProviderMu.RUnlock()
 
-	if sub.sub.Domain == "server_status" {
+	var events []Event
+
+	switch domain {
+	case "server_status":
 		if sub.sub.ServerID == 0 && allProvider != nil {
 			for _, payload := range allProvider() {
-				event := Event{
+				events = append(events, Event{
 					Type:    EvtServerStatus,
 					Payload: payload,
-				}
-				h.sendToClient(sub.client, event)
+				})
 			}
 		} else if sub.sub.ServerID != 0 && provider != nil {
-			alive := provider(sub.sub.ServerID)
-			event := Event{
+			events = append(events, Event{
 				Type: EvtServerStatus,
 				Payload: map[string]any{
 					"server_id": sub.sub.ServerID,
-					"alive":     alive,
+					"alive":     provider(sub.sub.ServerID),
 				},
-			}
-			h.sendToClient(sub.client, event)
+			})
+		}
+	case "system_info":
+		if sysProvider != nil {
+			events = append(events, Event{
+				Type:    EvtSystemInfo,
+				Payload: sysProvider(),
+			})
 		}
 	}
 
-	if sub.sub.Domain == "system_info" && sysProvider != nil {
-		info := sysProvider()
-		event := Event{
-			Type:    EvtSystemInfo,
-			Payload: info,
+	if len(events) == 0 {
+		return
+	}
+
+	h.deliverSnapshot(sub.client, domain, seq, events)
+}
+
+// deliverSnapshot queues a computed snapshot only if no live event for the
+// same domain was queued since the subscription. enqueue and deliverSnapshot
+// both hold sendMu, so the check and the writes cannot interleave with a
+// broadcast that would make the snapshot stale.
+func (h *Hub) deliverSnapshot(client *Client, domain string, seq uint64, events []Event) {
+	client.sendMu.Lock()
+	defer client.sendMu.Unlock()
+
+	if client.domainDeliveries(domain).Load() != seq {
+		return
+	}
+
+	for _, event := range events {
+		select {
+		case client.send <- event:
+			client.domainDeliveries(domain).Add(1)
+		default:
+			// A snapshot is best effort: do not evict live events for it.
+			return
 		}
-		h.sendToClient(sub.client, event)
 	}
 }
 
@@ -235,42 +318,45 @@ func (h *Hub) handleBroadcast(event Event) {
 	})
 }
 
-func (h *Hub) match(sub Subscription, event Event) bool {
-	// Mapping EventType to Domain names
-	var domain string
-
-	switch event.Type {
+// domainForEvent maps an event type to the subscription domain it belongs to.
+// It is shared by match() and by the per-domain delivery counters.
+func domainForEvent(t EventType) string {
+	switch t {
 	case EvtServerStatus:
-		domain = "server_status"
+		return "server_status"
 	case EvtInstallProgress:
-		domain = "install_progress"
+		return "install_progress"
 	case EvtSystemInfo:
-		domain = "system_info"
+		return "system_info"
 	case EvtSteamCmdLog:
-		domain = "steamcmd_log"
+		return "steamcmd_log"
 	case EvtReforgerStats:
-		domain = "reforger_stats"
+		return "reforger_stats"
 	case EvtServerLog:
-		domain = "server_log"
+		return "server_log"
 	case EvtServerUpdated:
-		domain = "server_updated"
+		return "server_updated"
 	case EvtReforgerScenariosUpdated:
-		domain = "reforger_scenarios_updated"
+		return "reforger_scenarios_updated"
 	case EvtModMetadataUpdated:
-		domain = "mod_metadata_updated"
+		return "mod_metadata_updated"
 	case EvtModDeleted:
-		domain = "mod_deleted"
+		return "mod_deleted"
 	case EvtDiscordEventRsvpUpdated:
-		domain = "discord_event_rsvp_updated"
+		return "discord_event_rsvp_updated"
 	case EvtDiscordEventUpdated:
-		domain = "discord_event_updated"
+		return "discord_event_updated"
 	case EvtModSignatureProgress:
-		domain = "mod_signature_progress"
+		return "mod_signature_progress"
 	case EvtModSignatureChecked:
-		domain = "mod_signature_checked"
+		return "mod_signature_checked"
 	}
 
-	if sub.Domain != domain {
+	return ""
+}
+
+func (h *Hub) match(sub Subscription, event Event) bool {
+	if sub.Domain != domainForEvent(event.Type) {
 		return false
 	}
 

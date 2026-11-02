@@ -1045,14 +1045,24 @@ func (m *ProcessManager) handleGenericLogLine(p *Process, line []byte, b Broadca
 	bufferPool.Put(outBuf)
 }
 
+// GetActiveLogFiles returns the log files of the servers that are currently
+// running. info is read under the process lock, like every other reader of
+// proc.info: reading it unlocked would turn into a data race the moment log
+// rotation starts updating info.CurrentLogFile.
 func (m *ProcessManager) GetActiveLogFiles() []string {
 	var files []string
-	m.processes.Range(func(key, value any) bool {
-		if proc, ok := value.(*Process); ok {
-			if proc.IsAlive() && proc.info != nil && proc.info.CurrentLogFile != "" {
-				files = append(files, proc.info.CurrentLogFile)
-			}
+	m.processes.Range(func(_, value any) bool {
+		proc, ok := value.(*Process)
+		if !ok {
+			return true
 		}
+
+		proc.mu.RLock()
+		if !proc.exited && proc.info != nil && proc.info.CurrentLogFile != "" {
+			files = append(files, proc.info.CurrentLogFile)
+		}
+		proc.mu.RUnlock()
+
 		return true
 	})
 	return files

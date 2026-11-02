@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/coder/websocket"
@@ -36,6 +37,17 @@ type Client struct {
 
 	// Ensures send channel is only closed once
 	closeOnce sync.Once
+
+	// sendMu serialises writes to send so that a snapshot computed off the
+	// hub loop can be discarded when a live event for the same domain has
+	// already been queued. It never waits on the peer: every write is
+	// non-blocking.
+	sendMu sync.Mutex
+
+	// delivered counts, per domain, how many events have been queued for this
+	// client. A snapshot captures the count and delivers only if it did not
+	// move, which is how a stale snapshot is recognised.
+	delivered sync.Map // domain string -> *atomic.Uint64
 }
 
 func (c *Client) readPump(ctx context.Context, cancel context.CancelFunc) {
@@ -132,11 +144,33 @@ func (c *Client) writePump(ctx context.Context, cancel context.CancelFunc) {
 
 func (c *Client) close() {
 	c.closeOnce.Do(func() {
+		c.sendMu.Lock()
+		defer c.sendMu.Unlock()
+
 		close(c.send)
 	})
 	if c.conn != nil {
 		c.conn.Close(websocket.StatusNormalClosure, "")
 	}
+}
+
+// domainDeliveries returns the delivery counter of one domain, creating it on
+// first use. Counters are monotonic and only ever incremented.
+func (c *Client) domainDeliveries(domain string) *atomic.Uint64 {
+	if v, ok := c.delivered.Load(domain); ok {
+		if counter, okCounter := v.(*atomic.Uint64); okCounter {
+			return counter
+		}
+	}
+
+	counter := new(atomic.Uint64)
+
+	actual, _ := c.delivered.LoadOrStore(domain, counter)
+	if stored, okStored := actual.(*atomic.Uint64); okStored {
+		return stored
+	}
+
+	return counter
 }
 
 func ServeWs(hub *Hub, w http.ResponseWriter, r *http.Request, allowedOrigin string) {

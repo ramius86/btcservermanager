@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"sync"
 	"testing"
 	"time"
 
@@ -184,6 +185,58 @@ func TestProcessManager_UpdateQueryInfo(t *testing.T) {
 	assert.Equal(t, 1, broadcaster.getCount())
 	assert.Equal(t, 5, p.info.Players)
 	assert.Equal(t, "Coop2", p.info.Mission)
+}
+
+// TestProcessManager_GetActiveLogFilesConcurrentUpdate reads the active log
+// files while another goroutine rewrites the instance info. info must only be
+// read under the process lock, otherwise the race detector reports it (and a
+// future log rotation would corrupt the read in production).
+func TestProcessManager_GetActiveLogFilesConcurrentUpdate(t *testing.T) {
+	tempDir := t.TempDir()
+	paths := &dummyPathProvider{tempDir: tempDir}
+	launcher := NewLauncher(paths, []string{})
+	pm := NewProcessManager(paths, launcher, false)
+	pm.SetBroadcaster(&testBroadcaster{})
+
+	const logName = "ARMA3_1_2026-11-02.log"
+
+	p := &Process{
+		serverID: 1,
+		info: &ServerInstanceInfo{
+			CurrentLogFile: logName,
+			Map:            "Altis",
+			Mission:        "Coop",
+		},
+	}
+	pm.processes.Store(int64(1), p)
+
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			pm.UpdateQueryInfo(1, i, "Altis", fmt.Sprintf("Coop%d", i))
+		}
+	}()
+
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 200; i++ {
+			files := pm.GetActiveLogFiles()
+			require.Len(t, files, 1)
+			assert.Equal(t, logName, files[0])
+		}
+	}()
+
+	wg.Wait()
+
+	// A stopped process must not report its log as active anymore.
+	p.mu.Lock()
+	p.exited = true
+	p.mu.Unlock()
+
+	assert.Empty(t, pm.GetActiveLogFiles())
 }
 
 func TestProcessManager_StartStopServer(t *testing.T) {
