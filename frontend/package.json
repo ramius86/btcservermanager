@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "dev": "node -e \"try { require('../scripts/update-readme.js') } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }\" && vite",
-    "build": "node -e \"try { require('../scripts/update-readme.js') } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }\" && tsc && vite build",
+    "dev": "vite",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "test": "vitest run",
     "update-readme": "node ../scripts/update-readme.js"

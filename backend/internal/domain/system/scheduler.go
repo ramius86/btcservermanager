@@ -81,7 +81,11 @@ func (s *Scheduler) Stop() {
 func (s *Scheduler) Start() {
 	ctx := context.Background()
 	if settings, err := s.systemService.GetAppSettings(ctx); err == nil && settings.ModUpdateCheckIntervalMinutes > 0 {
+		// Same lock as UpdateWorkshopInterval/runWorkshopUpdate: the field is
+		// read by a ticker goroutine, so it must not be written bare.
+		s.workshopIntervalMu.Lock()
 		s.workshopInterval = time.Duration(settings.ModUpdateCheckIntervalMinutes) * time.Minute
+		s.workshopIntervalMu.Unlock()
 	}
 
 	go s.runLogCleanup()

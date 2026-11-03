@@ -35,7 +35,7 @@ interface SystemInfoContextType {
 const SystemInfoContext = createContext<SystemInfoContextType | undefined>(undefined)
 
 export function SystemInfoProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { subscribe, send } = useWebSocket()
+  const { subscribe } = useWebSocket()
   const [systemInfo, setSystemInfo] = useState<SystemInfo | null>(null)
 
   useEffect(() => {
@@ -44,14 +44,14 @@ export function SystemInfoProvider({ children }: Readonly<{ children: React.Reac
   }, [])
 
   useEffect(() => {
-    send({ type: 'subscribe', payload: { domain: 'system_info' } })
-
+    // subscribe() already sends the subscribe frame for the first listener in
+    // this domain, so an explicit send here was a duplicate.
     const unsub = subscribe('system_info', (e) => {
       setSystemInfo(e.payload as SystemInfo)
     })
 
     return () => unsub()
-  }, [subscribe, send])
+  }, [subscribe])
 
   const value = React.useMemo(() => ({ systemInfo }), [systemInfo])
 

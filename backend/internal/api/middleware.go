@@ -27,8 +27,9 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 
 		cspValue = strings.Join([]string{
 			"default-src 'self'",
-			// Script: solo self + Cloudflare Web Analytics
-			"script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
+			// Script: solo self + Cloudflare Web Analytics. 'unsafe-eval' non serve:
+			// la build Vite di produzione non valuta stringhe come codice.
+			"script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
 			// Stili: self + Google Fonts
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
 			// Font: self + Google Fonts CDN

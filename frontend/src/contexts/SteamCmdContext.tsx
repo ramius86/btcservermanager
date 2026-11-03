@@ -12,12 +12,12 @@ interface SteamCmdContextType {
 const SteamCmdContext = createContext<SteamCmdContextType | undefined>(undefined)
 
 export function SteamCmdProvider({ children }: Readonly<{ children: React.ReactNode }>) {
-  const { subscribe, send } = useWebSocket()
+  const { subscribe } = useWebSocket()
   const [logBuffer, setLogBuffer] = useState<string[]>([])
 
   useEffect(() => {
-    send({ type: 'subscribe', payload: { domain: 'steamcmd_log' } })
-
+    // subscribe() already sends the subscribe frame for the first listener in
+    // this domain, so an explicit send here was a duplicate.
     const unsub = subscribe('steamcmd_log', (e) => {
       if (!e?.payload?.message) return
       const { message } = e.payload as SteamCmdLog
@@ -29,7 +29,7 @@ export function SteamCmdProvider({ children }: Readonly<{ children: React.ReactN
     })
 
     return () => unsub()
-  }, [subscribe, send])
+  }, [subscribe])
 
   const value = React.useMemo(() => ({ log: logBuffer.join('\n') }), [logBuffer])
 
