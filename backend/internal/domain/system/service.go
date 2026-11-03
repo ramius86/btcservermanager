@@ -94,6 +94,20 @@ type Service struct {
 
 	// Cached local IP with TTL
 	localIP localIPCache
+
+	// CPU usage is the delta between two /proc/stat samples, so the previous
+	// sample is kept between calls. Guarded because the dashboard and the
+	// metrics ticker can ask at the same time.
+	cpuMu     sync.Mutex
+	cpuLast   cpuTimes
+	cpuLastAt time.Time
+}
+
+// cpuTimes is one /proc/stat "cpu" line reduced to the two numbers a delta
+// needs: the sum of all counters and the idle part (idle + iowait).
+type cpuTimes struct {
+	total uint64
+	idle  uint64
 }
 
 type ServiceDeps struct {
@@ -146,7 +160,7 @@ func (s *Service) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	info.MemoryFree = memAvail * 1024
 	info.MemoryUsed = (memTotal - memAvail) * 1024
 
-	// CPU usage (simplified as in Java)
+	// CPU usage from two /proc/stat samples (0 on the first call)
 	info.CPUUsage = s.getCPUUsage()
 
 	// Uptime from /proc/uptime
@@ -243,24 +257,93 @@ func (s *Service) parseMemLine(line string) int64 {
 	return v
 }
 
+// getCPUUsage returns the share of CPU time spent outside idle since the
+// previous call. It used to return loadavg[0]/NumCPU, which is the load
+// average: inside a container that is the host's load and the value can
+// exceed 100%, so the dashboard showed a number that was not CPU usage.
 func (s *Service) getCPUUsage() float64 {
-	// Simple load average / num CPU as in Java
-	f, err := os.Open(s.getSystemPath("/proc/loadavg"))
-	if err != nil {
+	current, ok := s.readCPUTimes()
+	if !ok {
 		return 0
+	}
+
+	s.cpuMu.Lock()
+	previous := s.cpuLast
+	hasPrevious := !s.cpuLastAt.IsZero()
+	s.cpuLast = current
+	s.cpuLastAt = time.Now()
+	s.cpuMu.Unlock()
+
+	if !hasPrevious {
+		// No baseline yet: the first sample after boot cannot express a rate.
+		return 0
+	}
+
+	return cpuBusyPercent(previous, current)
+}
+
+// cpuBusyPercent turns two /proc/stat samples into a 0-100 percentage.
+func cpuBusyPercent(previous, current cpuTimes) float64 {
+	if current.total <= previous.total {
+		return 0
+	}
+
+	totalDelta := current.total - previous.total
+
+	var idleDelta uint64
+	if current.idle > previous.idle {
+		idleDelta = current.idle - previous.idle
+	}
+
+	if idleDelta >= totalDelta {
+		return 0
+	}
+
+	return float64(totalDelta-idleDelta) / float64(totalDelta) * 100
+}
+
+// readCPUTimes parses the aggregate "cpu" line of /proc/stat.
+func (s *Service) readCPUTimes() (cpuTimes, bool) {
+	f, err := os.Open(s.getSystemPath("/proc/stat"))
+	if err != nil {
+		return cpuTimes{}, false
 	}
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
-	if scanner.Scan() {
-		parts := strings.Fields(scanner.Text())
-		if len(parts) > 0 {
-			load1, _ := strconv.ParseFloat(parts[0], 64)
-			return load1 / float64(runtime.NumCPU())
-		}
+	if !scanner.Scan() {
+		return cpuTimes{}, false
 	}
 
-	return 0
+	fields := strings.Fields(scanner.Text())
+	// cpu user nice system idle iowait irq softirq steal [guest guest_nice]
+	if len(fields) < 5 || fields[0] != "cpu" {
+		return cpuTimes{}, false
+	}
+
+	var total uint64
+	// guest and guest_nice are already counted in user and nice, so summing
+	// the whole line would count part of the time twice.
+	counters := fields[1:]
+	if len(counters) > 8 {
+		counters = counters[:8]
+	}
+
+	for _, field := range counters {
+		value, err := strconv.ParseUint(field, 10, 64)
+		if err != nil {
+			return cpuTimes{}, false
+		}
+		total += value
+	}
+
+	idle, _ := strconv.ParseUint(fields[4], 10, 64)
+	iowait := uint64(0)
+	if len(fields) > 5 {
+		iowait, _ = strconv.ParseUint(fields[5], 10, 64)
+	}
+
+	return cpuTimes{total: total, idle: idle + iowait}, true
 }
 
 // readKernelVersion reads /proc/version once. Called from initStatic.

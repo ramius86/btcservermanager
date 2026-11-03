@@ -23,6 +23,8 @@ import { useServerStatus } from '../contexts/ServerStatusContext'
 import { useInstallProgress } from '../contexts/InstallProgressContext'
 import { LOG_PAGE_SIZE, applyFetchedPage, hasMorePages, initialLogPaging, offsetForNextPage } from '../utils/logPaging'
 import { parseServerLogName, serverLogPrefix } from '../utils/logFiles'
+import { downloadFile } from '../utils/download'
+import { useToast } from '../components/ui/Toast'
 
 const getAutoSelectedFile = (qType: string, qGame: string, qServerId: string | null, sortedFiles: string[]): string | null => {
   if (sortedFiles.length === 0) return null;
@@ -70,6 +72,16 @@ export const LogExplorerPage: React.FC = () => {
   const { sidebarWidth, containerRef, startResizing } = useResizableSidebar(380)
   const { statuses } = useServerStatus()
   const { installations } = useInstallProgress()
+  const { showToast } = useToast()
+
+  const handleDownloadLog = async () => {
+    if (!selectedFile) return
+    try {
+      await downloadFile(LogService.download(selectedFile), selectedFile)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Download failed', 'error')
+    }
+  }
 
   const liveFiles = React.useMemo(() => {
     const live = new Set<string>()
@@ -391,7 +403,7 @@ export const LogExplorerPage: React.FC = () => {
               selectedFile={selectedFile} logType={logType} selectedGame={selectedGame}
               view={view} autoScroll={autoScroll} isFullscreen={isFullscreen} isLive={selectedFile ? liveFiles.has(selectedFile) : false}
               onToggleAutoScroll={() => setAutoScroll(!autoScroll)}
-              onDownload={() => selectedFile && window.open(LogService.download(selectedFile), '_blank')}
+              onDownload={handleDownloadLog}
               onToggleFullscreen={() => setIsFullscreen(!isFullscreen)}
               onViewChange={(v) => setSearchParams({ ...Object.fromEntries(searchParams), view: v })}
               onOpenFileList={() => setShowFileList(true)}

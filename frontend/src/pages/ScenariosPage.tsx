@@ -10,8 +10,7 @@ import { useToast } from '../components/ui/Toast'
 import { Badge } from '../components/ui/Badge'
 
 import { useDragAndDrop } from '../hooks/useDragAndDrop'
-
-const API_BASE = import.meta.env.VITE_API_URL || '/api'
+import { downloadFile } from '../utils/download'
 
 export function ScenariosPage() {
   const { showToast } = useToast()
@@ -98,8 +97,13 @@ export function ScenariosPage() {
 
   const { isDragging, dragProps } = useDragAndDrop(onDropFiles)
 
-  const handleDownload = (name: string) => {
-    window.open(`${API_BASE}/scenarios/arma3/${encodeURIComponent(name)}`, '_blank')
+  const handleDownload = async (name: string) => {
+    try {
+      await downloadFile(ScenarioService.downloadUrl(name), name)
+    } catch (err) {
+      console.error('Download failed', err)
+      showToast(err instanceof Error ? err.message : 'Download failed', 'error')
+    }
   }
 
   const toggleA3Sort = (field: 'name' | 'createdAt') => {

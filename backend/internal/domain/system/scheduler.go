@@ -106,7 +106,7 @@ func (s *Scheduler) runMetricsTicker() {
 		case <-s.stopCh:
 			return
 		case <-tickerSys.C:
-			if s.broadcaster != nil {
+			if shouldCollectSystemInfo(s.broadcaster) {
 				bgCtx := context.Background()
 				info, err := s.systemService.GetSystemInfo(bgCtx)
 				if err != nil {
@@ -117,6 +117,27 @@ func (s *Scheduler) runMetricsTicker() {
 			}
 		}
 	}
+}
+
+// subscriberAwareBroadcaster is implemented by the WebSocket hub: it can say
+// whether anybody is listening to a domain.
+type subscriberAwareBroadcaster interface {
+	HasSubscribers(domain string) bool
+}
+
+// shouldCollectSystemInfo decides whether a system_info sample is worth
+// building and serialising. A broadcaster that cannot answer is treated like
+// before (collect on every tick).
+func shouldCollectSystemInfo(b Broadcaster) bool {
+	if b == nil {
+		return false
+	}
+
+	if aware, ok := b.(subscriberAwareBroadcaster); ok {
+		return aware.HasSubscribers("system_info")
+	}
+
+	return true
 }
 
 func (s *Scheduler) runDiscordReminders() {

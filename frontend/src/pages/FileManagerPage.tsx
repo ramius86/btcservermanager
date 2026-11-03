@@ -42,6 +42,8 @@ import { FileManagerService } from '../services/api'
 import { FileItemDto } from '../dtos/FileDto'
 import { FileEditorModal } from '../components/files/FileEditorModal'
 import { TableVirtuoso, TableComponents } from 'react-virtuoso'
+import { downloadFile } from '../utils/download'
+import { deleteEach, describeBulkDelete } from '../utils/bulkDelete'
 
 // Quick jump targets from storage root
 const QUICK_JUMPS = [
@@ -480,20 +482,37 @@ export const FileManagerPage: React.FC = () => {
     }
   }
 
-  // Delete items
+  // Delete items. Every selected file is attempted once: stopping at the first
+  // error left the user unable to tell which files were gone.
   const handleDeleteConfirm = async () => {
     const itemsToDelete = deleteDialog.items
     if (itemsToDelete.length === 0) return
 
-    try {
-      for (const item of itemsToDelete) {
-        await FileManagerService.delete(item.path)
-      }
-      showToast(`Deleted ${itemsToDelete.length} item(s)`, 'success')
-      setDeleteDialog({ isOpen: false, items: [] })
+    const outcome = await deleteEach(itemsToDelete, (item) => FileManagerService.delete(item.path))
+
+    if (outcome.deleted > 0) {
       loadDirectory(currentPath)
-    } catch (err: any) {
-      showToast(err.message || 'Could not delete item(s)', 'error')
+    }
+
+    const message = describeBulkDelete(outcome, (item) => item.name)
+
+    if (outcome.failures.length === 0) {
+      showToast(message, 'success')
+      setDeleteDialog({ isOpen: false, items: [] })
+      return
+    }
+
+    // Keep the dialog open with only the failed items so a retry does not
+    // include the files that were already removed.
+    showToast(message, 'error')
+    setDeleteDialog({ isOpen: true, items: outcome.failures.map((failure) => failure.item) })
+  }
+
+  const handleDownload = async (path: string, fallbackName: string) => {
+    try {
+      await downloadFile(FileManagerService.downloadUrl(path), fallbackName)
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Download failed', 'error')
     }
   }
 
@@ -687,9 +706,7 @@ export const FileManagerPage: React.FC = () => {
                     Open Folder
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    onClick={() =>
-                      window.open(FileManagerService.downloadUrl(item.path), '_blank')
-                    }
+                    onClick={() => handleDownload(item.path, `${item.name}.zip`)}
                   >
                     <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                     Download as Zip
@@ -729,11 +746,7 @@ export const FileManagerPage: React.FC = () => {
               )}
 
               {!item.isDir && (
-                <DropdownMenuItem
-                  onClick={() =>
-                    window.open(FileManagerService.downloadUrl(item.path), '_blank')
-                  }
-                >
+                <DropdownMenuItem onClick={() => handleDownload(item.path, item.name)}>
                   <Download className="w-3.5 h-3.5 mr-2 text-muted-foreground" />
                   Download File
                 </DropdownMenuItem>

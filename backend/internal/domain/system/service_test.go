@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 	"time"
 
@@ -49,8 +48,6 @@ func TestGetSystemInfo(t *testing.T) {
 
 	err = os.WriteFile(filepath.Join(procDir, "meminfo"), []byte("MemTotal: 16000000 kB\nMemAvailable: 8000000 kB\n"), 0o644)
 	assert.NoError(t, err)
-	err = os.WriteFile(filepath.Join(procDir, "loadavg"), []byte("0.50 0.40 0.30 1/100 1234\n"), 0o644)
-	assert.NoError(t, err)
 	err = os.WriteFile(filepath.Join(procDir, "version"), []byte("Linux version 5.15.0 (build@worker) #1 SMP\n"), 0o644)
 	assert.NoError(t, err)
 	err = os.WriteFile(filepath.Join(procDir, "uptime"), []byte("3600.00 7200.00\n"), 0o644)
@@ -69,7 +66,8 @@ func TestGetSystemInfo(t *testing.T) {
 
 	assert.Equal(t, int64(16000000*1024), info.MemoryTotal)
 	assert.Equal(t, int64(8000000*1024), info.MemoryFree)
-	assert.Equal(t, 0.50/float64(runtime.NumCPU()), info.CPUUsage)
+	// The first sample has no baseline to compare against.
+	assert.Equal(t, float64(0), info.CPUUsage)
 	assert.Equal(t, "5.15.0", info.Kernel)
 	assert.Equal(t, 3600.00, info.Uptime)
 	assert.Equal(t, "AMD Ryzen 7 3700X", info.CPUModel)

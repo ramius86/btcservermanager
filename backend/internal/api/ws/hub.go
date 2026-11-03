@@ -64,6 +64,31 @@ func (h *Hub) SetSystemInfoProvider(provider func() any) {
 	h.systemInfoProvider = provider
 }
 
+// HasSubscribers reports whether at least one client is subscribed to domain.
+// It lets producers skip work that nobody would receive (the metrics ticker
+// rebuilds system_info every 2 s even with no dashboard open).
+func (h *Hub) HasSubscribers(domain string) bool {
+	found := false
+
+	h.clients.Range(func(_, value any) bool {
+		subs, ok := value.([]Subscription)
+		if !ok {
+			return true
+		}
+
+		for _, sub := range subs {
+			if sub.Domain == domain {
+				found = true
+				return false
+			}
+		}
+
+		return true
+	})
+
+	return found
+}
+
 func (h *Hub) Stop() {
 	close(h.stop)
 }
