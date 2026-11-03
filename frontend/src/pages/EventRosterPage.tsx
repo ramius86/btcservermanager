@@ -61,6 +61,9 @@ import {
   swapPlayerSlots,
   reconcileSquadsWithCandidates,
   cleanPlayerName,
+  computeAssignedAndUnassigned,
+  filterCandidateList,
+  extractRosterAssignments,
   type RosterLanguage,
   ROSTER_HEADER_LANG_KEY,
 } from '../components/roster/rosterUtils'
@@ -323,51 +326,6 @@ function assignCandidateInSquads(
     }
     return s
   })
-}
-
-function computeAssignedAndUnassigned(squads: RosterSquad[], allCandidates: RosterCandidate[]) {
-  const assignedSet = new Set<string>()
-  for (const sq of squads) {
-    for (const sl of sq.slots) {
-      if (sl.assignedPlayerName) {
-        assignedSet.add(sl.assignedPlayerName.toLowerCase().trim())
-      }
-    }
-  }
-  const unassigned = allCandidates.filter(c => !assignedSet.has(c.name.toLowerCase().trim()))
-  return { assignedNames: assignedSet, unassignedCandidates: unassigned }
-}
-
-function filterCandidateList(
-  candidates: RosterCandidate[],
-  filterType: 'all' | 'going' | 'maybe',
-  searchQuery: string
-) {
-  const q = searchQuery.trim().toLowerCase()
-  return candidates.filter(c => {
-    if (filterType === 'going' && c.isMaybe) return false
-    if (filterType === 'maybe' && !c.isMaybe) return false
-    if (q) {
-      return c.name.toLowerCase().includes(q) || c.qualifications.some(qual => qual.toLowerCase().includes(q))
-    }
-    return true
-  })
-}
-
-function extractRosterAssignments(squads: RosterSquad[]) {
-  const assignments: { userId: string; playerName: string; role: string }[] = []
-  for (const sq of squads) {
-    for (const sl of sq.slots) {
-      if (sl.assignedPlayerName && sl.role) {
-        assignments.push({
-          userId: sl.assignedUserId || sl.assignedPlayerName,
-          playerName: sl.assignedPlayerName,
-          role: sl.role,
-        })
-      }
-    }
-  }
-  return assignments
 }
 
 function parseInitialRosterState(savedRoster: any, defaultHeader: string) {

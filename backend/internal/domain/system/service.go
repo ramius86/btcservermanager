@@ -24,6 +24,7 @@ const unknownVal = "Unknown"
 var Version = "dev"
 
 type SystemInfo struct {
+	// CPUUsage is a 0-100 percentage, not a 0-1 fraction.
 	CPUUsage              float64 `json:"cpu_usage"`
 	MemoryTotal           int64   `json:"total_memory"`
 	MemoryUsed            int64   `json:"memory_usage"`

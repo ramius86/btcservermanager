@@ -59,6 +59,19 @@ type Service struct {
 	rolesCacheMu       sync.RWMutex
 	isSyncingNicknames int32
 	stopTicker         chan struct{}
+	// ctx is cancelled by Close so background work stops with the service
+	// instead of continuing against a closed Discord session.
+	ctx    context.Context
+	cancel context.CancelFunc
+}
+
+// baseContext returns the service context. Zero-value services built by tests
+// have none, and must not panic.
+func (s *Service) baseContext() context.Context {
+	if s.ctx != nil {
+		return s.ctx
+	}
+	return context.Background()
 }
 
 func (s *Service) SetBroadcaster(b Broadcaster) {
@@ -75,10 +88,13 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 		return nil, fmt.Errorf("failed to create discord session: %w", err)
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
 	svc := &Service{
 		session: session,
 		guildID: guildID,
 		repo:    repo,
+		ctx:     ctx,
+		cancel:  cancel,
 	}
 
 	session.AddHandler(svc.handleInteraction)
@@ -97,12 +113,18 @@ func New(token, guildID string, repo *Repository) (*Service, error) {
 }
 
 func NewUnconfigured(repo *Repository) *Service {
+	ctx, cancel := context.WithCancel(context.Background())
 	return &Service{
-		repo: repo,
+		repo:   repo,
+		ctx:    ctx,
+		cancel: cancel,
 	}
 }
 
 func (s *Service) Open() error {
+	if s.ctx == nil {
+		s.ctx, s.cancel = context.WithCancel(context.Background())
+	}
 	s.session.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers
 	err := s.session.Open()
 	if err != nil && (strings.Contains(err.Error(), "4014") || strings.Contains(err.Error(), "disallowed")) {
@@ -118,9 +140,9 @@ func (s *Service) Open() error {
 
 	// Warm caches in background at startup
 	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		ctx, cancel := context.WithTimeout(s.baseContext(), 2*time.Minute)
 		defer cancel()
-		if err := s.SyncMemberNicknames(ctx); err != nil {
+		if err := s.SyncMemberNicknames(ctx); err != nil && !errors.Is(err, context.Canceled) {
 			log.Printf("⚠️  Failed initial member nickname sync: %v", err)
 		}
 		if _, err := s.GetChannels(); err != nil {
@@ -138,9 +160,12 @@ func (s *Service) Open() error {
 		for {
 			select {
 			case <-ticker.C:
-				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-				_ = s.SyncMemberNicknames(ctx)
+				ctx, cancel := context.WithTimeout(s.baseContext(), 2*time.Minute)
+				err := s.SyncMemberNicknames(ctx)
 				cancel()
+				if err != nil && !errors.Is(err, context.Canceled) {
+					log.Printf("⚠️  Periodic member nickname sync failed: %v", err)
+				}
 			case <-s.stopTicker:
 				return
 			}
@@ -151,6 +176,11 @@ func (s *Service) Open() error {
 }
 
 func (s *Service) Close() {
+	// Cancel first: in-flight calls must not keep using a session that is
+	// about to be closed under them.
+	if s.cancel != nil {
+		s.cancel()
+	}
 	if s.stopTicker != nil {
 		select {
 		case <-s.stopTicker:
@@ -574,7 +604,7 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 	userID := getInteractionUserID(i)
 	username := getInteractionUsername(i)
 
-	ctx := context.Background()
+	ctx := s.baseContext()
 
 	event, err := s.repo.GetEventByMessageID(ctx, i.Message.ID)
 	if err != nil {
@@ -791,7 +821,7 @@ func (s *Service) MergeUsers(ctx context.Context, sourceUserID, targetUserID str
 	}
 
 	go func() {
-		bgCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		bgCtx, cancel := context.WithTimeout(s.baseContext(), 30*time.Second)
 		defer cancel()
 		events, err := s.repo.GetAllEvents(bgCtx)
 		if err != nil {
@@ -1014,7 +1044,7 @@ func (s *Service) onMemberUpdated(m *discordgo.Member) {
 	}
 
 	displayName := getMemberDisplayName(m)
-	ctx := context.Background()
+	ctx := s.baseContext()
 
 	updated, err := s.repo.UpdateUserNickname(ctx, m.User.ID, displayName)
 	if err != nil {
@@ -1082,7 +1112,7 @@ func (s *Service) tryAsyncSyncMemberNicknames(members []*discordgo.Member) {
 	}
 	go func() {
 		defer atomic.StoreInt32(&s.isSyncingNicknames, 0)
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		ctx, cancel := context.WithTimeout(s.baseContext(), 30*time.Second)
 		defer cancel()
 		s.syncMemberNicknamesToDatabase(ctx, members)
 	}()

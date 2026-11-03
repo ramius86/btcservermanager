@@ -3,6 +3,7 @@ import { useWebSocket } from './WebSocketContext'
 import { SystemService } from '../services/api'
 
 interface SystemInfo {
+  // Percentage 0-100: the backend already scales it, do not multiply by 100.
   cpu_usage: number
   memory_usage: number
   total_memory: number

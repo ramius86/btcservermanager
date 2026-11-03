@@ -255,11 +255,11 @@ export function DashboardPage() {
       <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
             <StatsCard
               title="CPU Load"
-              value={sysInfo?.cpu_usage === undefined ? '...' : `${(sysInfo.cpu_usage * 100).toFixed(1)}%`}
+              value={sysInfo?.cpu_usage === undefined ? '...' : `${sysInfo.cpu_usage.toFixed(1)}%`}
               icon={Cpu}
               color="text-blue-400"
               bgColor="bg-blue-500/10"
-              progress={sysInfo?.cpu_usage === undefined ? 0 : sysInfo.cpu_usage * 100}
+              progress={sysInfo?.cpu_usage === undefined ? 0 : sysInfo.cpu_usage}
             />
         <StatsCard
           title="Memory"

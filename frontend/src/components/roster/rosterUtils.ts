@@ -470,6 +470,65 @@ export function reconcileSquadsWithCandidates(
   }))
 }
 
+/**
+ * Splits the candidate pool into the names already placed in a slot and the
+ * candidates still available. Names are compared case-insensitively and
+ * trimmed so " Alice " and "alice" are the same player.
+ */
+export function computeAssignedAndUnassigned(squads: RosterSquad[], allCandidates: RosterCandidate[]) {
+  const assignedSet = new Set<string>()
+  for (const sq of squads) {
+    for (const sl of sq.slots) {
+      if (sl.assignedPlayerName) {
+        assignedSet.add(sl.assignedPlayerName.toLowerCase().trim())
+      }
+    }
+  }
+  const unassigned = allCandidates.filter(c => !assignedSet.has(c.name.toLowerCase().trim()))
+  return { assignedNames: assignedSet, unassignedCandidates: unassigned }
+}
+
+/**
+ * Filters the unassigned candidates by RSVP state and by a free-text query that
+ * matches either the player name or one of their qualifications.
+ */
+export function filterCandidateList(
+  candidates: RosterCandidate[],
+  filterType: 'all' | 'going' | 'maybe',
+  searchQuery: string
+) {
+  const q = searchQuery.trim().toLowerCase()
+  return candidates.filter(c => {
+    if (filterType === 'going' && c.isMaybe) return false
+    if (filterType === 'maybe' && !c.isMaybe) return false
+    if (q) {
+      return c.name.toLowerCase().includes(q) || c.qualifications.some(qual => qual.toLowerCase().includes(q))
+    }
+    return true
+  })
+}
+
+/**
+ * Flattens the squads into the assignment rows sent to the backend when the
+ * roster is saved. Slots without a player or a role are skipped, and the user
+ * id falls back to the player name for guests.
+ */
+export function extractRosterAssignments(squads: RosterSquad[]) {
+  const assignments: { userId: string; playerName: string; role: string }[] = []
+  for (const sq of squads) {
+    for (const sl of sq.slots) {
+      if (sl.assignedPlayerName && sl.role) {
+        assignments.push({
+          userId: sl.assignedUserId || sl.assignedPlayerName,
+          playerName: sl.assignedPlayerName,
+          role: sl.role,
+        })
+      }
+    }
+  }
+  return assignments
+}
+
 function formatPlayerSuffix(name: string, isMaybe?: boolean): string {
   if (!name) return ''
   return isMaybe ? `${name} (?)` : name
