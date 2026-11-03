@@ -17,6 +17,11 @@ import (
 // running after the handler returns, so this is not the process lifetime.
 const startServerTimeout = 60 * time.Second
 
+// stopServerTimeout bounds a stop request: the graceful window is 30s and the
+// post-kill wait is 5s, so 60s leaves room for the kill escalation without
+// leaving the handler open forever.
+const stopServerTimeout = 60 * time.Second
+
 /*
 This file is part of the API Servers split.
 It handles the HTTP endpoints for server process lifecycle (Start, Stop, Restart, Status monitoring) and auto-restart settings.
@@ -62,12 +67,19 @@ func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) handleStopServer(w http.ResponseWriter, req *http.Request) {
-	ctx := req.Context()
 	id, err := strconv.ParseInt(chi.URLParam(req, "id"), 10, 64)
 	if err != nil {
 		http.Error(w, errInvalidServerID, http.StatusBadRequest)
 		return
 	}
+
+	// Detached from the request, like start and restart: a page reload or a
+	// dropped tunnel cancels req.Context(), and StopServer reads that cancel as
+	// "the graceful wait is over" and escalates to SIGKILL. A shutdown the user
+	// asked for must not turn into a hard kill because the browser went away.
+	ctx, cancel := context.WithTimeout(context.Background(), stopServerTimeout)
+	defer cancel()
+
 	if err := r.serverService.StopServer(ctx, id); err != nil {
 		if errors.Is(err, server.ErrServerNotFound) {
 			http.Error(w, err.Error(), http.StatusNotFound)

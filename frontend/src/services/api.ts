@@ -144,7 +144,7 @@ export const WorkshopService = {
 export const ScenarioService = {
   getArma3: (): Promise<any[]> => fetchApi('/scenarios/arma3').then(res => res?.scenarios || []),
   downloadUrl: (name: string): string => `${API_BASE}/scenarios/arma3/${encodeURIComponent(name)}`,
-  deleteArma3: (name: string): Promise<void> => fetchApi(`/scenarios/arma3/${name}`, { method: 'DELETE' }),
+  deleteArma3: (name: string): Promise<void> => fetchApi(`/scenarios/arma3/${encodeURIComponent(name)}`, { method: 'DELETE' }),
   // The endpoint deliberately returns vanilla + every modded scenario in the
   // DB (discovery must work for mods not yet saved), so no serverId is sent.
   getReforger: (): Promise<any[]> => fetchApi('/scenarios/reforger').then(res => res?.scenarios || []),

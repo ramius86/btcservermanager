@@ -41,6 +41,7 @@ type Service struct {
 	httpClient           *http.Client
 	broadcaster          Broadcaster
 	stopCh               chan struct{}
+	stopOnce             sync.Once
 	gameUpdateListenerMu sync.RWMutex
 	gameUpdateListener   GameUpdateListener
 	updateIntervalMu     sync.RWMutex
@@ -99,8 +100,12 @@ func NewService(deps ServiceDeps) *Service {
 	return s
 }
 
+// Stop is idempotent: closing an already closed channel panics, and this is a
+// public lifecycle method that tests and future shutdown paths may call twice.
 func (s *Service) Stop() {
-	close(s.stopCh)
+	s.stopOnce.Do(func() {
+		close(s.stopCh)
+	})
 }
 
 // submit enqueues a job and resolves it locally when the executor queue cannot

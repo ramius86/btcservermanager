@@ -127,6 +127,17 @@ type DiskSpaceProbe func() (total, free uint64)
 // writing logs and profiles, not an estimate of what the game files need.
 const minFreeDiskBytes uint64 = 1 << 30
 
+// gracefulStopTimeout is how long a single server gets to honour SIGINT before
+// its process group is killed.
+const gracefulStopTimeout = 30 * time.Second
+
+// shutdownStopBudget bounds the whole stop performed by Stop(). Because the
+// servers are stopped in parallel, the budget is also the total: docker only
+// allows stop_grace_period before it SIGKILLs the container, and a sequential
+// stop cost up to gracefulStopTimeout for every running instance, so two
+// servers were already enough to be killed mid-write.
+const shutdownStopBudget = gracefulStopTimeout
+
 // SetDiskSpaceProbe installs the free-space check used before a start. Without a
 // probe the check is skipped: refusing to start because the platform cannot
 // report the volume would be worse than not checking at all.
@@ -897,7 +908,7 @@ func (m *ProcessManager) gracefulShutdown(proc *Process, ctx context.Context) (b
 		return true, nil
 	case <-ctx.Done():
 		return false, ctx.Err()
-	case <-time.After(30 * time.Second):
+	case <-time.After(gracefulStopTimeout):
 		// Fallback to Kill
 		return false, nil
 	}
@@ -922,8 +933,6 @@ func (m *ProcessManager) startFastDLForServer() error {
 	m.fastdlMu.Lock()
 	defer m.fastdlMu.Unlock()
 
-	m.fastdlActiveCount++
-
 	if m.fastdlServer == nil {
 		// Serve directly from the mpmissions directory.
 		// This ensures new .pbo files uploaded at runtime are immediately available
@@ -933,13 +942,33 @@ func (m *ProcessManager) startFastDLForServer() error {
 			return fmt.Errorf("failed to ensure mpmissions directory exists: %w", err)
 		}
 
-		m.fastdlServer = fastdl.NewServer(m.fastdlPort, mpmissionsDir)
+		srv := fastdl.NewServer(m.fastdlPort, mpmissionsDir)
+		m.fastdlServer = srv
+
+		// The server is captured instead of reading m.fastdlServer from the
+		// goroutine: stopFastDLForServer clears that field, and reading it here
+		// without the lock was a data race.
 		go func() {
-			if err := m.fastdlServer.Start(); err != nil {
+			if err := srv.Start(); err != nil {
 				log.Printf("[ProcessManager] FastDL server error: %v", err)
+
+				// The listener never came up (port already taken, permission
+				// denied). Clearing it lets the next start retry instead of
+				// keeping a dead server nothing can restart.
+				m.fastdlMu.Lock()
+				if m.fastdlServer == srv {
+					m.fastdlServer = nil
+				}
+				m.fastdlMu.Unlock()
 			}
 		}()
 	}
+
+	// Counted only once the server exists. Incrementing before the error return
+	// above leaked the counter by one forever: startFastDLIfNeeded then reported
+	// the start as failed and nobody ever decremented it again, so the FastDL
+	// listener was never stopped for the life of the process.
+	m.fastdlActiveCount++
 
 	return nil
 }
@@ -948,32 +977,59 @@ func (m *ProcessManager) stopFastDLForServer() {
 	m.fastdlMu.Lock()
 	defer m.fastdlMu.Unlock()
 
-	m.fastdlActiveCount--
+	if m.fastdlActiveCount > 0 {
+		m.fastdlActiveCount--
+	}
 
-	if m.fastdlActiveCount <= 0 {
-		m.fastdlActiveCount = 0
-		if m.fastdlServer != nil {
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-			_ = m.fastdlServer.Stop(ctx)
-			m.fastdlServer = nil
-		}
+	if m.fastdlActiveCount > 0 {
+		return
+	}
+
+	if m.fastdlServer != nil {
+		srv := m.fastdlServer
+		m.fastdlServer = nil
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Stop(ctx)
 	}
 }
 
+// Stop terminates every running server.
+//
+// The servers are stopped in parallel over one shared budget: stopping them one
+// after another cost up to gracefulStopTimeout each, so with two instances the
+// container was SIGKILLed by docker before the loop was over. The shared
+// context also gives every server the same deadline, so the last one does not
+// silently lose its graceful window.
 func (m *ProcessManager) Stop() {
 	log.Println("[ProcessManager] Stopping all running servers...")
-	bgCtx := context.Background()
+
+	ctx, cancel := context.WithTimeout(context.Background(), shutdownStopBudget)
+	defer cancel()
+
+	var wg sync.WaitGroup
+
 	m.processes.Range(func(key, _ any) bool {
 		id, okID := key.(int64)
 		if !okID {
 			return true
 		}
-		if err := m.StopServer(bgCtx, id); err != nil {
-			log.Printf("[ProcessManager] Failed to stop server ID %d: %v", id, err)
-		}
+
+		wg.Add(1)
+
+		go func(serverID int64) {
+			defer wg.Done()
+
+			if err := m.StopServer(ctx, serverID); err != nil {
+				log.Printf("[ProcessManager] Failed to stop server ID %d: %v", serverID, err)
+			}
+		}(id)
+
 		return true
 	})
+
+	wg.Wait()
 }
 
 func (m *ProcessManager) GetInstanceInfo(id int64) *ServerInstanceInfo {

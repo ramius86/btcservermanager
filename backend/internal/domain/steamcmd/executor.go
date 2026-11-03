@@ -41,6 +41,7 @@ type Executor struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	stopCh        chan struct{}
+	stopOnce      sync.Once
 	wg            sync.WaitGroup
 	execCommand   func(ctx context.Context, name string, arg ...string) *exec.Cmd
 }
@@ -83,9 +84,15 @@ func (e *Executor) SetExecCommand(f func(ctx context.Context, name string, arg .
 	e.execCommand = f
 }
 
+// Stop is idempotent: a second call would otherwise panic on the closed
+// channel. The wait stays outside the Once so every caller still blocks until
+// the worker has actually finished.
 func (e *Executor) Stop() {
-	e.cancel()
-	close(e.stopCh)
+	e.stopOnce.Do(func() {
+		e.cancel()
+		close(e.stopCh)
+	})
+
 	e.wg.Wait()
 }
 

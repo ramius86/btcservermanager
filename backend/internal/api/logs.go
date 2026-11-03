@@ -25,6 +25,20 @@ const (
 	errInvalidLogFilenameFormat = "invalid log filename format"
 )
 
+// statsLogPathFor derives the telemetry file that sits next to a server log,
+// mirroring statsLogPathFor in the server domain so the writer and the reader
+// cannot disagree. Replacing the first ".log" in the whole path also rewrote
+// directory names containing that sequence (e.g. "/logs.archive/x.log" became
+// "/mnt.stats.logs.archive/x.log"), so the stats file was never found.
+func statsLogPathFor(logPath string) string {
+	ext := filepath.Ext(logPath)
+	if ext == "" {
+		return logPath + ".stats"
+	}
+
+	return strings.TrimSuffix(logPath, ext) + ".stats" + ext
+}
+
 func (r *Router) handleGetServerLogContent(w http.ResponseWriter, req *http.Request) {
 	filename := filepath.Base(chi.URLParam(req, "filename"))
 	if err := r.validateLogFilename(filename); err != nil {
@@ -248,7 +262,7 @@ func (r *Router) handleGetServerStats(w http.ResponseWriter, req *http.Request) 
 	}
 
 	logFilePath := filepath.Join(r.config.LogsDirectory, filepath.Base(filename))
-	statsFilePath := strings.Replace(logFilePath, ".log", statsLogSuffix, 1)
+	statsFilePath := statsLogPathFor(logFilePath)
 
 	fileToRead := logFilePath
 	if _, err := os.Stat(statsFilePath); err == nil {
@@ -353,8 +367,7 @@ func (r *Router) handleDeleteLog(w http.ResponseWriter, req *http.Request) {
 
 	// Also try to delete .stats.log if it exists (only if we're deleting a primary .log file)
 	if strings.HasSuffix(filename, ".log") && !strings.HasSuffix(filename, statsLogSuffix) {
-		statsPath := strings.Replace(path, ".log", statsLogSuffix, 1)
-		_ = os.Remove(statsPath)
+		_ = os.Remove(statsLogPathFor(path))
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -386,7 +399,7 @@ func removeLogAndStats(f string) {
 	}
 
 	if strings.HasSuffix(f, ".log") {
-		statsFile := strings.Replace(f, ".log", statsLogSuffix, 1)
+		statsFile := statsLogPathFor(f)
 		if err := os.Remove(statsFile); err != nil && !os.IsNotExist(err) {
 			log.Printf("[API] Failed to remove stats log %s: %v", statsFile, err)
 		}
