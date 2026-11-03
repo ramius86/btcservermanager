@@ -83,7 +83,7 @@ func TestRouterInit(t *testing.T) {
 	scenarioRepo := scenario.NewRepository(database)
 	installationRepo := installation.NewRepository(database)
 	appSettingsRepo := appsettings.NewRepository(database)
-	steamauthRepo := steamauth.NewRepository(database)
+	steamauthRepo := steamauth.NewRepository(database, cfg.SecretKey)
 
 	// Services
 	serverService := server.NewService(serverRepo, nil, &mockConfigManager{}, workshopRepo)
@@ -129,6 +129,9 @@ func runSubtests(t *testing.T, handler http.Handler) {
 	t.Run("GET /api/nonexistent -> 404", func(t *testing.T) { testNonexistent(t, handler) })
 	t.Run("GET /api/settings -> 200", func(t *testing.T) { testGetSettings(t, handler) })
 	t.Run("PUT /api/settings -> 200", func(t *testing.T) { testPutSettings(t, handler) })
+	t.Run("PUT /api/settings with Sec-Fetch-Site: cross-site -> 403", func(t *testing.T) {
+		testCrossSiteMutationRejected(t, handler)
+	})
 	t.Run("GET /api/system/info -> 200", func(t *testing.T) { testGetSystemInfo(t, handler) })
 	t.Run("GET /api/server -> 200 (empty list)", func(t *testing.T) { testGetServerEmpty(t, handler) })
 
@@ -187,6 +190,16 @@ func testPutSettings(t *testing.T, handler http.Handler) {
 	if s.LogRetentionDays != 45 || s.LogMaxTotalSizeMB != 512 {
 		t.Errorf("expected retention=45, size=512; got retention=%d, size=%d", s.LogRetentionDays, s.LogMaxTotalSizeMB)
 	}
+}
+
+func testCrossSiteMutationRejected(t *testing.T, handler http.Handler) {
+	body := `{"logRetentionDays": 45, "logMaxTotalSizeMB": 512, "qualificationNames": []}`
+	req, _ := http.NewRequest(http.MethodPut, "/api/settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Sec-Fetch-Site", "cross-site")
+	rr := httptest.NewRecorder()
+	handler.ServeHTTP(rr, req)
+	assertStatus(t, http.StatusForbidden, rr.Code)
 }
 
 func testGetSystemInfo(t *testing.T, handler http.Handler) {

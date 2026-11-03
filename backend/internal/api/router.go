@@ -99,6 +99,9 @@ func (r *Router) Init() http.Handler {
 	mux.Post("/api/csp-report", r.handleCSPReport)
 
 	mux.Route("/api", func(mux chi.Router) {
+		// Refuse browser-marked cross-site mutations before spending work on
+		// access-token validation.
+		mux.Use(requireSameSiteMutations)
 		mux.Use(cfValidator.middleware)
 		mux.Get("/ws", r.handleWebSocket)
 		mux.Mount("/server", r.serverRoutes())

@@ -10,15 +10,13 @@ import (
 )
 
 func TestRepository(t *testing.T) {
-	t.Setenv("SECRET_KEY", "dummy-key-with-at-least-32-characters")
-
 	dbPath := filepath.Join(t.TempDir(), "test.db")
 
 	database, _ := db.Connect(dbPath)
 	defer database.Close()
 	_ = db.Migrate(dbPath)
 
-	repo := NewRepository(database)
+	repo := NewRepository(database, testSecretKey)
 	ctx := t.Context()
 
 	t.Run("SteamAuth CRUD", func(t *testing.T) {
@@ -68,6 +66,25 @@ func TestRepository(t *testing.T) {
 		empty, _ := repo.GetAuth(ctx)
 		if empty.Username != "" {
 			t.Error("expected empty auth after delete")
+		}
+	})
+
+	// The repository seals and opens with the key it was constructed with, not
+	// with whatever SECRET_KEY happens to be exported at call time.
+	t.Run("Repository key wins over the environment", func(t *testing.T) {
+		t.Setenv("SECRET_KEY", otherSecretKey)
+
+		if err := repo.Save(ctx, &SteamAuth{Username: "envuser", Password: "envpass"}); err != nil {
+			t.Fatalf("failed to save: %v", err)
+		}
+		defer func() { _ = repo.Delete(ctx) }()
+
+		saved, err := repo.GetAuth(ctx)
+		if err != nil {
+			t.Fatalf("failed to get: %v", err)
+		}
+		if saved.Password != "envpass" {
+			t.Errorf("password not decrypted with the repository key, got %q", saved.Password)
 		}
 	})
 }

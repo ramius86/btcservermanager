@@ -175,7 +175,7 @@ func run() error {
 	installationService := installation.NewService(installationRepo)
 	dryRunService := installation.NewDryRunService(cfg)
 
-	steamauthRepo := steamauth.NewRepository(database)
+	steamauthRepo := steamauth.NewRepository(database, cfg.SecretKey)
 	steamauthService := steamauth.NewAuthService(steamauthRepo)
 
 	systemService := system.NewService(system.ServiceDeps{

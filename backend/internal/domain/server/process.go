@@ -676,7 +676,24 @@ func (m *ProcessManager) stopHeadlessClients(id int64) {
 	}
 }
 
-func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) error {
+// headlessContextErr reports the caller's cancellation before an operation that
+// cannot be undone (spawning or killing a process). The request context
+// deliberately does not own the client's lifetime: it is cancelled as soon as
+// the HTTP response is written, while a headless client has to keep running.
+// It only decides whether the operation is still wanted.
+func headlessContextErr(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("headless client operation aborted: %w", err)
+	}
+
+	return nil
+}
+
+func (m *ProcessManager) AddHeadlessClient(ctx context.Context, s *Arma3Server) error {
+	if err := headlessContextErr(ctx); err != nil {
+		return err
+	}
+
 	p, ok := m.processes.Load(s.ID)
 	if !ok {
 		return ErrServerNotRunning
@@ -734,6 +751,13 @@ func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) er
 		}
 	}
 
+	// The lookup and the caller's mod resolution can take a while; if the
+	// request was cancelled in the meantime, do not spawn a client nobody is
+	// waiting for.
+	if err := headlessContextErr(ctx); err != nil {
+		return err
+	}
+
 	hc := NewHeadlessClient(nextID, s, m.paths, onExit)
 	if err := hc.Start(m.launcher.additionalMods); err != nil {
 		return err
@@ -751,7 +775,11 @@ func (m *ProcessManager) AddHeadlessClient(_ context.Context, s *Arma3Server) er
 	return nil
 }
 
-func (m *ProcessManager) RemoveHeadlessClient(_ context.Context, id int64) error {
+func (m *ProcessManager) RemoveHeadlessClient(ctx context.Context, id int64) error {
+	if err := headlessContextErr(ctx); err != nil {
+		return err
+	}
+
 	m.hcMu.Lock()
 	defer m.hcMu.Unlock()
 

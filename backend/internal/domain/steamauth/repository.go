@@ -8,11 +8,15 @@ import (
 )
 
 type Repository struct {
-	db *sql.DB
+	db        *sql.DB
+	secretKey string
 }
 
-func NewRepository(db *sql.DB) *Repository {
-	return &Repository{db: db}
+// NewRepository takes the encryption key explicitly. The key has exactly one
+// source (Config.SecretKey) so the credentials are always sealed with the key
+// the application validated and logged at boot.
+func NewRepository(db *sql.DB, secretKey string) *Repository {
+	return &Repository{db: db, secretKey: secretKey}
 }
 
 func (r *Repository) GetAuth(ctx context.Context) (*SteamAuth, error) {
@@ -30,10 +34,10 @@ func (r *Repository) GetAuth(ctx context.Context) (*SteamAuth, error) {
 	}
 
 	// Decrypt sensitive fields
-	if a.Password, err = decrypt(a.Password); err != nil {
+	if a.Password, err = decrypt(r.secretKey, a.Password); err != nil {
 		return nil, fmt.Errorf("failed to decrypt password: %w", err)
 	}
-	if a.SteamGuardToken, err = decrypt(a.SteamGuardToken); err != nil {
+	if a.SteamGuardToken, err = decrypt(r.secretKey, a.SteamGuardToken); err != nil {
 		return nil, fmt.Errorf("failed to decrypt steam guard token: %w", err)
 	}
 
@@ -65,7 +69,7 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 
 	passwordToSave := current.Password
 	if a.Password != "" {
-		enc, err := encrypt(a.Password)
+		enc, err := encrypt(r.secretKey, a.Password)
 		if err != nil {
 			return err
 		}
@@ -74,7 +78,7 @@ func (r *Repository) Save(ctx context.Context, a *SteamAuth) error {
 
 	tokenToSave := current.SteamGuardToken
 	if a.SteamGuardToken != "" {
-		enc, err := encrypt(a.SteamGuardToken)
+		enc, err := encrypt(r.secretKey, a.SteamGuardToken)
 		if err != nil {
 			return err
 		}

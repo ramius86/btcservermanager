@@ -158,7 +158,7 @@ func setupRouterForEndpointsTest(t *testing.T) (http.Handler, RouterDeps, func()
 	scenarioRepo := scenario.NewRepository(database)
 	installationRepo := installation.NewRepository(database)
 	appSettingsRepo := appsettings.NewRepository(database)
-	steamauthRepo := steamauth.NewRepository(database)
+	steamauthRepo := steamauth.NewRepository(database, cfg.SecretKey)
 	discordRepo := discordbot.NewRepository(database)
 
 	// Services

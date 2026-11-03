@@ -81,6 +81,36 @@ func (r *Router) securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// requireSameSiteMutations rejects state-changing requests that the browser
+// itself marks as coming from another site. Sec-Fetch-Site is set by the
+// browser and cannot be forged by page script, so a cross-site form post or
+// fetch() is refused even when it carries the Cloudflare Access cookie: the
+// session cookie would otherwise authenticate a request the user never made.
+//
+// A missing header is allowed because the signal is browser-only (curl,
+// scripts, monitoring); this is defense in depth on top of the access token
+// check, not a replacement for it. "same-site" is deliberately allowed: a
+// deployment that serves the SPA from a sibling subdomain produces it.
+func requireSameSiteMutations(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		if isMutatingMethod(req.Method) && strings.EqualFold(req.Header.Get("Sec-Fetch-Site"), "cross-site") {
+			http.Error(w, "cross-site request rejected", http.StatusForbidden)
+			return
+		}
+
+		next.ServeHTTP(w, req)
+	})
+}
+
+func isMutatingMethod(method string) bool {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions, http.MethodTrace:
+		return false
+	default:
+		return true
+	}
+}
+
 // CorsHandler restituisce un middleware CORS configuration con origine specifica.
 // Usa la libreria go-chi/cors già presente nel go.mod.
 func CorsHandler(allowedOrigin string) func(http.Handler) http.Handler {

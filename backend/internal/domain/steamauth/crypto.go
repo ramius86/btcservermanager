@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"strings"
 )
 
@@ -31,8 +30,13 @@ func isPlaceholderSecret(secret string) bool {
 	return false
 }
 
-func deriveKey() ([]byte, error) {
-	secret := strings.TrimSpace(os.Getenv("SECRET_KEY"))
+// deriveKey validates the caller-supplied secret and turns it into the AES
+// key. The secret arrives from Config; reading os.Getenv here (as an earlier
+// version did) left Config.SecretKey as a decoy that nothing encrypted with,
+// so a validated key and the key actually in use could silently differ (the
+// config value is not trimmed, this one is).
+func deriveKey(secret string) ([]byte, error) {
+	secret = strings.TrimSpace(secret)
 
 	if secret == "" {
 		return nil, errors.New("FATAL SECURITY ERROR: SECRET_KEY environment variable must be set to secure Steam credentials")
@@ -51,12 +55,12 @@ func deriveKey() ([]byte, error) {
 	return hash[:], nil
 }
 
-func encrypt(plaintext string) (string, error) {
+func encrypt(secret, plaintext string) (string, error) {
 	if plaintext == "" {
 		return "", nil
 	}
 
-	key, err := deriveKey()
+	key, err := deriveKey(secret)
 	if err != nil {
 		return "", err
 	}
@@ -81,12 +85,12 @@ func encrypt(plaintext string) (string, error) {
 	return base64.StdEncoding.EncodeToString(ciphertext), nil
 }
 
-func decrypt(encoded string) (string, error) {
+func decrypt(secret, encoded string) (string, error) {
 	if encoded == "" {
 		return "", nil
 	}
 
-	key, err := deriveKey()
+	key, err := deriveKey(secret)
 	if err != nil {
 		return "", err
 	}
