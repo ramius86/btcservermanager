@@ -1,60 +1,52 @@
-import React, { createContext, useContext, useEffect, useState, useMemo } from 'react'
+import React, { createContext, useContext, useEffect, useRef, useSyncExternalStore } from 'react'
 import { useWebSocket } from './WebSocketContext'
-
-interface ReforgerStat {
-  timestamp: string
-  fps: number
-  memoryMb: number
-  players: number
-  ai: number
-  vehicles: number
-  vehiclesTotal: number
-  projectiles: number
-  rplItems: number
-}
+import { createStatsStore, MAX_STATS_SAMPLES, type ReforgerStat, type StatsStore } from './reforgerStatsStore'
 
 interface ReforgerStatsContextType {
   stats: ReforgerStat[]
 }
 
-const ReforgerStatsContext = createContext<ReforgerStatsContextType | undefined>(undefined)
+// The provider hands over the store, not the samples: a new sample then updates
+// only the components that read it, instead of re-rendering the whole subtree.
+const ReforgerStatsContext = createContext<StatsStore | undefined>(undefined)
 
 export function ReforgerStatsProvider({ serverId, children }: Readonly<{ serverId: number, children: React.ReactNode }>) {
-  const { subscribe, send } = useWebSocket()
-  const [stats, setStats] = useState<ReforgerStat[]>([])
+  const { subscribe } = useWebSocket()
+  const storeRef = useRef<StatsStore | null>(null)
+
+  if (!storeRef.current) {
+    storeRef.current = createStatsStore(MAX_STATS_SAMPLES)
+  }
+
+  const store = storeRef.current
 
   useEffect(() => {
-    if (serverId === 0) return
+    // A different server must not inherit the previous server's samples.
+    store.reset()
 
-    send({ type: 'subscribe', payload: { domain: 'reforger_stats', server_id: serverId } })
+    if (serverId === 0) return
 
     const unsub = subscribe('reforger_stats', (e) => {
       // payload: { server_id: number, stats: ReforgerStat }
       if (!e?.payload || e.payload.server_id !== serverId || !e.payload.stats) return
-      setStats((prev) => {
-        const newStats = [...prev, e.payload.stats]
-        if (newStats.length > 15000) return newStats.slice(-15000)
-        return newStats
-      })
+      store.append(e.payload.stats)
     })
 
-    return () => {
-      send({ type: 'unsubscribe', payload: { domain: 'reforger_stats', server_id: serverId } })
-      unsub()
-    }
-  }, [subscribe, send, serverId])
-
-  const contextValue = useMemo(() => ({ stats }), [stats])
+    return () => unsub()
+  }, [subscribe, serverId, store])
 
   return (
-    <ReforgerStatsContext.Provider value={contextValue}>
+    <ReforgerStatsContext.Provider value={store}>
       {children}
     </ReforgerStatsContext.Provider>
   )
 }
 
-export function useReforgerStats() {
-  const context = useContext(ReforgerStatsContext)
-  if (!context) throw new Error('useReforgerStats must be used within ReforgerStatsProvider')
-  return context
+export function useReforgerStats(): ReforgerStatsContextType {
+  const store = useContext(ReforgerStatsContext)
+  if (!store) throw new Error('useReforgerStats must be used within ReforgerStatsProvider')
+
+  const stats = useSyncExternalStore(store.subscribe, store.getSnapshot)
+
+  return { stats }
 }
