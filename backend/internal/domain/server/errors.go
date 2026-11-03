@@ -20,4 +20,8 @@ var (
 
 	// ErrPortConflict is returned when server ports conflict with another running server.
 	ErrPortConflict = errors.New("port conflict detected")
+
+	// ErrInsufficientDiskSpace is returned when the volume holding the server
+	// installations does not have the headroom required to spawn a process.
+	ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 )

@@ -50,6 +50,10 @@ func (r *Router) handleStartServer(w http.ResponseWriter, req *http.Request) {
 			http.Error(w, err.Error(), http.StatusConflict)
 			return
 		}
+		if errors.Is(err, server.ErrInsufficientDiskSpace) {
+			http.Error(w, err.Error(), http.StatusInsufficientStorage)
+			return
+		}
 		r.respondInternalError(w, err)
 		return
 	}
@@ -96,6 +100,10 @@ func (r *Router) handleRestartServer(w http.ResponseWriter, req *http.Request) {
 		}
 		if errors.Is(err, server.ErrPortConflict) {
 			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		if errors.Is(err, server.ErrInsufficientDiskSpace) {
+			http.Error(w, err.Error(), http.StatusInsufficientStorage)
 			return
 		}
 		r.respondInternalError(w, err)

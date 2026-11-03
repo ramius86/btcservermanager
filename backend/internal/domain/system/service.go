@@ -187,6 +187,13 @@ func (s *Service) GetSystemInfo(ctx context.Context) (*SystemInfo, error) {
 	return info, nil
 }
 
+// FreeDiskSpace reports the total and free bytes of the volume that holds the
+// server installations. A zero total means the platform could not report it,
+// which callers treat as "unknown" rather than "full".
+func (s *Service) FreeDiskSpace() (total, free uint64) {
+	return s.getDiskUsage()
+}
+
 func (s *Service) getMemoryInfo() (total, avail int64) {
 	f, err := os.Open(s.getSystemPath("/proc/meminfo"))
 	if err != nil {

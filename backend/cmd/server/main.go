@@ -63,6 +63,18 @@ func run() error {
 		return err
 	}
 
+	// Dry-run profiles and scenario-extraction directories are removed with
+	// defer, so a crash or a kill leaves them behind and nothing ever reuses
+	// them. Clean them now, before any operation can create a new one.
+	if os.Getenv("TEST_MODE") != "true" {
+		removed, cleanupErr := installation.CleanupStaleTempDirs(cfg.StoragePath, os.TempDir(), time.Now())
+		if cleanupErr != nil {
+			log.Printf("⚠️  Temp cleanup removed %d entr(ies) with errors: %v", removed, cleanupErr)
+		} else if removed > 0 {
+			log.Printf("🧹 Removed %d stale temp entr(ies) left by a previous run", removed)
+		}
+	}
+
 	// 2. Connect to database
 	database, err := db.Connect(cfg.DatabaseURL)
 	if err != nil {
@@ -176,6 +188,10 @@ func run() error {
 		info, _ := systemService.GetSystemInfo(context.Background())
 		return info
 	})
+
+	// Disk pre-flight: a start on a full volume fails halfway through the spawn,
+	// so the manager asks the same statfs the dashboard already reports.
+	processManager.SetDiskSpaceProbe(systemService.FreeDiskSpace)
 
 	steamCmdExecutor := steamcmd.NewExecutor(paths, steamauthService)
 	defer steamCmdExecutor.Stop()

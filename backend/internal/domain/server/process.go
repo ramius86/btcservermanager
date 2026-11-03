@@ -83,6 +83,9 @@ type ProcessManager struct {
 	exitListenerMu  sync.RWMutex
 	exitListener    ServerExitListener
 
+	diskSpaceMu sync.RWMutex
+	diskSpace   DiskSpaceProbe
+
 	fastdlServer      *fastdl.Server
 	fastdlActiveCount int
 	fastdlPort        int
@@ -113,6 +116,45 @@ func (m *ProcessManager) SetBroadcaster(b Broadcaster) {
 	m.broadcasterMu.Lock()
 	defer m.broadcasterMu.Unlock()
 	m.broadcaster = b
+}
+
+// DiskSpaceProbe reports the total and free bytes of the volume that holds the
+// server installations. A zero total means the platform cannot report it.
+type DiskSpaceProbe func() (total, free uint64)
+
+// minFreeDiskBytes is the headroom required before a server is spawned. It is a
+// floor that surfaces a full volume before the process fails halfway through
+// writing logs and profiles, not an estimate of what the game files need.
+const minFreeDiskBytes uint64 = 1 << 30
+
+// SetDiskSpaceProbe installs the free-space check used before a start. Without a
+// probe the check is skipped: refusing to start because the platform cannot
+// report the volume would be worse than not checking at all.
+func (m *ProcessManager) SetDiskSpaceProbe(probe DiskSpaceProbe) {
+	m.diskSpaceMu.Lock()
+	defer m.diskSpaceMu.Unlock()
+	m.diskSpace = probe
+}
+
+func (m *ProcessManager) checkDiskSpace() error {
+	m.diskSpaceMu.RLock()
+	probe := m.diskSpace
+	m.diskSpaceMu.RUnlock()
+
+	if probe == nil {
+		return nil
+	}
+
+	total, free := probe()
+	if total == 0 {
+		return nil
+	}
+
+	if free < minFreeDiskBytes {
+		return fmt.Errorf("%w: %d MiB free, at least %d MiB required", ErrInsufficientDiskSpace, free>>20, minFreeDiskBytes>>20)
+	}
+
+	return nil
 }
 
 func (m *ProcessManager) SetExitListener(l ServerExitListener) {
@@ -172,6 +214,13 @@ func (m *ProcessManager) UpdateQueryInfo(id int64, players int, mapName, mission
 func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	id, name, t, maxPlayers, port, queryPort, err := m.parseServerInstance(s)
 	if err != nil {
+		return err
+	}
+
+	// A full volume fails the spawn halfway (log writes, profile locks, mod
+	// links). Check before reserving anything, so a refusal costs nothing and
+	// does not leave the ports claimed.
+	if err := m.checkDiskSpace(); err != nil {
 		return err
 	}
 
