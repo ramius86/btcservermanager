@@ -123,6 +123,7 @@ func (s *Service) getReforgerScenariosFromExecutable(ctx context.Context) ([]Ref
 
 	cmd := exec.CommandContext(execCtx, executable, "-listScenarios", "-logStats", "1", "-profile", profileDir, "-nothrow")
 	cmd.Dir = s.paths.GetServerPath(server.TypeReforger)
+	cmd.Env = server.ChildEnv()
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()
 

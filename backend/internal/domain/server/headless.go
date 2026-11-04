@@ -40,6 +40,7 @@ func (hc *HeadlessClient) Start(additionalMods []string) error {
 
 	cmd := exec.Command(executable, params...)
 	cmd.Dir = hc.Paths.GetServerPath(TypeArma3)
+	cmd.Env = ChildEnv()
 
 	if err := os.MkdirAll(filepath.Dir(logFile), 0o755); err != nil {
 		return fmt.Errorf("failed to create HC log directory: %w", err)

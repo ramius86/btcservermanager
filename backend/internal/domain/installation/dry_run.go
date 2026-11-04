@@ -77,6 +77,7 @@ func (s *DryRunService) PerformDryRun(serverType server.Type) (string, error) {
 
 	cmd := exec.Command(exePath, args...)
 	cmd.Dir = filepath.Join(s.config.ServersDirectory, string(serverType))
+	cmd.Env = server.ChildEnv()
 
 	if s.config.DebugMode {
 		fmt.Printf("[DryRun] Executing: %s %s\n", exePath, strings.Join(args, " "))
@@ -246,6 +247,7 @@ func (s *DryRunService) PerformReforgerDryRun() (*ReforgerDryRunResult, error) {
 
 	cmd := exec.CommandContext(ctx, exePath, args...)
 	cmd.Dir = filepath.Join(s.config.ServersDirectory, string(server.TypeReforger))
+	cmd.Env = server.ChildEnv()
 
 	stdout, _ := cmd.StdoutPipe()
 	stderr, _ := cmd.StderrPipe()

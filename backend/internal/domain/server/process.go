@@ -275,6 +275,7 @@ func (m *ProcessManager) StartServer(ctx context.Context, s any) error {
 	executable := m.paths.GetServerExecutable(t)
 	cmd := exec.Command(executable, params...)
 	cmd.Dir = m.paths.GetServerPath(t)
+	cmd.Env = ChildEnv()
 
 	m.logStartMessage(id, t, executable, params)
 
