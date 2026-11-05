@@ -17,19 +17,19 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', asChild = false, type = 'button', ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
-    
+
     const variants = {
-      primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm',
-      secondary: 'bg-surface-elevated text-foreground border border-border hover:bg-accent/50 hover:border-border-active',
-      outline: 'border border-border bg-transparent hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:border-border-active',
-      ghost: 'hover:bg-accent/50 text-muted-foreground hover:text-foreground',
-      danger: 'bg-destructive text-primary-foreground hover:bg-destructive/90',
+      primary: 'bg-primary/15 text-primary border border-primary/70 hover:bg-primary hover:text-primary-foreground shadow-[0_0_18px_-10px_var(--color-primary)]',
+      secondary: 'bg-transparent text-foreground border border-border hover:border-primary/60 hover:text-primary',
+      outline: 'bg-transparent text-muted-foreground border border-dashed border-border hover:border-primary/60 hover:text-primary',
+      ghost: 'bg-transparent text-muted-foreground border border-transparent hover:bg-primary/10 hover:text-primary',
+      danger: 'bg-destructive/15 text-destructive border border-destructive/60 hover:bg-destructive hover:text-white',
     }
 
     const sizes = {
-      sm: 'h-8 px-3 text-xs',
-      md: 'h-10 px-4 py-2 text-sm',
-      lg: 'h-11 px-8 text-base',
+      sm: 'h-8 px-3 text-[10px]',
+      md: 'h-10 px-4 text-[11px]',
+      lg: 'h-11 px-8 text-xs',
       icon: 'h-9 w-9',
     }
 
@@ -37,7 +37,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         type={type}
         className={cn(
-          "inline-flex items-center justify-center rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-active disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex items-center justify-center rounded-none font-mono uppercase tracking-[0.14em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:pointer-events-none disabled:opacity-40",
           variants[variant],
           sizes[size],
           className

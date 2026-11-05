@@ -4,72 +4,99 @@
 @custom-variant light (&:where(.light, .light *));
 
 @theme {
-  --color-background: #051424;
-  --color-foreground: #d4e4fa;
-  
-  --color-surface: #051424;
-  --color-surface-elevated: #122131;
-  --color-border: #334155;
-  --color-border-active: #3b82f6;
-  
-  --color-primary: #adc6ff;
-  --color-primary-foreground: #002e6a;
-  
-  --color-accent: #1e293b;
-  --color-accent-foreground: #d4e4fa;
-  
-  --color-muted: #0d1c2d;
-  --color-muted-foreground: #8c909f;
-  
-  --color-success: #10b981;
-  --color-destructive: #ffb4ab;
+  --color-background: #0a0906;
+  --color-foreground: #ffb000;
 
-  --radius-sm: 0.125rem;
-  --radius-md: 0.25rem;
-  --radius-lg: 0.5rem;
-  --font-sans: 'Inter', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --color-surface: #0b0a07;
+  --color-surface-elevated: #12100a;
+  --color-border: #3a2c12;
+  --color-border-active: #ffb000;
+
+  --color-primary: #ffb000;
+  --color-primary-foreground: #0a0906;
+
+  --color-accent: #1b1610;
+  --color-accent-foreground: #ffb000;
+
+  --color-muted: #0f0d09;
+  --color-muted-foreground: #a67c2e;
+
+  --color-success: #7ee787;
+  --color-destructive: #ff5f56;
+
+  --radius-sm: 0rem;
+  --radius-md: 0rem;
+  --radius-lg: 0rem;
+  --font-sans: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --font-display: 'IBM Plex Mono', ui-monospace, monospace;
 }
 
 .light {
-  --color-background: #ffffff;
-  --color-foreground: #0f172a;
-  
-  --color-surface: #ffffff;
-  --color-surface-elevated: #f1f5f9;
-  --color-border: #e2e8f0;
-  --color-border-active: #2563eb;
-  
-  --color-primary: #2563eb;
-  --color-primary-foreground: #ffffff;
-  
-  --color-accent: #f1f5f9;
-  --color-accent-foreground: #0f172a;
-  
-  --color-muted: #f8fafc;
-  --color-muted-foreground: #64748b;
+  --color-background: #f4efe1;
+  --color-foreground: #2a2318;
+
+  --color-surface: #f7f3e7;
+  --color-surface-elevated: #fbf8ee;
+  --color-border: #cbbd9c;
+  --color-border-active: #9a5b00;
+
+  --color-primary: #9a5b00;
+  --color-primary-foreground: #fff8e6;
+
+  --color-accent: #ece5d2;
+  --color-accent-foreground: #2a2318;
+
+  --color-muted: #ece5d2;
+  --color-muted-foreground: #6f6350;
+
+  --color-success: #2f7d4f;
+  --color-destructive: #b3261e;
 }
 
 @layer base {
   * {
     @apply border-border;
   }
-  
+
   body {
     @apply bg-background text-foreground;
     font-family: var(--font-sans);
+    letter-spacing: 0.01em;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     transition: background-color 0.2s ease, color 0.2s ease;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply tracking-tight font-semibold;
-    letter-spacing: -0.02em;
+  h1, h2, h3 {
+    font-family: var(--font-mono);
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
   }
 
-  code, pre {
+  h1 {
+    font-size: clamp(1.35rem, 2.2vw, 1.75rem);
+    line-height: 1.15;
+  }
+
+  h2 {
+    font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  }
+
+  h4, h5, h6 {
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+  }
+
+  code, pre, kbd, samp {
     font-family: var(--font-mono);
+  }
+
+  ::selection {
+    background: var(--color-primary);
+    color: var(--color-primary-foreground);
   }
 
   /* Hide number input arrows */
@@ -87,16 +114,44 @@
 
 @layer components {
   .glass {
-    @apply bg-surface/80 backdrop-blur-md border border-border;
+    @apply bg-surface border border-border;
   }
-  
+
   .terminal-card {
-    @apply bg-surface border border-border rounded-md overflow-hidden transition-all duration-300;
-    box-shadow: none !important;
+    @apply bg-surface border border-border rounded-none overflow-hidden transition-colors duration-150;
+    box-shadow: 0 0 32px -24px var(--color-primary), inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 10%, transparent);
   }
-  
+
+  .terminal-card:hover {
+    @apply border-primary/60;
+  }
+
   .terminal-card-active {
-    @apply border-border-active;
+    @apply border-primary;
+    box-shadow: 0 0 24px -12px var(--color-primary), inset 0 0 0 1px color-mix(in srgb, var(--color-primary) 35%, transparent);
+  }
+
+  /* Faint CRT scanlines over the workspace */
+  .crt-scanlines::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--color-primary) 5%, transparent) 0 1px,
+      transparent 1px 3px
+    );
+    opacity: 0.5;
+  }
+
+  /* Segmented measure bar, like a disk-usage readout */
+  .crt-bar {
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--color-primary) 0 8px,
+      color-mix(in srgb, var(--color-primary) 30%, transparent) 8px 10px
+    );
   }
 }
 
@@ -108,7 +163,7 @@
   }
   .scrollbar-thin::-webkit-scrollbar-thumb {
     background: var(--color-border);
-    border-radius: 9999px;
+    border-radius: 0;
   }
   .scrollbar-thin::-webkit-scrollbar-track {
     background: transparent;
@@ -126,7 +181,7 @@
     display: none;
   }
   .no-scrollbar {
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }
