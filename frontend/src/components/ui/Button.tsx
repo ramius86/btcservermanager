@@ -17,19 +17,19 @@ export interface ButtonProps
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant = 'primary', size = 'md', asChild = false, type = 'button', ...props }, ref) => {
     const Comp = asChild ? Slot : "button"
-    
+
     const variants = {
-      primary: 'bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm',
-      secondary: 'bg-surface-elevated text-foreground border border-border hover:bg-accent/50 hover:border-border-active',
-      outline: 'border border-border bg-transparent hover:bg-accent/50 text-muted-foreground hover:text-foreground hover:border-border-active',
-      ghost: 'hover:bg-accent/50 text-muted-foreground hover:text-foreground',
-      danger: 'bg-destructive text-primary-foreground hover:bg-destructive/90',
+      primary: 'bg-primary text-primary-foreground hover:bg-primary/90',
+      secondary: 'bg-transparent text-foreground border border-border hover:border-foreground',
+      outline: 'bg-transparent text-foreground border border-foreground/30 hover:border-foreground',
+      ghost: 'bg-transparent text-muted-foreground hover:text-foreground underline-offset-4 hover:underline',
+      danger: 'bg-destructive text-white hover:bg-destructive/90',
     }
 
     const sizes = {
-      sm: 'h-8 px-3 text-xs',
-      md: 'h-10 px-4 py-2 text-sm',
-      lg: 'h-11 px-8 text-base',
+      sm: 'h-8 px-3 text-[10px]',
+      md: 'h-10 px-5 text-[11px]',
+      lg: 'h-12 px-8 text-xs',
       icon: 'h-9 w-9',
     }
 
@@ -37,7 +37,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <Comp
         type={type}
         className={cn(
-          "inline-flex items-center justify-center rounded-md font-medium transition-all focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-border-active disabled:pointer-events-none disabled:opacity-50",
+          "inline-flex items-center justify-center rounded-none font-mono font-medium uppercase tracking-[0.16em] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-background disabled:pointer-events-none disabled:opacity-40",
           variants[variant],
           sizes[size],
           className
