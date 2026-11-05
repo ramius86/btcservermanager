@@ -6,7 +6,9 @@ services:
     stop_grace_period: 120s
     volumes:
       - ${HOST_STORAGE_PATH:-./storage}:/app/storage
-      - ${HOST_STORAGE_PATH:-./storage}/steam:/home/steam/Steam
+      # SteamCMD's own cache (bootstrapper, login tickets): persisting it stops
+      # the ~41 MB self-update on every container restart.
+      - ${HOST_STORAGE_PATH:-./storage}/steam:/home/steam/.local/share/Steam
     environment:
       - STEAM_API_KEY=${STEAM_API_KEY}
       - SECRET_KEY=${SECRET_KEY}

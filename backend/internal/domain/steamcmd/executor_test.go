@@ -23,6 +23,40 @@ func (m *mockBroadcaster) Broadcast(eventType string, payload any) {
 	m.lastPayload = payload
 }
 
+// The bootstrapper prints its own update progress before SteamCMD starts. It
+// must not be reported as the server's progress: it showed the 41 MB self-update
+// as the branch update, then the bar jumped back to 0% when the real app_update
+// started.
+func TestExecutor_ParseProgress_IgnoresBootstrapperSelfUpdate(t *testing.T) {
+	e := &Executor{}
+	mb := &mockBroadcaster{}
+	e.SetBroadcaster(mb)
+
+	job := NewJob(JobUpdateServer)
+	job.RelatedServer = server.TypeArma3
+
+	for _, line := range []string{
+		"[  0%] Checking for available updates...",
+		"[----] Downloading update (0 of 41,429 KB)...",
+		"[ 18%] Downloading update (12,693 of 41,429 KB)...",
+		"[----] Verifying installation...",
+	} {
+		e.parseProgress(line, job)
+
+		if mb.lastEvent != "" {
+			t.Fatalf("bootstrapper line %q emitted %s", line, mb.lastEvent)
+		}
+	}
+
+	// A mod job has no server to attribute the line to, and used to emit a
+	// phantom item 0 that kept the SteamCMD log viewer marked as live.
+	e.parseProgress("[ 18%] Downloading update (12,693 of 41,429 KB)...", NewJob(JobInstallMods))
+
+	if mb.lastEvent != "" {
+		t.Fatalf("bootstrapper line emitted %s for a mod job", mb.lastEvent)
+	}
+}
+
 func TestExecutor_ParseProgress_WorkshopSuccess(t *testing.T) {
 	e := &Executor{}
 	mb := &mockBroadcaster{}
@@ -92,6 +126,19 @@ func TestExecutor_ParseProgress_UpdateProgress(t *testing.T) {
 
 	if info["itemId"] != int64(233780) {
 		t.Errorf("expected server AppID 233780, got %v", info["itemId"])
+	}
+}
+
+func TestExecutor_ParseProgress_IgnoresTerminalUnknownUpdateState(t *testing.T) {
+	e := &Executor{}
+	mb := &mockBroadcaster{}
+	e.SetBroadcaster(mb)
+
+	job := &Job{RelatedServer: server.TypeArma3}
+	e.parseProgress(" Update state (0x0) unknown, progress: 0.00 (0 / 0)", job)
+
+	if mb.lastEvent != "" {
+		t.Fatalf("the terminal 0x0 state must not reset progress, got %s %+v", mb.lastEvent, mb.lastPayload)
 	}
 }
 

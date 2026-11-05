@@ -2,6 +2,7 @@ package steamcmd
 
 import (
 	"btcservermanager/internal/config"
+	"btcservermanager/internal/domain/server"
 	"btcservermanager/internal/domain/workshop"
 	"context"
 	"os"
@@ -54,6 +55,21 @@ func TestHasSteamCMDError(t *testing.T) {
 		{"steamcmd failure", "ERROR! App '233780' state is 0x202 after update job.", true},
 		{"failed", "FAILED to install app", true},
 		{"timeout", "Download timed out", true},
+		{
+			"bootstrap translation warning printed on every linux start",
+			`ILocalize::AddFile() failed to load file "public/steambootstrapper_english.txt".`,
+			false,
+		},
+		{
+			"successful install with the bootstrap warning",
+			"ILocalize::AddFile() failed to load file \"public/steambootstrapper_english.txt\".\nSuccess! App '233780' fully installed.\n",
+			false,
+		},
+		{
+			"bootstrap warning must not hide a real failure later in the log",
+			"ILocalize::AddFile() failed to load file \"public/steambootstrapper_english.txt\".\nERROR! Failed to install app '233780' (No subscription).\n",
+			true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -62,6 +78,72 @@ func TestHasSteamCMDError(t *testing.T) {
 				t.Fatalf("hasSteamCMDError(%q) = %v, want %v", tc.output, got, tc.want)
 			}
 		})
+	}
+}
+
+func TestHandleResultAcceptsSuccessfulInstallWithBootstrapWarning(t *testing.T) {
+	e := &Executor{}
+	job := NewJob(JobInstallServer)
+	job.RelatedServer = server.TypeArma3
+
+	output := "Redirecting stderr to '/home/steam/.local/share/Steam/logs/stderr.txt'\n" +
+		`ILocalize::AddFile() failed to load file "public/steambootstrapper_english.txt".` + "\n" +
+		"[100%] Download Complete.\n" +
+		"Success! App '233780' fully installed.\n"
+
+	e.handleResult(output, job)
+
+	if job.ErrorStatus != nil {
+		t.Fatalf("a completed install must not be reported as failed, got %v", *job.ErrorStatus)
+	}
+}
+
+// realSteamCMDConvarEcho is the exact start of a real run: SteamCMD echoes
+// every convar it applies, and "@ShutdownOnFailedCommand" contains "failed".
+const realSteamCMDConvarEcho = `Steam>"@NoPromptForPassword" = "1"` + "\n" +
+	`Steam>"@ShutdownOnFailedCommand" = "1"` + "\n"
+
+func TestHasSteamCMDErrorIgnoresConvarEcho(t *testing.T) {
+	output := realSteamCMDConvarEcho +
+		"Loading Steam API...OK\n" +
+		"Update state (0x5) verifying install, progress: 91.69 (4973184093 / 5423767960)\n" +
+		"Update state (0x0) unknown, progress: 0.00 (0 / 0)\n" +
+		"Success! App '233780' fully installed.\n" +
+		"Steam>Unloading Steam API...OK\n"
+
+	if hasSteamCMDError(output) {
+		t.Fatal("the @ShutdownOnFailedCommand echo must not count as a failure")
+	}
+}
+
+func TestHandleResultAcceptsInstallAfterConvarEcho(t *testing.T) {
+	e := &Executor{}
+	job := NewJob(JobInstallServer)
+	job.RelatedServer = server.TypeArma3
+
+	e.handleResult(realSteamCMDConvarEcho+"Success! App '233780' fully installed.\n", job)
+
+	if job.ErrorStatus != nil {
+		t.Fatalf("a completed install must not be reported as failed, got %v", *job.ErrorStatus)
+	}
+}
+
+func TestHasTransientFailureMarkerIgnoresProgressByteCounts(t *testing.T) {
+	// 5049971015 contains "504": a substring match retried an install whose
+	// verify had already reached 93%.
+	progress := "Update state (0x5) verifying install, progress: 93.11 (5049971015 / 5423767960)"
+	if hasTransientFailureMarker(progress) {
+		t.Fatalf("a progress byte count must not look like a transient failure: %q", progress)
+	}
+
+	for _, output := range []string{
+		"HTTP Error 503 (Service Unavailable)",
+		"Connection closed by peer",
+		"Download timed out",
+	} {
+		if !hasTransientFailureMarker(output) {
+			t.Fatalf("hasTransientFailureMarker(%q) = false, want true", output)
+		}
 	}
 }
 

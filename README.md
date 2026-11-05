@@ -79,7 +79,7 @@ Here's a quick look at the main features of the BTC Server Manager interface:
 * **Graceful Degradation**: The manager works perfectly even if the Discord bot is not configured, automatically hiding Discord-dependent UI.
 
 ### Secure Steam Authentication
-* **Dedicated Steam Credentials & Session Caching**: Connect a dedicated Steam account required by SteamCMD to download Arma 3 server binaries and Steam Workshop mods. Sensitive credentials are encrypted at rest, and SteamCMD authentication session tickets are persistently cached on the host volume (`/home/steam/Steam/config/config.vdf`) across container restarts.
+* **Dedicated Steam Credentials & Session Caching**: Connect a dedicated Steam account required by SteamCMD to download Arma 3 server binaries and Steam Workshop mods. Sensitive credentials are encrypted at rest, and SteamCMD authentication session tickets are persistently cached on the host volume (`/home/steam/.local/share/Steam/config/config.vdf`) across container restarts.
 
 ---
 

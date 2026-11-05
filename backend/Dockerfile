@@ -40,7 +40,7 @@ RUN useradd -u 1000 -m -s /bin/bash steam \
           wget \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && mkdir -p /app /app/storage/logs /app/storage/data /home/steam/Steam \
+    && mkdir -p /app /app/storage/logs /app/storage/data /home/steam/.local/share/Steam \
     && chown -R steam:steam /app /home/steam
 
 WORKDIR /app

@@ -13,6 +13,7 @@ import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { useServerStatus } from '../contexts/ServerStatusContext'
 import { useInstallProgress } from '../contexts/InstallProgressContext'
 import { useWebSocket } from '../contexts/WebSocketContext'
+import { isTerminalInstallStatus } from '../utils/installStatus'
 import { AnyServerDto, ServerInstallationDto } from '../dtos/ServerDto'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '../components/ui/DropdownMenu'
 import { ConfirmationDialog } from '../components/ui/ConfirmationDialog'
@@ -174,9 +175,20 @@ export function DashboardPage() {
       fetchInstallations()
     })
 
+    // The progress entry is dropped as soon as a job ends, so the card falls
+    // back to the stored installation record. Refetch it, otherwise a finished
+    // or failed job keeps showing the stale IN_PROGRESS state at 0%.
+    const unsubProgress = subscribe('install_progress', (e) => {
+      const status = (e.payload as { status?: string } | undefined)?.status
+      if (isTerminalInstallStatus(status)) {
+        fetchInstallations()
+      }
+    })
+
     return () => {
       unsubscribe()
       unsubReconnect()
+      unsubProgress()
     }
   }, [subscribe, onReconnect, fetchServers, fetchInstallations])
 

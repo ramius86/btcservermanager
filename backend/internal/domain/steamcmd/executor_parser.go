@@ -31,7 +31,10 @@ var (
 
 	successModRegex     = regexp.MustCompile(`(?i)success\. downloaded item (\d+)`)
 	downloadingModRegex = regexp.MustCompile(`(?i)downloading item (\d+)`)
-	successAppRegex     = regexp.MustCompile(`(?i)success! app '\d+' fully installed`)
+	// "already up to date" is the Success line a verify run prints when nothing
+	// had to be downloaded; without it the progress entry never reaches FINISHED
+	// and the frontend keeps showing the job as running.
+	successAppRegex = regexp.MustCompile(`(?i)success! app '\d+' (?:fully installed|already up to date)`)
 
 	// Per-item error patterns:
 	//   "ERROR! Download item 583496184 failed (Failure)."
@@ -72,7 +75,7 @@ func (e *Executor) parseProgress(line string, job *Job) {
 
 	lineLower := strings.ToLower(strings.TrimSpace(line))
 
-	if e.parseSelfUpdateOrVerify(line, lineLower, job) {
+	if parseBootstrapperLine(line, lineLower) {
 		return
 	}
 	if e.parseModErrors(lineLower, job) {
@@ -117,35 +120,18 @@ func (e *Executor) updateFinishedServerBuildID(job *Job, buildID string) {
 	}
 }
 
-func (e *Executor) parseSelfUpdateOrVerify(line, lineLower string, job *Job) bool {
-	if strings.Contains(lineLower, "checking for available updates") || strings.Contains(lineLower, "verifying installation") {
-		if job.RelatedServer != "" {
-			info := ItemInfo{
-				ItemID:   server.ServerIDs[job.RelatedServer],
-				Status:   StatusVerifying,
-				Progress: 0.0,
-			}
-			e.itemInfo.Store(serverPrefix+string(job.RelatedServer), info)
-			e.emitProgress(info)
-		}
+// parseBootstrapperLine consumes SteamCMD's own self-update output. Those lines
+// belong to the bootstrapper replacing itself, not to the game install: showing
+// them for the server painted the 41 MB self-update as the branch update and
+// then dropped the bar back to 0% when the real app_update started. The game's
+// own progress comes from the "Update state (0x..)" lines.
+func parseBootstrapperLine(line, lineLower string) bool {
+	if strings.Contains(lineLower, "checking for available update") ||
+		strings.Contains(lineLower, "verifying installation") {
 		return true
 	}
 
-	if matches := selfUpdateRegex.FindStringSubmatch(line); len(matches) >= 4 {
-		if p, err := strconv.ParseFloat(matches[1], 64); err == nil {
-			info := ItemInfo{
-				Status:   StatusDownloading,
-				Progress: p,
-			}
-			if job.RelatedServer != "" {
-				info.ItemID = server.ServerIDs[job.RelatedServer]
-				e.itemInfo.Store(serverPrefix+string(job.RelatedServer), info)
-			}
-			e.emitProgress(info)
-		}
-		return true
-	}
-	return false
+	return selfUpdateRegex.MatchString(line)
 }
 
 func (e *Executor) parseModErrors(lineLower string, job *Job) bool {
@@ -233,6 +219,13 @@ func (e *Executor) parseAppUpdateState(lineLower string, job *Job) bool {
 		return false
 	}
 
+	// SteamCMD closes an app update with "Update state (0x0) unknown, progress:
+	// 0.00 (0 / 0)" right before the Success line. Treating it as a download
+	// dropped the bar back to 0% after the install had already completed.
+	if strings.Contains(lineLower, "update state (0x0)") {
+		return true
+	}
+
 	status := StatusDownloading
 	switch {
 	case strings.Contains(lineLower, "preallocating"):
@@ -300,15 +293,55 @@ func (e *Executor) handleResult(output string, job *Job) {
 // case-insensitive.
 var steamCMDErrorMarkers = []string{"error!", "failed", "timed out"}
 
+// steamCMDBenignErrorLines are diagnostic lines that contain a failure marker
+// but never mean the job failed. SteamCMD prints the missing bootstrapper
+// translation file on stderr at every Linux start, so scanning the raw output
+// for "failed" reported every successful install and update as an error.
+var steamCMDBenignErrorLines = []string{
+	"ilocalize::addfile() failed to load file",
+}
+
 func hasSteamCMDError(output string) bool {
-	lower := strings.ToLower(output)
-	for _, marker := range steamCMDErrorMarkers {
-		if strings.Contains(lower, marker) {
+	for _, line := range strings.Split(strings.ToLower(output), "\n") {
+		if isBenignSteamCMDLine(line) {
+			continue
+		}
+
+		for _, marker := range steamCMDErrorMarkers {
+			if strings.Contains(line, marker) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func isBenignSteamCMDLine(line string) bool {
+	if isSteamCMDConvarEcho(line) {
+		return true
+	}
+
+	for _, benign := range steamCMDBenignErrorLines {
+		if strings.Contains(line, benign) {
 			return true
 		}
 	}
 
 	return false
+}
+
+// isSteamCMDConvarEcho reports whether the line is SteamCMD echoing a setting
+// it just applied (`Steam>"@ShutdownOnFailedCommand" = "1"`, sometimes without
+// quotes). The convar name contains "failed", so scanning that echo as a
+// failure marked every install and update as failed, retried it, and left the
+// installation on ERROR after SteamCMD had printed "Success! App ... fully
+// installed.". A line that carries an actual failure never starts with the
+// prompt plus an assignment.
+func isSteamCMDConvarEcho(line string) bool {
+	trimmed := strings.TrimSpace(line)
+
+	return strings.HasPrefix(trimmed, "steam>") && strings.Contains(trimmed, "=")
 }
 
 func parseJobErrorCode(cleanOut string) workshop.ErrorStatus {
@@ -381,33 +414,16 @@ func (e *Executor) handleModResult(job *Job) {
 	}
 }
 
-// transientFailureMarkers describe conditions that can clear on their own. A
+// transientFailurePattern describes conditions that can clear on their own. A
 // generic failure is retried only when one of them appears in the output.
-var transientFailureMarkers = []string{
-	"connection closed",
-	"connection reset",
-	"service unavailable",
-	"temporarily unavailable",
-	"try again later",
-	"timed out",
-	"timeout",
-	"rate limit",
-	"too many requests",
-	"network",
-	"502",
-	"503",
-	"504",
-}
+//
+// The HTTP status codes need word boundaries: a plain substring search matched
+// byte counts such as "progress: 93.11 (5049971015 / 5423767960)" and turned a
+// deterministic failure into another full verify of the whole install.
+var transientFailurePattern = regexp.MustCompile(`(?i)\b(?:502|503|504)\b|network|connection closed|connection reset|service unavailable|temporarily unavailable|try again later|timed out|timeout|rate limit|too many requests`)
 
 func hasTransientFailureMarker(output string) bool {
-	lower := strings.ToLower(output)
-	for _, marker := range transientFailureMarkers {
-		if strings.Contains(lower, marker) {
-			return true
-		}
-	}
-
-	return false
+	return transientFailurePattern.MatchString(output)
 }
 
 func (e *Executor) isRetriable(status *workshop.ErrorStatus, output string) bool {
