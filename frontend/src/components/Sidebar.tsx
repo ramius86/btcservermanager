@@ -90,7 +90,7 @@ export function Sidebar() {
     <>
       {/* ─── MOBILE: Fixed bottom navigation bar ─── */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-50">
-        <nav className="flex flex-row items-center justify-start overflow-x-auto no-scrollbar border-t border-border bg-surface/95 backdrop-blur-md h-[calc(4rem+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] px-2 gap-1.5">
+        <nav className="flex flex-row items-center justify-start overflow-x-auto no-scrollbar border-t border-border bg-surface/60 backdrop-blur-2xl h-[calc(4rem+env(safe-area-inset-bottom,0px))] pb-[env(safe-area-inset-bottom,0px)] px-2 gap-1.5">
           {navItems.map((item) => (
             <NavLink
               key={item.label}
@@ -99,7 +99,7 @@ export function Sidebar() {
               className={({ isActive }) => {
                 let stateClasses = "text-muted-foreground"
                 if (isActive) {
-                  stateClasses = "text-primary"
+                  stateClasses = "text-foreground bg-accent"
                 } else if (item.label === 'Mods' && hasModUpdates) {
                   stateClasses = "text-red-500"
                 }
@@ -122,7 +122,7 @@ export function Sidebar() {
           ))}
           <button
             onClick={toggleTheme}
-            className="flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-lg text-muted-foreground transition-all min-w-[56px] ml-auto pr-3"
+            className="flex flex-col items-center justify-center shrink-0 gap-0.5 px-2 py-1 rounded-xl text-muted-foreground transition-colors min-w-[56px] ml-auto pr-3"
             title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -133,7 +133,7 @@ export function Sidebar() {
       </div>
 
       {/* ─── DESKTOP: Vertical sidebar ─── */}
-      <aside className="hidden md:flex w-[180px] flex-col border-r border-border bg-surface transition-all duration-300">
+      <aside className="hidden md:flex w-[180px] flex-col border-r border-border bg-surface/50 backdrop-blur-2xl transition-colors duration-300">
         <div className="p-4 pt-8 pb-6">
           <button
             type="button" 
@@ -147,7 +147,7 @@ export function Sidebar() {
               <img src="/btclogo.png" alt="Black Templars Logo" className="w-16 h-16 object-contain group-hover:scale-105 transition-transform" />
             </div>
             <div className="flex flex-col items-center">
-              <span className="text-sm font-black tracking-tighter text-foreground uppercase leading-tight">BTC</span>
+              <span className="text-sm font-semibold tracking-tight text-foreground uppercase leading-tight">BTC</span>
               <span className="text-[9px] text-muted-foreground font-bold tracking-widest uppercase mt-0.5">Server Manager</span>
             </div>
           </button>
@@ -159,14 +159,14 @@ export function Sidebar() {
               key={item.label}
               to={item.href}
               className={({ isActive }) => {
-                let stateClasses = "text-muted-foreground hover:bg-accent/30 hover:text-foreground border border-transparent"
+                let stateClasses = "text-muted-foreground hover:bg-accent/40 hover:text-foreground border border-transparent"
                 if (isActive) {
-                  stateClasses = "bg-primary/10 text-primary border border-primary/20"
+                  stateClasses = "bg-accent text-foreground border border-primary/30 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]"
                 } else if (item.label === 'Mods' && hasModUpdates) {
-                  stateClasses = "text-red-500 animate-pulse border border-red-500/30 bg-red-500/10 hover:bg-red-500/20"
+                  stateClasses = "text-destructive bg-destructive/10 border border-destructive/30 hover:bg-destructive/15"
                 }
                 return cn(
-                  "flex items-center gap-3 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-widest rounded-md transition-all duration-200 group",
+                  "flex items-center gap-3 px-3 py-2.5 text-[10px] font-medium uppercase tracking-[0.14em] rounded-xl transition-all duration-200 group",
                   stateClasses
                 )
               }}
@@ -177,7 +177,7 @@ export function Sidebar() {
           ))}
         </nav>
 
-        <div className="px-4 py-4 border-t border-border/50 bg-surface-elevated/10">
+        <div className="px-4 py-4 border-t border-border/60 bg-transparent">
           <SidebarClock timezone={systemInfo?.timezone} />
           <div className="flex items-center justify-between">
             <div className="flex flex-col">
@@ -186,7 +186,7 @@ export function Sidebar() {
             </div>
             <button
               onClick={toggleTheme}
-              className="p-1.5 rounded-md bg-surface border border-border text-muted-foreground hover:text-primary hover:border-primary/50 transition-all active:scale-95"
+              className="p-2 rounded-xl bg-surface/60 border border-border text-muted-foreground backdrop-blur hover:text-foreground hover:border-primary/40 transition-all active:scale-95"
               title={theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
             >
               {theme === 'dark' ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}

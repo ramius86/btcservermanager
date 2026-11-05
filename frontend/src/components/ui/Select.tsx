@@ -11,8 +11,8 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
       <div className="relative w-full">
         <select
           className={cn(
-            "flex h-10 w-full rounded-md border border-border bg-muted/50 px-3 py-2 text-sm text-foreground ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:cursor-not-allowed disabled:opacity-50 appearance-none transition-colors",
-            "hover:border-border-active/50",
+            "flex h-11 w-full rounded-2xl border border-border bg-surface/60 px-4 py-2 text-sm text-foreground backdrop-blur-xl ring-offset-background focus-visible:outline-none focus-visible:border-primary/60 focus-visible:ring-2 focus-visible:ring-primary/25 disabled:cursor-not-allowed disabled:opacity-40 appearance-none transition-all",
+            "hover:bg-accent/40",
             className
           )}
           ref={ref}
@@ -20,8 +20,8 @@ const Select = React.forwardRef<HTMLSelectElement, SelectProps>(
         >
           {children}
         </select>
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground/50">
-          <ChevronDown className="w-4 h-4" />
+        <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-muted-foreground">
+          <ChevronDown className="w-4 h-4" strokeWidth={2} />
         </div>
       </div>
     )
