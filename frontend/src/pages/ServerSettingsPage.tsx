@@ -39,22 +39,34 @@ export function ServerSettingsPage() {
         const missionHeaderStr = (d.type === 'REFORGER' && d.missionHeader) 
           ? JSON.stringify(d.missionHeader, null, 2) 
           : '';
-        setServer({
-          ...d,
-          motd: d.motd || [],
-          admins: d.admins || [],
-          allowedLoadFileExtensions: d.allowedLoadFileExtensions || [],
-          allowedPreprocessFileExtensions: d.allowedPreprocessFileExtensions || [],
-          allowedHTMLLoadExtensions: d.allowedHTMLLoadExtensions || [],
-          headlessClients: d.headlessClients || [],
-          localClient: d.localClient || [],
-          difficultySettings: d.difficultySettings || {},
-          networkSettings: d.networkSettings || {},
-          activeMods: d.activeMods || [],
-          activeDLCs: d.activeDLCs || [],
-          missions: d.missions || [],
-          missionHeader: d.type === 'REFORGER' ? missionHeaderStr : d.missionHeader
-        })
+        // Only initialise fields that exist on the concrete server type.
+        // The backend decodes strictly, so leaking e.g. "motd" into a
+        // Reforger payload makes every save fail with 400.
+        const normalized: any = { ...d }
+
+        if (d.type === 'REFORGER') {
+          normalized.admins = d.admins || []
+          normalized.activeMods = d.activeMods || []
+          normalized.missionHeader = missionHeaderStr
+        } else if (d.type === 'DAYZ' || d.type === 'DAYZ_EXP') {
+          normalized.motd = d.motd || []
+          normalized.activeMods = d.activeMods || []
+        } else if (d.type === 'ARMA3') {
+          normalized.motd = d.motd || []
+          normalized.admins = d.admins || []
+          normalized.allowedLoadFileExtensions = d.allowedLoadFileExtensions || []
+          normalized.allowedPreprocessFileExtensions = d.allowedPreprocessFileExtensions || []
+          normalized.allowedHTMLLoadExtensions = d.allowedHTMLLoadExtensions || []
+          normalized.headlessClients = d.headlessClients || []
+          normalized.localClient = d.localClient || []
+          normalized.difficultySettings = d.difficultySettings || {}
+          normalized.networkSettings = d.networkSettings || {}
+          normalized.activeMods = d.activeMods || []
+          normalized.activeDLCs = d.activeDLCs || []
+          normalized.missions = d.missions || []
+        }
+
+        setServer(normalized)
       }).catch(err => {
         showToast(err?.message || 'Failed to load server', 'error')
         navigate('/servers')

@@ -104,13 +104,23 @@ func newTestExecutor(t *testing.T) *Executor {
 	t.Helper()
 
 	dir := t.TempDir()
-
-	return &Executor{
+	e := &Executor{
 		paths: config.NewPaths(&config.Config{
 			StoragePath:   dir,
 			LogsDirectory: filepath.Join(dir, "logs"),
 		}),
 	}
+
+	// These tests call handleAttemptResult directly instead of going through
+	// run(), which is what normally closes the daily log file after a job.
+	// Release it before TempDir cleanup: Windows refuses to delete an open file.
+	t.Cleanup(func() {
+		e.logMutex.Lock()
+		defer e.logMutex.Unlock()
+		e.closeLogFileLocked()
+	})
+
+	return e
 }
 
 func itemInfoKeys(e *Executor) []string {
