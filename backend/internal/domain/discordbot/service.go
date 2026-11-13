@@ -1,6 +1,7 @@
 package discordbot
 
 import (
+	"btcservermanager/internal/domain/appsettings"
 	"bytes"
 	"context"
 	"encoding/base64"
@@ -46,6 +47,10 @@ type Broadcaster interface {
 	Broadcast(eventType string, payload any)
 }
 
+// AppSettingsProvider supplies the current application settings. The interaction
+// handler reads them per RSVP so a settings change applies without a restart.
+type AppSettingsProvider func(ctx context.Context) (*appsettings.AppSettings, error)
+
 type Service struct {
 	session            *discordgo.Session
 	guildID            string
@@ -57,6 +62,8 @@ type Service struct {
 	channelsCacheMu    sync.RWMutex
 	rolesCache         []DiscordRole
 	rolesCacheMu       sync.RWMutex
+	settingsProvider   AppSettingsProvider
+	settingsProviderMu sync.RWMutex
 	isSyncingNicknames int32
 	stopTicker         chan struct{}
 	// ctx is cancelled by Close so background work stops with the service
@@ -76,6 +83,18 @@ func (s *Service) baseContext() context.Context {
 
 func (s *Service) SetBroadcaster(b Broadcaster) {
 	s.broadcaster = b
+}
+
+func (s *Service) SetAppSettingsProvider(p AppSettingsProvider) {
+	s.settingsProviderMu.Lock()
+	s.settingsProvider = p
+	s.settingsProviderMu.Unlock()
+}
+
+func (s *Service) getAppSettingsProvider() AppSettingsProvider {
+	s.settingsProviderMu.RLock()
+	defer s.settingsProviderMu.RUnlock()
+	return s.settingsProvider
 }
 
 func New(token, guildID string, repo *Repository) (*Service, error) {
@@ -585,6 +604,61 @@ func groupParticipants(parts []Participation) (going, notGoing, maybe []string) 
 	return going, notGoing, maybe
 }
 
+// rsvpLockHours returns the configured RSVP lock window in hours, or 0 when
+// the lock is disabled or the settings cannot be read.
+func (s *Service) rsvpLockHours(ctx context.Context) int {
+	provider := s.getAppSettingsProvider()
+	if provider == nil {
+		return 0
+	}
+
+	settings, err := provider(ctx)
+	if err != nil {
+		log.Printf("⚠️  Failed to load app settings for RSVP lock: %v", err)
+		return 0
+	}
+	if settings == nil || !settings.RsvpLockEnabled || settings.RsvpLockHours <= 0 {
+		return 0
+	}
+	return settings.RsvpLockHours
+}
+
+// isRsvpDeadlinePassed reports whether the RSVP lock window for an event has
+// started. Events with an unparseable date never lock.
+func isRsvpDeadlinePassed(event *Event, lockHours int, now time.Time) bool {
+	if lockHours <= 0 {
+		return false
+	}
+	eventTime, err := time.ParseInLocation(dateTimeFormat, event.DateTime, time.Local)
+	if err != nil {
+		return false
+	}
+	return !now.Before(eventTime.Add(-time.Duration(lockHours) * time.Hour))
+}
+
+func formatLockWindow(hours int) string {
+	if hours == 1 {
+		return "1 hour"
+	}
+	return fmt.Sprintf("%d hours", hours)
+}
+
+func respondRsvpLocked(sess *discordgo.Session, i *discordgo.InteractionCreate, event *Event, lockHours int) {
+	err := sess.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: fmt.Sprintf(
+				"RSVP for **%s** is closed: responses lock %s before the event and you have not responded yet. Contact an administrator if you still need to be added.",
+				event.Title, formatLockWindow(lockHours),
+			),
+			Flags: discordgo.MessageFlagsEphemeral,
+		},
+	})
+	if err != nil {
+		log.Printf("⚠️  Failed to send locked RSVP response: %v", err)
+	}
+}
+
 func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.InteractionCreate) {
 	if i.Type != discordgo.InteractionMessageComponent {
 		return
@@ -625,6 +699,18 @@ func (s *Service) handleInteraction(sess *discordgo.Session, i *discordgo.Intera
 			log.Printf("⚠️  Failed to freeze expired event via interaction: %v", err)
 		}
 		return
+	}
+
+	// The RSVP lock only affects members who have not answered yet: members who
+	// already responded may still change their status until the event starts.
+	if lockHours := s.rsvpLockHours(ctx); isRsvpDeadlinePassed(event, lockHours, time.Now()) {
+		responded, err := s.repo.HasParticipation(ctx, event.ID, userID)
+		if err != nil {
+			log.Printf("⚠️  Failed to check participation for event %d: %v", event.ID, err)
+		} else if !responded {
+			respondRsvpLocked(sess, i, event, lockHours)
+			return
+		}
 	}
 
 	if err := s.repo.UpsertUser(ctx, userID, username); err != nil {

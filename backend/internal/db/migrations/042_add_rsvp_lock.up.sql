@@ -1,0 +1,2 @@
+ALTER TABLE app_settings ADD COLUMN rsvp_lock_enabled BOOLEAN NOT NULL DEFAULT 0;
+ALTER TABLE app_settings ADD COLUMN rsvp_lock_hours INTEGER NOT NULL DEFAULT 0;

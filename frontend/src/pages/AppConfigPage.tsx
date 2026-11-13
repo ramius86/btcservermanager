@@ -37,6 +37,8 @@ export function AppConfigPage() {
     modUpdateCheckIntervalMinutes: 360,
     gameUpdateCheckIntervalMinutes: 15,
     eventRosterEnabled: true,
+    rsvpLockEnabled: false,
+    rsvpLockHours: 0,
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)

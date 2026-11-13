@@ -1,5 +1,5 @@
 import React from 'react'
-import { Clock, MessageSquare, Save, Info, Users } from 'lucide-react'
+import { Clock, Lock, MessageSquare, Save, Info, Users } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
@@ -10,6 +10,8 @@ interface EventsSettings {
   discordReminderHours: number
   discordReminderMessage: string
   eventRosterEnabled?: boolean
+  rsvpLockEnabled?: boolean
+  rsvpLockHours?: number
 }
 
 interface EventsSettingsFormProps {
@@ -83,6 +85,46 @@ export function EventsSettingsForm({ settings, onSave }: Readonly<EventsSettings
               onChange={e => setLocalSettings({ ...localSettings, discordReminderMessage: e.target.value })}
             />
             <p className="text-[9px] text-muted-foreground italic px-1">This text will be prepended to the event details in the DM.</p>
+          </div>
+
+          <div className="space-y-4 p-4 bg-surface/50 rounded-lg border border-border">
+            <div className="flex items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <Lock className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-bold text-foreground">Lock RSVP Deadline</span>
+                </div>
+                <p className="text-[10px] text-muted-foreground">
+                  Members who have not responded lose the ability to RSVP once the deadline is reached. Members who already responded can still change their answer until the event starts.
+                </p>
+              </div>
+              <Switch
+                checked={localSettings.rsvpLockEnabled ?? false}
+                onCheckedChange={(checked) => setLocalSettings({ ...localSettings, rsvpLockEnabled: checked })}
+              />
+            </div>
+
+            {localSettings.rsvpLockEnabled && (
+              <div className="space-y-2 pt-4 border-t border-border/60">
+                <label className="text-[9px] uppercase font-bold tracking-widest text-muted-foreground ml-1 flex items-center gap-2">
+                  <Clock className="w-3 h-3" />
+                  Lock Window
+                </label>
+                <div className="relative max-w-[220px]">
+                  <Input
+                    type="number"
+                    min="1"
+                    className="bg-surface border-border focus:border-primary/50 h-10 text-sm pr-12"
+                    value={localSettings.rsvpLockHours ?? 0}
+                    onChange={e => setLocalSettings({ ...localSettings, rsvpLockHours: Number.parseInt(e.target.value, 10) || 0 })}
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[8px] font-bold text-muted-foreground uppercase tracking-widest">Hours</span>
+                </div>
+                <p className="text-[9px] text-muted-foreground italic px-1">
+                  No-response members are locked out of RSVP this many hours before the event. At least 1 hour is required for the lock to apply.
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="flex items-center justify-between p-4 bg-surface/50 rounded-lg border border-border">

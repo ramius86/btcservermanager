@@ -15,4 +15,6 @@ type AppSettings struct {
 	ModUpdateCheckIntervalMinutes  int      `json:"modUpdateCheckIntervalMinutes"`
 	GameUpdateCheckIntervalMinutes int      `json:"gameUpdateCheckIntervalMinutes"`
 	EventRosterEnabled             bool     `json:"eventRosterEnabled"`
+	RsvpLockEnabled                bool     `json:"rsvpLockEnabled"`
+	RsvpLockHours                  int      `json:"rsvpLockHours"`
 }

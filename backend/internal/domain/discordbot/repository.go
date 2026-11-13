@@ -194,6 +194,19 @@ func (r *Repository) UpsertParticipation(ctx context.Context, eventID int64, use
 	return err
 }
 
+func (r *Repository) HasParticipation(ctx context.Context, eventID int64, userID string) (bool, error) {
+	var exists int
+	query := `SELECT 1 FROM discord_event_participations WHERE event_id = ? AND user_id = ?`
+	err := r.db.QueryRowContext(ctx, query, eventID, userID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 func (r *Repository) GetEventParticipations(ctx context.Context, eventID int64) ([]Participation, error) {
 	query := `
 		SELECT p.event_id, p.user_id, u.username, p.status, p.updated_at

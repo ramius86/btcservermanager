@@ -235,6 +235,7 @@ func run() error {
 	if discordService != nil {
 		defer discordService.Close()
 		discordService.SetBroadcaster(hub)
+		discordService.SetAppSettingsProvider(appSettingsRepo.GetSettings)
 	}
 	scheduler.SetDiscordService(discordService)
 
