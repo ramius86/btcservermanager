@@ -1,15 +1,102 @@
-name: Release & Publish Container
+name: Container Pipeline
 
 on:
   release:
     types: [published]
+  push:
+    branches: ["main"]
+    paths:
+      - "backend/**"
+      - "frontend/**"
+      - ".dockerignore"
+      - "docker-compose.build.yml"
+      - ".github/workflows/publish-docker.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+
+# A deploy must never be cancelled halfway: runs queue instead.
+concurrency:
+  group: container-${{ github.ref }}
+  cancel-in-progress: false
 
 jobs:
+  # Gate for main: a green pipeline means tested code, so nothing is deployed
+  # from a commit that did not pass here first. It also carries the answer to
+  # "did this push come from a merged pull request?", which the deploy needs.
+  verify:
+    name: Verify
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      from_pr: ${{ steps.origin.outputs.from_pr }}
+    steps:
+      - name: Check the push comes from a merged pull request
+        id: origin
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          COMMIT: ${{ github.sha }}
+        run: |
+          count=$(gh api "repos/$GITHUB_REPOSITORY/commits/$COMMIT/pulls" \
+            --jq '[.[] | select(.merged_at != null)] | length' 2>/dev/null) || count=""
+          if [ -z "$count" ]; then
+            echo "::warning::could not read the pull requests for this commit; continuing"
+            count=1
+          fi
+          if [ "$count" -eq 0 ]; then
+            echo "::notice::this push does not come from a merged pull request, the deploy will be skipped"
+            echo "from_pr=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "from_pr=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout Code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5 # v7.1.0
+        with:
+          go-version: '1.26.11'
+          cache: true
+          cache-dependency-path: backend/go.sum
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          version: v2.14.0
+          working-directory: backend
+          args: --timeout=5m
+
+      - name: Go build, vet and tests
+        run: |
+          cd backend
+          go build ./...
+          go vet ./...
+          go test -tags integration -race ./...
+
+      - name: Set up Node.js
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Frontend install, test and build
+        run: |
+          cd frontend
+          npm ci
+          npm test
+          npm run build
+
   publish:
-    name: Push Container to Registries
+    name: Publish release
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -40,14 +127,14 @@ jobs:
             --notes-file "${{ steps.changelog.outputs.changelog }}"
 
       - name: Log in to GHCR
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
@@ -98,3 +185,139 @@ jobs:
           subject-name: docker.io/${{ secrets.DOCKERHUB_USERNAME }}/btcservermanager
           subject-digest: ${{ steps.build-push.outputs.digest }}
           push-to-registry: true
+
+  # The deployment builds docker-compose.build.yml from the pushed commit, so
+  # this job only queues it and waits for the result.
+  #
+  # Log hygiene for a public repository:
+  #   - never print a response body, a deployment id or a build log;
+  #   - curl runs silent, so its error messages (which contain the hostname)
+  #     never reach the log;
+  #   - no checkout and no GITHUB_TOKEN: `permissions: {}`;
+  #   - never add `set -x`, `curl -v` or a step summary here.
+  # Masking only hides the exact secret string, not a substring of it (the bare
+  # hostname of DOKPLOY_URL would show up unmasked).
+  deploy:
+    name: Deploy
+    needs: verify
+    if: |
+      needs.verify.result == 'success' &&
+      (github.event_name != 'push' || needs.verify.outputs.from_pr == 'true')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions: {}
+    concurrency:
+      group: deploy-production
+      cancel-in-progress: false
+    steps:
+      - name: Check configuration
+        id: guard
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          missing=""
+          for v in DOKPLOY_URL DOKPLOY_API_KEY CF_ACCESS_CLIENT_ID CF_ACCESS_CLIENT_SECRET DOKPLOY_COMPOSE_ID; do
+            if [ -z "${!v}" ]; then missing="$missing $v"; fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::deploy not configured, skipping (missing:$missing)"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy and wait for the result
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          DOKPLOY_URL: ${{ secrets.DOKPLOY_URL }}
+          DOKPLOY_API_KEY: ${{ secrets.DOKPLOY_API_KEY }}
+          CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+          DOKPLOY_COMPOSE_ID: ${{ secrets.DOKPLOY_COMPOSE_ID }}
+        run: |
+          # Never -x: it would print the arguments holding the secrets.
+          set -uo pipefail
+          umask 077
+          work=$(mktemp -d)
+          trap 'rm -rf "$work"' EXIT
+          base="${DOKPLOY_URL%/}"
+          auth=(-H "x-api-key: $DOKPLOY_API_KEY" \
+                -H "CF-Access-Client-Id: $CF_ACCESS_CLIENT_ID" \
+                -H "CF-Access-Client-Secret: $CF_ACCESS_CLIENT_SECRET")
+
+          # GET first (query bridge), falling back to POST. Prints only the
+          # HTTP status: the body is parsed, never echoed.
+          api() { # $1 endpoint, $2 query, $3 json body, $4 output file
+            local code
+            code=$(curl --silent -o "$4" -w '%{http_code}' --max-time 30 \
+              -X GET "$base/api/$1?$2" "${auth[@]}" 2>/dev/null) || true
+            if [ "${code:0:1}" = "2" ] && jq -e . "$4" > /dev/null 2>&1; then
+              printf '%s' "$code"; return
+            fi
+            code=$(curl --silent -o "$4" -w '%{http_code}' --max-time 30 \
+              -X POST "$base/api/$1" "${auth[@]}" \
+              -H 'Content-Type: application/json' -d "$3" 2>/dev/null) || true
+            printf '%s' "${code:-000}"
+          }
+
+          # 1) Snapshot of the deployments that already exist (non-blocking).
+          api deployment.allByCompose "composeId=$DOKPLOY_COMPOSE_ID" \
+            "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}" "$work/before.json" > /dev/null
+          if jq -r '.[].deploymentId' "$work/before.json" > "$work/seen.tmp" 2>/dev/null; then
+            mv "$work/seen.tmp" "$work/seen.txt"
+          else
+            : > "$work/seen.txt"
+          fi
+
+          # 2) Queue the deployment.
+          code=$(curl --silent -o "$work/queue.json" -w '%{http_code}' --max-time 60 \
+            -X POST "$base/api/compose.deploy" "${auth[@]}" \
+            -H 'Content-Type: application/json' \
+            -d "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\",\"title\":\"CI ${GITHUB_SHA:0:7}\"}" 2>/dev/null) || true
+          case "$code" in
+            200) ;;
+            302) echo "::error::deploy path redirected to a login page (HTTP 302): it is not authorized for service tokens."; exit 1 ;;
+            401|403) echo "::error::credentials rejected (HTTP $code)."; exit 1 ;;
+            404) echo "::error::wrong endpoint or service id (HTTP 404)."; exit 1 ;;
+            *) echo "::error::deploy rejected (HTTP ${code:-000})."; exit 1 ;;
+          esac
+          echo "Deploy queued."
+
+          # 3) Wait for the new deployment to appear.
+          dep=""
+          for _ in $(seq 1 24); do
+            api deployment.allByCompose "composeId=$DOKPLOY_COMPOSE_ID" \
+              "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}" "$work/deps.json" > /dev/null
+            dep=$(jq -r --rawfile b "$work/seen.txt" '
+              ($b | split("\n") | map(select(length > 0))) as $seen
+              | [ .[] | select((.deploymentId as $id | $seen | index($id)) == null) ][0]
+              | if . == null then "" else .deploymentId end' "$work/deps.json" 2>/dev/null) || dep=""
+            if [ -n "$dep" ]; then break; fi
+            sleep 5
+          done
+          if [ -z "$dep" ]; then
+            echo "::error::no deployment appeared within 2 minutes."
+            exit 1
+          fi
+          echo "Deployment queued; waiting for the result."
+
+          # 4) Follow the status until it settles.
+          for _ in $(seq 1 120); do
+            api deployment.allByCompose "composeId=$DOKPLOY_COMPOSE_ID" \
+              "{\"composeId\":\"$DOKPLOY_COMPOSE_ID\"}" "$work/deps.json" > /dev/null
+            status=$(jq -r --arg id "$dep" '.[] | select(.deploymentId == $id) | .status' \
+              "$work/deps.json" 2>/dev/null) || status=""
+            case "$status" in
+              done) echo "::notice::deploy completed."; exit 0 ;;
+              error|cancelled)
+                echo "::error::deploy $status: build details are not published here."
+                exit 1 ;;
+            esac
+            sleep 20
+          done
+          echo "::error::timeout waiting for the deploy result."
+          exit 1
