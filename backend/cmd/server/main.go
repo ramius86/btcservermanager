@@ -261,6 +261,22 @@ func run() error {
 		}
 	})
 
+	// A server that could not be restored at startup stays down: report it on
+	// the same channel used for crash alerts.
+	serverService.SetRestoreFailureListener(func(serverID int64, serverName string, serverType server.Type, attempts int, restoreErr error) {
+		if discordService == nil || !discordService.IsConfigured() {
+			return
+		}
+		bgCtx := context.Background()
+		settings, err := appSettingsRepo.GetSettings(bgCtx)
+		if err != nil || settings.DiscordAlertChannelID == "" || !settings.DiscordAlertServerOffline {
+			return
+		}
+		if err := discordService.SendServerRestoreFailedAlert(settings.DiscordAlertChannelID, serverName, string(serverType), attempts, restoreErr); err != nil {
+			log.Printf("[DiscordAlert] Failed to send restore alert for %s: %v", serverName, err)
+		}
+	})
+
 	workshopService.SetModUpdateListener(func(mod *workshop.WorkshopMod) {
 		if discordService == nil || !discordService.IsConfigured() {
 			return
@@ -334,9 +350,22 @@ func run() error {
 	// Start server in a goroutine
 	startServer(srv)
 
+	// Bring back the game servers that were running before the last stop. The
+	// context stops new starts as soon as the manager is asked to shut down.
+	autostartCtx, cancelAutostart := context.WithCancel(context.Background())
+	defer cancelAutostart()
+
+	if settings, err := appSettingsRepo.GetSettings(autostartCtx); err != nil {
+		log.Printf("[Autostart] Cannot read the settings: %v", err)
+	} else if settings.RestoreServersOnStart {
+		go serverService.RestoreDesiredServers(autostartCtx)
+	}
+
 	// Wait for stop signal
 	<-stop
 	log.Println("Shutting down server...")
+
+	cancelAutostart()
 
 	// Create a context with timeout for shutdown
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

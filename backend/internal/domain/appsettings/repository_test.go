@@ -38,6 +38,7 @@ func TestRepository(t *testing.T) {
 		assert.True(t, s.EventRosterEnabled)
 		assert.False(t, s.RsvpLockEnabled)
 		assert.Equal(t, 0, s.RsvpLockHours)
+		assert.True(t, s.RestoreServersOnStart)
 
 		// Save (Insert)
 		s.LogRetentionDays = 60
@@ -51,6 +52,7 @@ func TestRepository(t *testing.T) {
 		s.EventRosterEnabled = false
 		s.RsvpLockEnabled = true
 		s.RsvpLockHours = 6
+		s.RestoreServersOnStart = false
 
 		err = repo.Save(ctx, s)
 		assert.NoError(t, err)
@@ -68,6 +70,7 @@ func TestRepository(t *testing.T) {
 		assert.False(t, saved.EventRosterEnabled)
 		assert.True(t, saved.RsvpLockEnabled)
 		assert.Equal(t, 6, saved.RsvpLockHours)
+		assert.False(t, saved.RestoreServersOnStart)
 
 		// Update
 		saved.LogRetentionDays = 90

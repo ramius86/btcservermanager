@@ -240,3 +240,93 @@ func TestRepository(t *testing.T) {
 		}
 	})
 }
+
+func TestRepositoryDesiredRunning(t *testing.T) {
+	dbPath := filepath.Join(t.TempDir(), "test.db")
+
+	database, err := db.Connect(dbPath)
+	if err != nil {
+		t.Fatalf("failed to connect to database: %v", err)
+	}
+
+	defer database.Close()
+
+	if err := db.Migrate(dbPath); err != nil {
+		t.Fatalf("failed to migrate database: %v", err)
+	}
+
+	repo := NewRepository(database)
+	ctx := t.Context()
+
+	id, err := repo.Save(ctx, &Arma3Server{Server: Server{Type: TypeArma3, Name: "Desired"}})
+	if err != nil {
+		t.Fatalf("failed to save server: %v", err)
+	}
+
+	// A new server has no pending start.
+	running, err := repo.IsDesiredRunning(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to read the desired state: %v", err)
+	}
+	if running {
+		t.Fatal("a new server must not be marked as running")
+	}
+
+	ids, err := repo.GetDesiredRunningIDs(ctx)
+	if err != nil {
+		t.Fatalf("failed to list the servers to restore: %v", err)
+	}
+	if len(ids) != 0 {
+		t.Fatalf("expected no servers to restore, got %v", ids)
+	}
+
+	if err := repo.SetDesiredRunning(ctx, id, true); err != nil {
+		t.Fatalf("failed to set the desired state: %v", err)
+	}
+
+	running, err = repo.IsDesiredRunning(ctx, id)
+	if err != nil || !running {
+		t.Fatalf("expected the server to be marked as running, got %v (err %v)", running, err)
+	}
+
+	ids, err = repo.GetDesiredRunningIDs(ctx)
+	if err != nil {
+		t.Fatalf("failed to list the servers to restore: %v", err)
+	}
+	if len(ids) != 1 || ids[0] != id {
+		t.Fatalf("expected [%d], got %v", id, ids)
+	}
+
+	// Saving the server from the UI must not reset the intent.
+	saved, err := repo.GetServerByID(ctx, id)
+	if err != nil {
+		t.Fatalf("failed to load the server: %v", err)
+	}
+
+	a3, ok := saved.(*Arma3Server)
+	if !ok {
+		t.Fatalf("expected *Arma3Server, got %T", saved)
+	}
+	if !a3.DesiredRunning {
+		t.Fatal("expected the loaded server to carry the desired state")
+	}
+
+	a3.Name = "Renamed"
+	if _, err := repo.Save(ctx, a3); err != nil {
+		t.Fatalf("failed to update the server: %v", err)
+	}
+
+	running, err = repo.IsDesiredRunning(ctx, id)
+	if err != nil || !running {
+		t.Fatalf("an update must keep the desired state, got %v (err %v)", running, err)
+	}
+
+	if err := repo.SetDesiredRunning(ctx, id, false); err != nil {
+		t.Fatalf("failed to clear the desired state: %v", err)
+	}
+
+	running, err = repo.IsDesiredRunning(ctx, id)
+	if err != nil || running {
+		t.Fatalf("expected the server to be stopped, got %v (err %v)", running, err)
+	}
+}

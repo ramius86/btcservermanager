@@ -67,6 +67,42 @@ func (s *Service) SendServerOfflineAlert(channelID, serverName, serverType strin
 	return err
 }
 
+// SendServerRestoreFailedAlert reports a server that could not be started
+// again after the manager restart. The attempt count and the last error make
+// the usual cause (a broken mod) recognisable at a glance.
+func (s *Service) SendServerRestoreFailedAlert(channelID, serverName, serverType string, attempts int, lastErr error) error {
+	if s.session == nil {
+		return errors.New(errBotNotConfigured)
+	}
+	if channelID == "" {
+		return errors.New("channel ID is empty")
+	}
+
+	errMsg := "Unknown error"
+	if lastErr != nil {
+		errMsg = lastErr.Error()
+	}
+
+	now := time.Now().Unix()
+
+	embed := &discordgo.MessageEmbed{
+		Title:       "⚠️ Server Not Restored",
+		Description: fmt.Sprintf("Server **%s** did not come back after %d attempts and stays stopped.", serverName, attempts),
+		Color:       colorAlertWarning,
+		Fields: []*discordgo.MessageEmbedField{
+			{Name: "Server", Value: serverName, Inline: true},
+			{Name: "Game", Value: serverType, Inline: true},
+			{Name: "Attempts", Value: strconv.Itoa(attempts), Inline: true},
+			{Name: "Last Error", Value: errMsg, Inline: false},
+			{Name: "Timestamp", Value: fmt.Sprintf("<t:%d:F> (<t:%d:R>)", now, now), Inline: false},
+		},
+		Footer: &discordgo.MessageEmbedFooter{Text: footerText},
+	}
+
+	_, err := s.session.ChannelMessageSendEmbed(channelID, embed)
+	return err
+}
+
 func (s *Service) SendModUpdateAlert(channelID, modName string, modID int64, serverType, thumbnail string) error {
 	if s.session == nil {
 		return errors.New(errBotNotConfigured)

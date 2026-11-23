@@ -10,6 +10,7 @@ import { LogRetentionForm } from '../components/appConfig/LogRetentionForm'
 import { AlertsSettingsForm } from '../components/appConfig/AlertsSettingsForm'
 import { EventsSettingsForm } from '../components/appConfig/EventsSettingsForm'
 import { MembersSettingsForm } from '../components/appConfig/MembersSettingsForm'
+import { ServerRestoreForm } from '../components/appConfig/ServerRestoreForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/Tabs'
 import { useSystemInfo } from '../contexts/SystemInfoContext'
 import { Badge } from '../components/ui/Badge'
@@ -39,6 +40,7 @@ export function AppConfigPage() {
     eventRosterEnabled: true,
     rsvpLockEnabled: false,
     rsvpLockHours: 0,
+    restoreServersOnStart: true,
   })
   const [clearConfirm, setClearConfirm] = useState(false)
   const [loadingUpdate, setLoadingUpdate] = useState(false)
@@ -295,6 +297,14 @@ export function AppConfigPage() {
               setSettings(merged)
               await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Settings saved successfully.', 'Failed to save settings')
             }} 
+          />
+          <ServerRestoreForm
+            settings={settings}
+            onSave={async (newSettings) => {
+              const merged = { ...settings, ...newSettings };
+              setSettings(merged)
+              await executeAction(() => SettingsService.updateSettings(merged), () => {}, 'Settings saved successfully.', 'Failed to save settings')
+            }}
           />
         </TabsContent>
 

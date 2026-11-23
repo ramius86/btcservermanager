@@ -17,4 +17,5 @@ type AppSettings struct {
 	EventRosterEnabled             bool     `json:"eventRosterEnabled"`
 	RsvpLockEnabled                bool     `json:"rsvpLockEnabled"`
 	RsvpLockHours                  int      `json:"rsvpLockHours"`
+	RestoreServersOnStart          bool     `json:"restoreServersOnStart"`
 }
