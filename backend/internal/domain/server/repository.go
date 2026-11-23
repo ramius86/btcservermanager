@@ -172,7 +172,7 @@ func (r *Repository) getBaseServersBatch(ctx context.Context, ids []int64) (map[
 		args[i] = id
 	}
 
-	query := fmt.Sprintf(`SELECT id, type, description, name, port, query_port, max_players, password, admin_password, automatic_restart, automatic_restart_time, sort_order 
+	query := fmt.Sprintf(`SELECT id, type, description, name, port, query_port, max_players, password, admin_password, automatic_restart, automatic_restart_time, sort_order, desired_running
 	          FROM server WHERE id IN (%s)`, strings.Join(placeholders, ","))
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -188,7 +188,7 @@ func (r *Repository) getBaseServersBatch(ctx context.Context, ids []int64) (map[
 		s := &Server{}
 
 		err := rows.Scan(
-			&s.ID, &s.Type, &s.Description, &s.Name, &s.Port, &s.QueryPort, &s.MaxPlayers, &s.Password, &s.AdminPassword, &s.RestartAutomatically, &s.AutomaticRestartTime, &s.SortOrder,
+			&s.ID, &s.Type, &s.Description, &s.Name, &s.Port, &s.QueryPort, &s.MaxPlayers, &s.Password, &s.AdminPassword, &s.RestartAutomatically, &s.AutomaticRestartTime, &s.SortOrder, &s.DesiredRunning,
 		)
 		if err != nil {
 			return nil, err
@@ -416,4 +416,52 @@ func (r *Repository) FindAllServerIdsByActiveMod(ctx context.Context, modID stri
 	}
 
 	return ids, nil
+}
+
+// SetDesiredRunning records whether the server must be started again after a
+// manager restart. Only the start and stop paths write it: saving a server
+// from the UI must not reset the intent.
+func (r *Repository) SetDesiredRunning(ctx context.Context, id int64, running bool) error {
+	_, err := r.db.ExecContext(ctx, "UPDATE server SET desired_running = ? WHERE id = ?", running, id)
+	return err
+}
+
+// GetDesiredRunningIDs returns the servers that were running before the
+// manager stopped, in display order.
+func (r *Repository) GetDesiredRunningIDs(ctx context.Context) ([]int64, error) {
+	rows, err := r.db.QueryContext(ctx, "SELECT id FROM server WHERE desired_running = 1 ORDER BY sort_order ASC, id ASC")
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	ids := []int64{}
+
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+
+		ids = append(ids, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
+// IsDesiredRunning reports whether the server should still be running. The
+// restore checks it before every attempt, so a manual stop wins.
+func (r *Repository) IsDesiredRunning(ctx context.Context, id int64) (bool, error) {
+	var running bool
+	err := r.db.QueryRowContext(ctx, "SELECT desired_running FROM server WHERE id = ?", id).Scan(&running)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, ErrServerNotFound
+	}
+
+	return running, err
 }

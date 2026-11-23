@@ -68,6 +68,12 @@ func (f *fakeServerRepo) FindAllServerIdsByActiveMod(context.Context, string) ([
 	return nil, nil
 }
 
+func (f *fakeServerRepo) SetDesiredRunning(context.Context, int64, bool) error { return nil }
+
+func (f *fakeServerRepo) GetDesiredRunningIDs(context.Context) ([]int64, error) { return nil, nil }
+
+func (f *fakeServerRepo) IsDesiredRunning(context.Context, int64) (bool, error) { return false, nil }
+
 func (f *fakeServerRepo) GetCBAPresets(context.Context) ([]server.CBAPreset, error) { return nil, nil }
 
 func (f *fakeServerRepo) GetCBAPresetByID(context.Context, int64) (*server.CBAPreset, error) {

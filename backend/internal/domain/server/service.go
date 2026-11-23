@@ -25,6 +25,9 @@ type RepositoryInterface interface {
 	UpdateSortOrders(ctx context.Context, orders map[int64]int) error
 	Delete(ctx context.Context, id int64) error
 	FindAllServerIdsByActiveMod(ctx context.Context, modID string) ([]int64, error)
+	SetDesiredRunning(ctx context.Context, id int64, running bool) error
+	GetDesiredRunningIDs(ctx context.Context) ([]int64, error)
+	IsDesiredRunning(ctx context.Context, id int64) (bool, error)
 
 	GetCBAPresets(ctx context.Context) ([]CBAPreset, error)
 	GetCBAPresetByID(ctx context.Context, id int64) (*CBAPreset, error)
@@ -65,6 +68,9 @@ type Service struct {
 
 	serverLocksMu sync.Mutex
 	serverLocks   map[int64]*sync.Mutex
+
+	restoreFailureMu       sync.RWMutex
+	restoreFailureListener ServerRestoreFailureListener
 }
 
 // getLock returns the per-server mutex, creating it on first use. The map is
@@ -497,7 +503,16 @@ func (s *Service) startServerLocked(ctx context.Context, id int64) error {
 		return errors.New(errProcessManagerNotInit)
 	}
 
-	return s.processManager.StartServer(ctx, srv)
+	if err := s.processManager.StartServer(ctx, srv); err != nil {
+		return err
+	}
+
+	// Remember the intent so a manager restart can bring the server back.
+	if err := s.repo.SetDesiredRunning(ctx, id, true); err != nil {
+		log.Printf("[Server] Failed to persist desired state for server %d: %v", id, err)
+	}
+
+	return nil
 }
 
 func (s *Service) resolveAndAttachModNames(ctx context.Context, srv any) error {
@@ -542,7 +557,16 @@ func (s *Service) stopServerLocked(ctx context.Context, id int64) error {
 		return errors.New(errProcessManagerNotInit)
 	}
 
-	return s.processManager.StopServer(ctx, id)
+	if err := s.processManager.StopServer(ctx, id); err != nil {
+		return err
+	}
+
+	// The user stopped it: a manager restart must not bring it back.
+	if err := s.repo.SetDesiredRunning(ctx, id, false); err != nil {
+		log.Printf("[Server] Failed to persist desired state for server %d: %v", id, err)
+	}
+
+	return nil
 }
 
 func (s *Service) RestartServer(ctx context.Context, id int64) error {
@@ -614,6 +638,14 @@ func (s *Service) GetAllActiveReforgerModIDs(ctx context.Context) ([]string, err
 
 func (s *Service) SetServerExitListener(l ServerExitListener) {
 	s.processManager.SetExitListener(l)
+}
+
+// SetRestoreFailureListener registers the callback invoked once, after the
+// last attempt, when a server cannot be restored at startup.
+func (s *Service) SetRestoreFailureListener(l ServerRestoreFailureListener) {
+	s.restoreFailureMu.Lock()
+	s.restoreFailureListener = l
+	s.restoreFailureMu.Unlock()
 }
 
 func (s *Service) GetActiveLogFiles() []string {

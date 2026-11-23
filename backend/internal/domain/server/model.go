@@ -63,6 +63,9 @@ type Server struct {
 	AutomaticRestartTime   *string           `json:"automaticRestartTime"`
 	CustomLaunchParameters []LaunchParameter `json:"customLaunchParameters"`
 	SortOrder              int               `json:"sortOrder"`
+	// DesiredRunning remembers that the server was running, so a manager
+	// restart can start it again. It is written only by the start/stop paths.
+	DesiredRunning bool `json:"desiredRunning"`
 }
 
 const MaskedPassword = "***"
