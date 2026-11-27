@@ -103,7 +103,8 @@ func (s *DryRunService) PerformDryRun(serverType server.Type) (string, error) {
 			_ = cmd.Process.Kill()
 		}
 		select {
-		case <-waitCh:
+		case err := <-waitCh:
+			_ = err
 		case <-time.After(5 * time.Second):
 		}
 	}()
